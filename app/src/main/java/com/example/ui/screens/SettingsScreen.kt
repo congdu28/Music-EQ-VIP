@@ -1,0 +1,290 @@
+package com.example.ui.screens
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.equalizer.EqualizerState
+import com.example.player.PlayerUiState
+import com.example.ui.MainTab
+import com.example.ui.MusicAppUiState
+import com.example.ui.MusicViewModel
+import com.example.ui.theme.*
+
+@Composable
+fun SettingsScreen(
+    viewModel: MusicViewModel,
+    uiState: MusicAppUiState,
+    playerState: PlayerUiState,
+    equalizerState: EqualizerState,
+    modifier: Modifier = Modifier
+) {
+    // Back gesture returns to Library
+    BackHandler {
+        viewModel.setTab(MainTab.LIBRARY)
+    }
+
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(DarkBackground)
+            .verticalScroll(scrollState)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // App Hero Card
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = DarkSurfaceElevated,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = NeonViolet.copy(alpha = 0.2f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(imageVector = Icons.Default.Headphones, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(32.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text("Nhịp Điệu Hi-Res Player", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text("Trình phát nhạc ngoại tuyến & EQ Toàn Hệ Thống", color = TextSecondary, fontSize = 12.sp)
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = ElectricAzure.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ElectricAzure)
+                ) {
+                    Text(
+                        text = "Lossless 24-bit/96kHz Certified",
+                        color = ElectricAzure,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+        }
+
+        // Section: Định dạng âm thanh chất lượng cao hỗ trợ
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Định dạng âm thanh chất lượng cao hỗ trợ", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val formats = listOf(
+                    "FLAC (Lossless 24/96)",
+                    "WAV (32-bit Float PCM)",
+                    "ALAC (Apple Lossless)",
+                    "AAC (High Bitrate 320k)",
+                    "MP3 (320kbps Studio)",
+                    "OGG / Opus (Hi-Fi Stream)"
+                )
+
+                formats.chunked(2).forEach { rowItems ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { formatName ->
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = DarkSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(formatName, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section: Bộ nhớ & Quét thư viện
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Thư viện nhạc ngoại tuyến", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                SettingItemRow(
+                    icon = Icons.Default.FolderOpen,
+                    iconTint = NeonCyan,
+                    title = "Quét lại toàn bộ bộ nhớ",
+                    subtitle = "Tìm kiếm file FLAC, WAV, MP3 mới tải về máy",
+                    onClick = { viewModel.scanDeviceAudio() }
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = DarkBorder)
+
+                SettingItemRow(
+                    icon = Icons.Default.Bedtime,
+                    iconTint = NeonPurple,
+                    title = "Hẹn giờ tắt nhạc (Sleep Timer)",
+                    subtitle = if (playerState.isSleepTimerActive) "Đang hẹn giờ: ${playerState.sleepTimerRemainingSeconds / 60} phút còn lại" else "Tự động dừng phát khi đi ngủ",
+                    onClick = { viewModel.setShowSleepTimer(true) }
+                )
+            }
+        }
+
+        // Section: Cấu hình EQ & Toàn hệ thống
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Cấu hình EQ & Toàn hệ thống", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("EQ Toàn Hệ Thống", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Áp dụng cho ứng dụng khác (YouTube, Spotify, Games...)", color = TextSecondary, fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = equalizerState.isSystemWide,
+                        onCheckedChange = { viewModel.toggleSystemWideEq(it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
+                    )
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = DarkBorder)
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Chế độ phát Bit-Perfect", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Bỏ qua resampler của Android khi phát FLAC 96kHz", color = TextSecondary, fontSize = 11.sp)
+                    }
+                    Switch(
+                        checked = equalizerState.isHiResDspEnabled,
+                        onCheckedChange = { viewModel.toggleHiResDsp(it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
+                    )
+                }
+            }
+        }
+
+        // Section: Thông tin ứng dụng
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Thông tin & Giấy phép", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                InfoRow("Phiên bản", "1.0.0 (Audiophile Release)")
+                InfoRow("Ngôn ngữ", "Tiếng Việt (100% Native)")
+                InfoRow("Bộ xử lý âm thanh", "Android AudioFX + Native DSP")
+                InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0")
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingItemRow(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 6.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = iconTint.copy(alpha = 0.15f),
+            modifier = Modifier.size(38.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(imageVector = icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(20.dp))
+            }
+        }
+
+        Spacer(modifier = Modifier.width(12.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = TextSecondary, fontSize = 11.sp)
+        }
+
+        Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, color = TextSecondary, fontSize = 12.sp)
+        Text(value, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    }
+}

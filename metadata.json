@@ -1,0 +1,6 @@
+{
+  "name": "Music EQ",
+  "description": "Ứng dụng nghe nhạc ngoại tuyến chất lượng cao với lời bài hát đồng bộ (Karaoke LRC), bộ chỉnh âm Equalizer 10 dải tần hỗ trợ toàn hệ thống và ứng dụng bên thứ 3.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

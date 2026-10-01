@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">Music EQ</string>
+    <string name="tab_library">Thư viện</string>
+    <string name="tab_now_playing">Đang phát</string>
+    <string name="tab_lyrics">Lời bài hát</string>
+    <string name="tab_equalizer">Bộ chỉnh âm</string>
+    <string name="tab_settings">Cài đặt</string>
+    <string name="songs_count">%1$d bài hát</string>
+    <string name="playlists">Danh sách phát</string>
+    <string name="favorites">Yêu thích</string>
+    <string name="system_eq_title">EQ Toàn Hệ Thống</string>
+    <string name="system_eq_desc">Áp dụng hiệu ứng âm thanh cho tất cả ứng dụng thứ 3</string>
+    <string name="bass_boost">Tăng âm trầm (Bass)</string>
+    <string name="virtualizer">Âm thanh vòm 3D</string>
+    <string name="hi_res_badge">Hi-Res Audio 24-bit/96kHz</string>
+</resources>

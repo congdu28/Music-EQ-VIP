@@ -1,0 +1,57 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Glowing Headphone Arc -->
+    <path
+        android:pathData="M34,58 L34,50 A20,20 0 0,1 74,50 L74,58"
+        android:strokeWidth="5"
+        android:strokeColor="#7C3AED"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+
+    <!-- Left Ear Cup -->
+    <path
+        android:pathData="M30,52 C28,52 26,54 26,58 L26,66 C26,70 28,72 30,72 L33,72 C35,72 37,70 37,66 L37,58 C37,54 35,52 33,52 Z"
+        android:fillColor="#06B6D4" />
+
+    <!-- Right Ear Cup -->
+    <path
+        android:pathData="M75,52 C73,52 71,54 71,58 L71,66 C71,70 73,72 75,72 L78,72 C80,72 82,70 82,66 L82,58 C82,54 80,52 78,52 Z"
+        android:fillColor="#06B6D4" />
+
+    <!-- Equalizer Spectrum Bars in Center -->
+    <path
+        android:pathData="M42,66 L42,56"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#00F0FF" />
+    <path
+        android:pathData="M48,68 L48,48"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#A855F7" />
+    <path
+        android:pathData="M54,70 L54,42"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#EC4899" />
+    <path
+        android:pathData="M60,68 L60,48"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#A855F7" />
+    <path
+        android:pathData="M66,66 L66,56"
+        android:strokeWidth="3.5"
+        android:strokeLineCap="round"
+        android:strokeColor="#00F0FF" />
+
+    <!-- Sparkle / Accent note -->
+    <path
+        android:pathData="M70,32 A3,3 0 1,1 70,38 A3,3 0 1,1 70,32"
+        android:fillColor="#38BDF8" />
+</vector>
