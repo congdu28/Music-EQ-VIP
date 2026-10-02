@@ -98,7 +98,7 @@ fun LibraryScreen(
                             textStyle = TextStyle(
                                 color = TextPrimary,
                                 fontSize = 13.sp,
-                                fontFamily = BeVietnamProFontFamily
+                                fontFamily = GoogleSansFontFamily
                             ),
                             cursorBrush = SolidColor(NeonCyan),
                             singleLine = true,
