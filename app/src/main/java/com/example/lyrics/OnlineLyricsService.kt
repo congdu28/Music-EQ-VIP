@@ -3,8 +3,10 @@ package com.example.lyrics
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
@@ -222,10 +224,8 @@ Yêu cầu bắt buộc:
                     put("contents", contentsArray)
                 }
 
-                val body = okhttp3.RequestBody.create(
-                    okhttp3.MediaType.parse("application/json; charset=utf-8"),
-                    jsonPayload.toString()
-                )
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = jsonPayload.toString().toRequestBody(mediaType)
 
                 val request = Request.Builder()
                     .url(url)
