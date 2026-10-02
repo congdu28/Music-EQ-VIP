@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,6 +39,7 @@ import com.example.player.PlayerUiState
 import com.example.player.RepeatMode
 import com.example.ui.MainTab
 import com.example.ui.MusicViewModel
+import com.example.ui.components.AudioSpectrumVisualizer
 import com.example.ui.theme.*
 
 enum class NowPlayingDisplayMode {
@@ -145,23 +147,48 @@ fun NowPlayingScreen(
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
 
+    // Dynamic Color Palette extracted from current album art / song
+    val dynamicPalette = remember(song.id, song.title) {
+        AlbumArtColorExtractor.getPaletteForSong(song)
+    }
+    val animatedPrimary by animateColorAsState(
+        targetValue = dynamicPalette.primary,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "primaryColor"
+    )
+    val animatedSecondary by animateColorAsState(
+        targetValue = dynamicPalette.secondary,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "secondaryColor"
+    )
+    val animatedGlow by animateColorAsState(
+        targetValue = dynamicPalette.backgroundGlow,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "glowColor"
+    )
+    val animatedButtonGlow by animateColorAsState(
+        targetValue = dynamicPalette.buttonGlow,
+        animationSpec = tween(durationMillis = 600, easing = FastOutSlowInEasing),
+        label = "buttonGlow"
+    )
+
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
     ) {
-        // Atmospheric Top Radial Glow
+        // Atmospheric Top Radial Glow with Dynamic Album Art Tint
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(340.dp)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            RadialGradientTop.copy(alpha = 0.5f),
+                            animatedGlow.copy(alpha = 0.65f),
                             Color.Transparent
                         ),
-                        radius = 700f
+                        radius = 750f
                     )
                 )
         )
@@ -219,30 +246,56 @@ fun NowPlayingScreen(
                     )
                 }
 
-                // Mode switch: Art vs Full Lyrics Toggle
-                Surface(
-                    shape = CircleShape,
-                    color = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) ElectricAzure.copy(alpha = 0.2f) else DarkSurfaceVariant,
-                    border = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) androidx.compose.foundation.BorderStroke(1.dp, ElectricAzure) else null,
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .clickable {
-                            displayMode = if (displayMode == NowPlayingDisplayMode.ALBUM_ART) {
-                                NowPlayingDisplayMode.FULL_LYRICS
-                            } else {
-                                NowPlayingDisplayMode.ALBUM_ART
-                            }
-                        }
-                        .testTag("toggle_lyrics_mode_button")
+                // Right Actions: Edit Tag & Mode Switch
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) Icons.Default.Album else Icons.Default.Lyrics,
-                            contentDescription = "Chuyển chế độ lời bài hát",
-                            tint = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) ElectricAzure else TextPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                    // Edit Metadata Button
+                    Surface(
+                        shape = CircleShape,
+                        color = DarkSurfaceVariant,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .clickable { viewModel.setShowEditMetadata(song) }
+                            .testTag("now_playing_edit_tag_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Sửa thông tin bài hát",
+                                tint = animatedPrimary,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                    }
+
+                    // Mode switch: Art vs Full Lyrics Toggle
+                    Surface(
+                        shape = CircleShape,
+                        color = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) animatedPrimary.copy(alpha = 0.2f) else DarkSurfaceVariant,
+                        border = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary) else null,
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .clickable {
+                                displayMode = if (displayMode == NowPlayingDisplayMode.ALBUM_ART) {
+                                    NowPlayingDisplayMode.FULL_LYRICS
+                                } else {
+                                    NowPlayingDisplayMode.ALBUM_ART
+                                }
+                            }
+                            .testTag("toggle_lyrics_mode_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) Icons.Default.Album else Icons.Default.Lyrics,
+                                contentDescription = "Chuyển chế độ lời bài hát",
+                                tint = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) animatedPrimary else TextPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -305,14 +358,14 @@ fun NowPlayingScreen(
                                         Surface(
                                             shape = CircleShape,
                                             color = Color.Transparent,
-                                            border = androidx.compose.foundation.BorderStroke(3.5.dp, ElectricAzure),
+                                            border = androidx.compose.foundation.BorderStroke(3.5.dp, animatedPrimary),
                                             modifier = Modifier.size(120.dp)
                                         ) {
                                             Box(contentAlignment = Alignment.Center) {
                                                 // Central Core
                                                 Surface(
                                                     shape = CircleShape,
-                                                    color = ElectricAzure,
+                                                    color = animatedPrimary,
                                                     modifier = Modifier.size(86.dp)
                                                 ) {
                                                     Box(contentAlignment = Alignment.Center) {
@@ -583,7 +636,31 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Dynamic Melody Wave Visualizer (Sóng nhạc theo giai điệu)
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = DarkSurface.copy(alpha = 0.55f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp)
+            ) {
+                AudioSpectrumVisualizer(
+                    isPlaying = playerState.isPlaying,
+                    bands = equalizerState.bands,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(72.dp)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    customColors = listOf(animatedPrimary, animatedSecondary, NeonPink),
+                    style = uiState.visualizerStyle,
+                    onToggleStyle = { viewModel.toggleVisualizerStyle() }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Immersive Scrubber / Progress Bar
             Slider(
@@ -598,8 +675,8 @@ fun NowPlayingScreen(
                     isUserDragging = false
                 },
                 colors = SliderDefaults.colors(
-                    thumbColor = ElectricAzure,
-                    activeTrackColor = ElectricAzure,
+                    thumbColor = animatedPrimary,
+                    activeTrackColor = animatedPrimary,
                     inactiveTrackColor = DarkSurfaceVariant
                 ),
                 modifier = Modifier
@@ -647,15 +724,15 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Shuffle Mode
+                // Shuffle vs Sequential Mode Toggle Button
                 IconButton(
                     onClick = { viewModel.toggleShuffle() },
                     modifier = Modifier.size(42.dp).testTag("now_playing_shuffle_button")
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Shuffle,
-                        contentDescription = "Trộn bài",
-                        tint = if (playerState.isShuffle) ElectricAzure else TextSecondary
+                        imageVector = if (playerState.isShuffle) Icons.Default.Shuffle else Icons.AutoMirrored.Filled.QueueMusic,
+                        contentDescription = if (playerState.isShuffle) "Đang phát ngẫu nhiên" else "Đang phát theo thứ tự",
+                        tint = if (playerState.isShuffle) NeonPurple else ElectricAzure
                     )
                 }
 
@@ -672,7 +749,7 @@ fun NowPlayingScreen(
                     )
                 }
 
-                // Immersive Play / Pause Button (Light Pearl with Dark Icon)
+                // Immersive Play / Pause Button (Light Pearl with Dark Icon & Dynamic Glow)
                 Surface(
                     shape = CircleShape,
                     color = PlayButtonBackground,
@@ -681,7 +758,7 @@ fun NowPlayingScreen(
                         .shadow(
                             elevation = 14.dp,
                             shape = CircleShape,
-                            spotColor = ElectricAzure,
+                            spotColor = animatedButtonGlow,
                             ambientColor = Color.Black
                         )
                         .clip(CircleShape)
@@ -726,35 +803,73 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // EQ Status Pill Badge
-            Surface(
-                shape = CircleShape,
-                color = DarkSurfaceVariant,
-                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .clickable { viewModel.setTab(MainTab.EQUALIZER) }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Playback Order Badge (Phát theo thứ tự vs Phát ngẫu nhiên)
+                Surface(
+                    shape = CircleShape,
+                    color = if (playerState.isShuffle) NeonPurple.copy(alpha = 0.15f) else NeonCyan.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (playerState.isShuffle) NeonPurple.copy(alpha = 0.6f) else NeonCyan.copy(alpha = 0.6f)
+                    ),
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { viewModel.toggleShuffle() }
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(7.dp)
-                            .clip(CircleShape)
-                            .background(
-                                if (equalizerState.isEnabled) NeonGreen.copy(alpha = pulseAlpha) else TextMuted
-                            )
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (equalizerState.isEnabled) "EQ HỆ THỐNG: BẬT (${equalizerState.activePresetName})" else "EQ HỆ THỐNG: TẮT",
-                        color = TextSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.2.sp
-                    )
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (playerState.isShuffle) Icons.Default.Shuffle else Icons.AutoMirrored.Filled.QueueMusic,
+                            contentDescription = null,
+                            tint = if (playerState.isShuffle) NeonPurple else NeonCyan,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (playerState.isShuffle) "PHÁT NGẪU NHIÊN" else "PHÁT THEO THỨ TỰ",
+                            color = if (playerState.isShuffle) NeonPurple else NeonCyan,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp
+                        )
+                    }
+                }
+
+                // Equalizer Status Pill Badge
+                Surface(
+                    shape = CircleShape,
+                    color = DarkSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .clickable { viewModel.setTab(MainTab.EQUALIZER) }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (equalizerState.isEnabled) NeonGreen.copy(alpha = pulseAlpha) else TextMuted
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (equalizerState.isEnabled) "EQ: BẬT" else "EQ: TẮT",
+                            color = TextSecondary,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp
+                        )
+                    }
                 }
             }
 
@@ -818,6 +933,16 @@ fun NowPlayingScreen(
                     Icon(imageVector = Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Thông số", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                }
+
+                // Edit Song Metadata Dialog
+                TextButton(
+                    onClick = { viewModel.setShowEditMetadata(song) },
+                    colors = ButtonDefaults.textButtonColors(contentColor = animatedPrimary)
+                ) {
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Sửa thẻ", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 // Playback speed (Continuous granular slider & fine-tune)

@@ -73,7 +73,7 @@ fun SettingsScreen(
                 }
                 Spacer(modifier = Modifier.height(10.dp))
                 Text("Nhịp Điệu Hi-Res Player", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("Trình phát nhạc ngoại tuyến & EQ Toàn Hệ Thống", color = TextSecondary, fontSize = 12.sp)
+                Text("Trình phát nhạc Hi-Res Lossless & Bộ chỉnh âm 5 dải", color = TextSecondary, fontSize = 12.sp)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -172,7 +172,7 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Cấu hình EQ & Toàn hệ thống
+        // Section: Chuyển nhạc mượt mà (Crossfade)
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -180,7 +180,85 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Cấu hình EQ & Toàn hệ thống", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Chuyển nhạc mượt mà (Crossfade)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text(
+                            text = if (playerState.isCrossfadeEnabled) "Hòa trộn âm thanh ${String.format("%.1f", playerState.crossfadeDurationSeconds)}s giữa các bài hát" else "Đã tắt (Chuyển bài lập tức)",
+                            color = TextSecondary,
+                            fontSize = 11.sp
+                        )
+                    }
+                    Switch(
+                        checked = playerState.isCrossfadeEnabled,
+                        onCheckedChange = { viewModel.setCrossfadeEnabled(it) },
+                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
+                    )
+                }
+
+                if (playerState.isCrossfadeEnabled) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "Thời gian hòa âm (Fade In/Out): ${String.format("%.1fs", playerState.crossfadeDurationSeconds)}",
+                        color = NeonCyan,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Slider(
+                        value = playerState.crossfadeDurationSeconds,
+                        onValueChange = { viewModel.setCrossfadeDuration(it) },
+                        valueRange = 0.5f..5.0f,
+                        colors = SliderDefaults.colors(
+                            thumbColor = NeonCyan,
+                            activeTrackColor = NeonCyan,
+                            inactiveTrackColor = DarkSurfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(0.5f, 1.0f, 2.0f, 3.0f, 5.0f).forEach { sec ->
+                            val isSel = kotlin.math.abs(playerState.crossfadeDurationSeconds - sec) < 0.2f
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = if (isSel) NeonCyan else DarkSurfaceVariant,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (isSel) NeonCyan else DarkBorder),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .clickable { viewModel.setCrossfadeDuration(sec) }
+                            ) {
+                                Box(modifier = Modifier.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "${sec.toInt().takeIf { it.toFloat() == sec } ?: sec}s",
+                                        color = if (isSel) DarkBackground else TextSecondary,
+                                        fontSize = 10.sp,
+                                        fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section: Cấu hình EQ & Bộ xử lý âm thanh
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Bộ chỉnh âm Equalizer", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 Row(
@@ -189,33 +267,25 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("EQ Toàn Hệ Thống", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Áp dụng cho ứng dụng khác (YouTube, Spotify, Games...)", color = TextSecondary, fontSize = 11.sp)
+                        Text("Bật bộ lọc Equalizer", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(if (equalizerState.isEnabled) "Đang áp dụng: ${equalizerState.activePresetName}" else "Đã tắt bộ lọc", color = TextSecondary, fontSize = 11.sp)
                     }
                     Switch(
-                        checked = equalizerState.isSystemWide,
-                        onCheckedChange = { viewModel.toggleSystemWideEq(it) },
+                        checked = equalizerState.isEnabled,
+                        onCheckedChange = { viewModel.toggleEqualizerEnabled(it) },
                         colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
                     )
                 }
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = DarkBorder)
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Chế độ phát Bit-Perfect", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Bỏ qua resampler của Android khi phát FLAC 96kHz", color = TextSecondary, fontSize = 11.sp)
-                    }
-                    Switch(
-                        checked = equalizerState.isHiResDspEnabled,
-                        onCheckedChange = { viewModel.toggleHiResDsp(it) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
-                    )
-                }
+                SettingItemRow(
+                    icon = Icons.Default.Tune,
+                    iconTint = NeonCyan,
+                    title = "Tùy chỉnh dải tần & Hiệu ứng",
+                    subtitle = "Mở bảng điều khiển Equalizer, Bass Boost & Âm vòm 3D",
+                    onClick = { viewModel.setTab(MainTab.EQUALIZER) }
+                )
             }
         }
 

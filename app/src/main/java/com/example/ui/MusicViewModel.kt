@@ -7,7 +7,6 @@ import com.example.data.MusicRepository
 import com.example.equalizer.EqualizerBand
 import com.example.equalizer.EqualizerManager
 import com.example.equalizer.EqualizerState
-import com.example.equalizer.SpeakerProfile
 import com.example.lyrics.LrcParser
 import com.example.lyrics.ParsedLyrics
 import com.example.model.EqualizerPreset
@@ -15,8 +14,10 @@ import com.example.model.Playlist
 import com.example.model.Song
 import com.example.player.MusicPlayerController
 import com.example.player.PlayerUiState
+import com.example.ui.components.VisualizerStyle
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import java.io.File
 
 enum class MainTab(val title: String) {
     LIBRARY("Thư viện"),
@@ -28,10 +29,20 @@ enum class MainTab(val title: String) {
 
 enum class LibrarySubTab(val title: String) {
     ALL_SONGS("Tất cả"),
+    FOLDERS("Thư mục"),
+    HI_RES("Hi-Res FLAC/WAV"),
     FAVORITES("Yêu thích"),
     PLAYLISTS("Danh sách phát"),
-    HI_RES("Hi-Res FLAC/WAV"),
     ARTISTS("Nghệ sĩ")
+}
+
+data class MusicFolder(
+    val name: String,
+    val path: String,
+    val songs: List<Song>
+) {
+    val songCount: Int get() = songs.size
+    val hiResCount: Int get() = songs.count { it.isHiRes }
 }
 
 data class MusicAppUiState(
@@ -43,6 +54,7 @@ data class MusicAppUiState(
     val playlists: List<Playlist> = emptyList(),
     val selectedPlaylist: Playlist? = null,
     val selectedPlaylistSongs: List<Song> = emptyList(),
+    val selectedFolder: MusicFolder? = null,
     val presets: List<EqualizerPreset> = emptyList(),
     val parsedLyrics: ParsedLyrics = ParsedLyrics(),
     val activeLyricIndex: Int = -1,
@@ -50,10 +62,12 @@ data class MusicAppUiState(
     val scanResultMessage: String? = null,
     val showCreatePlaylistDialog: Boolean = false,
     val showAddToPlaylistDialog: Song? = null,
+    val showEditMetadataDialog: Song? = null,
     val showEditLyricsDialog: Boolean = false,
     val showSleepTimerDialog: Boolean = false,
     val showSavePresetDialog: Boolean = false,
-    val showAudioSpecsDialog: Boolean = false
+    val showAudioSpecsDialog: Boolean = false,
+    val visualizerStyle: VisualizerStyle = VisualizerStyle.WAVE
 )
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
@@ -75,10 +89,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.allSongs.collect { songList ->
                 _appUiState.update { it.copy(songs = songList) }
-                // If no song is loaded in player, load the first one ready
+                // Pre-load queue and first song ready WITHOUT auto-playing
                 if (playerController.uiState.value.currentSong == null && songList.isNotEmpty()) {
-                    playerController.playQueue(songList.take(1), 0)
-                    playerController.togglePlayPause() // Keep paused initially
+                    playerController.loadInitialQueue(songList, 0)
+                } else if (playerController.uiState.value.queue.isEmpty() && songList.isNotEmpty()) {
+                    playerController.updateQueue(songList)
                 }
             }
         }
@@ -124,21 +139,59 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setLibrarySubTab(subTab: LibrarySubTab) {
-        _appUiState.update { it.copy(librarySubTab = subTab) }
+        _appUiState.update { it.copy(librarySubTab = subTab, selectedFolder = null) }
     }
 
     fun setSearchQuery(query: String) {
         _appUiState.update { it.copy(searchQuery = query) }
     }
 
-    fun playSong(song: Song) {
-        val currentList = getFilteredSongs()
-        val index = currentList.indexOfFirst { it.id == song.id }.let { if (it >= 0) it else 0 }
-        playerController.playQueue(if (currentList.isNotEmpty()) currentList else listOf(song), index)
+    fun scanDeviceAudio() {
+        viewModelScope.launch {
+            _appUiState.update { it.copy(isScanning = true, scanResultMessage = null) }
+            val count = repository.scanDeviceAudioFiles()
+            _appUiState.update {
+                it.copy(
+                    isScanning = false,
+                    scanResultMessage = if (count > 0) "Đã quét và thêm $count bài hát mới vào thư viện" else "Thư viện đã được cập nhật đầy đủ"
+                )
+            }
+        }
+    }
+
+    fun scanDeviceAudioIfEmpty() {
+        viewModelScope.launch {
+            if (_appUiState.value.songs.isEmpty()) {
+                scanDeviceAudio()
+            }
+        }
+    }
+
+    fun dismissScanMessage() {
+        _appUiState.update { it.copy(scanResultMessage = null) }
+    }
+
+    fun toggleFavorite(song: Song) {
+        viewModelScope.launch {
+            repository.toggleFavorite(song)
+        }
+    }
+
+    // Playback Order controls
+    fun playAllSequential(songs: List<Song>, startIndex: Int = 0) {
+        playerController.playAllSequential(songs, startIndex)
+    }
+
+    fun playAllShuffled(songs: List<Song>) {
+        playerController.playAllShuffled(songs)
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         playerController.playQueue(songs, startIndex)
+    }
+
+    fun playSong(song: Song) {
+        playerController.playSong(song)
     }
 
     fun togglePlayPause() = playerController.togglePlayPause()
@@ -151,47 +204,119 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun startSleepTimer(minutes: Int) = playerController.startSleepTimer(minutes)
     fun cancelSleepTimer() = playerController.cancelSleepTimer()
 
-    fun toggleFavorite(song: Song) {
-        viewModelScope.launch {
-            repository.toggleFavorite(song)
+    // Smooth Crossfade controls
+    fun setCrossfadeEnabled(enabled: Boolean) = playerController.setCrossfadeEnabled(enabled)
+    fun setCrossfadeDuration(seconds: Float) = playerController.setCrossfadeDuration(seconds)
+
+    // Visualizer Style
+    fun toggleVisualizerStyle() {
+        val nextStyle = if (_appUiState.value.visualizerStyle == VisualizerStyle.WAVE) {
+            VisualizerStyle.SPECTRUM
+        } else {
+            VisualizerStyle.WAVE
         }
+        _appUiState.update { it.copy(visualizerStyle = nextStyle) }
     }
 
-    fun scanDeviceAudio() {
+    // Folder Browsing
+    fun getMusicFolders(): List<MusicFolder> {
+        val allSongs = _appUiState.value.songs
+        if (allSongs.isEmpty()) return emptyList()
+
+        val folderMap = mutableMapOf<String, MutableList<Song>>()
+        for (song in allSongs) {
+            val path = song.filePath
+            val parentPath = try {
+                val f = File(path)
+                f.parentFile?.absolutePath ?: "Bộ nhớ máy"
+            } catch (e: Exception) {
+                "Bộ nhớ máy"
+            }
+            folderMap.getOrPut(parentPath) { mutableListOf() }.add(song)
+        }
+
+        return folderMap.map { (path, songs) ->
+            val folderName = try {
+                val f = File(path)
+                when {
+                    f.name.isBlank() || f.name == "/" -> "Bộ nhớ trong"
+                    path.contains("files") || path.contains("synthetic") -> "Bộ sưu tập Hi-Res Studio"
+                    else -> f.name
+                }
+            } catch (e: Exception) {
+                "Thư mục âm nhạc"
+            }
+            MusicFolder(name = folderName, path = path, songs = songs)
+        }.sortedBy { it.name }
+    }
+
+    fun openFolder(folder: MusicFolder) {
+        _appUiState.update { it.copy(selectedFolder = folder) }
+    }
+
+    fun closeFolder() {
+        _appUiState.update { it.copy(selectedFolder = null) }
+    }
+
+    // Song Metadata Tag Editor
+    fun setShowEditMetadata(song: Song?) {
+        _appUiState.update { it.copy(showEditMetadataDialog = song) }
+    }
+
+    fun saveSongMetadata(songId: Long, title: String, artist: String, album: String, format: String) {
         viewModelScope.launch {
-            _appUiState.update { it.copy(isScanning = true, scanResultMessage = null) }
-            val count = repository.scanDeviceAudioFiles()
-            _appUiState.update {
-                it.copy(
-                    isScanning = false,
-                    scanResultMessage = if (count > 0) "Đã quét và thêm $count bài hát từ thiết bị!" else "Không tìm thấy file nhạc mới hoặc đã cập nhật đủ."
-                )
+            val updated = repository.updateSongMetadata(songId, title, artist, album, format)
+            if (updated != null) {
+                // If currently playing, update in playerController queue/currentSong
+                val current = playerState.value.currentSong
+                if (current != null && current.id == songId) {
+                    playerController.updateQueue(playerState.value.queue.map { if (it.id == songId) updated else it })
+                }
+                _appUiState.update {
+                    it.copy(
+                        showEditMetadataDialog = null,
+                        scanResultMessage = "Đã lưu thông tin: $title"
+                    )
+                }
+            } else {
+                _appUiState.update { it.copy(showEditMetadataDialog = null) }
             }
         }
     }
 
-    fun dismissScanMessage() {
-        _appUiState.update { it.copy(scanResultMessage = null) }
-    }
-
     // Equalizer controls
     fun toggleEqualizerEnabled(enabled: Boolean) = equalizerManager.setEnabled(enabled)
-    fun toggleSystemWideEq(enabled: Boolean) = equalizerManager.toggleSystemWide(enabled)
-    fun updateBandLevel(bandIndex: Short, levelMb: Short) = equalizerManager.updateBandLevel(bandIndex, levelMb)
+    fun updateBandLevel(bandIndex: Short, levelMilliBels: Short) = equalizerManager.updateBandLevel(bandIndex, levelMilliBels)
+    fun setBandLevel(bandIndex: Int, levelDb: Float) = equalizerManager.updateBandLevel(bandIndex.toShort(), (levelDb * 100).toInt().toShort())
     fun setBassBoost(strength: Int) = equalizerManager.setBassBoost(strength)
     fun setVirtualizer(strength: Int) = equalizerManager.setVirtualizer(strength)
-    fun setLoudnessEnhancer(gainMb: Int) = equalizerManager.setLoudnessEnhancerGain(gainMb)
-    fun toggleAntiClipping(enabled: Boolean) = equalizerManager.toggleAntiClipping(enabled)
-    fun setSpeakerProfile(profile: SpeakerProfile) = equalizerManager.setSpeakerProfile(profile)
-    fun setReverbPreset(preset: Short) = equalizerManager.setReverbPreset(preset)
-    fun toggleHiResDsp(enabled: Boolean) = equalizerManager.toggleHiResDsp(enabled)
-    fun toggleReplayGain(enabled: Boolean) = equalizerManager.toggleReplayGain(enabled)
-    fun refreshAudioDevice() = equalizerManager.detectCurrentAudioDevice()
+    fun resetEqualizer() = equalizerManager.resetToFlat()
+    fun resetEqualizerToFlat() = equalizerManager.resetToFlat()
 
     fun applyPreset(preset: EqualizerPreset) {
-        val gains = preset.bandLevelsCsv.split(",").mapNotNull { it.trim().toIntOrNull() }
-        equalizerManager.applyPreset(preset.name, gains, preset.bassBoost, preset.virtualizer)
-        equalizerManager.setReverbPreset(preset.reverbPreset.toShort())
+        val levels = preset.bandLevelsCsv.split(",").mapNotNull { it.trim().toIntOrNull() }
+        equalizerManager.applyPreset(preset.name, levels, preset.bassBoost, preset.virtualizer)
+    }
+
+    fun applyPreset(presetName: String) {
+        val preset = _appUiState.value.presets.firstOrNull { it.name == presetName }
+        if (preset != null) {
+            applyPreset(preset)
+        } else {
+            val defaultGains = when (presetName) {
+                "Bass Boost" -> listOf(600, 400, 100, 0, 0)
+                "Pop" -> listOf(100, 300, 500, 200, 100)
+                "Rock" -> listOf(500, 300, -100, 400, 600)
+                "EDM" -> listOf(700, 300, 0, 400, 500)
+                "Acoustic" -> listOf(300, 200, 200, 300, 200)
+                "Jazz" -> listOf(300, 100, -100, 200, 400)
+                "Classical" -> listOf(400, 200, -100, 200, 400)
+                else -> listOf(0, 0, 0, 0, 0)
+            }
+            val defaultBass = if (presetName == "Bass Boost" || presetName == "EDM") 600 else 100
+            val defaultVirtual = if (presetName == "EDM" || presetName == "Rock") 400 else 100
+            equalizerManager.applyPreset(presetName, defaultGains, defaultBass, defaultVirtual)
+        }
     }
 
     fun saveCurrentPreset(name: String) {
@@ -202,7 +327,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             bandLevelsCsv = currentBands,
             bassBoost = equalizerState.value.bassBoostStrength,
             virtualizer = equalizerState.value.virtualizerStrength,
-            reverbPreset = equalizerState.value.reverbPreset.toInt()
+            reverbPreset = 0
         )
         viewModelScope.launch {
             repository.saveEqualizerPreset(preset)
@@ -269,6 +394,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val query = _appUiState.value.searchQuery.trim().lowercase()
         val all = when (_appUiState.value.librarySubTab) {
             LibrarySubTab.ALL_SONGS -> _appUiState.value.songs
+            LibrarySubTab.FOLDERS -> _appUiState.value.songs
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }
             LibrarySubTab.ARTISTS, LibrarySubTab.PLAYLISTS -> _appUiState.value.songs

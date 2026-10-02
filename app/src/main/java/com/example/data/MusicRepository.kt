@@ -36,6 +36,7 @@ class MusicRepository(private val context: Context) {
     val allPresets: Flow<List<EqualizerPreset>> = db.equalizerDao().getAllPresets()
 
     suspend fun initializeDefaultDataIfEmpty() = withContext(Dispatchers.IO) {
+        removeDuplicateSongs()
         val existingSongs = db.songDao().getAllSongs().firstOrNull()
         if (existingSongs.isNullOrEmpty()) {
             val sampleSongs = createSampleSongs()
@@ -348,9 +349,15 @@ class MusicRepository(private val context: Context) {
                         )
                     )
                 }
-                if (scannedSongs.isNotEmpty()) {
-                    db.songDao().insertSongs(scannedSongs)
-                    count = scannedSongs.size
+                val existingPaths = db.songDao().getAllSongPaths().filter { it.isNotEmpty() }.toSet()
+                val uniqueScannedSongs = scannedSongs
+                    .filter { it.filePath.isNotEmpty() }
+                    .distinctBy { it.filePath }
+                    .filter { !existingPaths.contains(it.filePath) }
+
+                if (uniqueScannedSongs.isNotEmpty()) {
+                    db.songDao().insertSongs(uniqueScannedSongs)
+                    count = uniqueScannedSongs.size
                 }
             }
         } catch (e: Exception) {
@@ -359,12 +366,62 @@ class MusicRepository(private val context: Context) {
         count
     }
 
+    suspend fun removeDuplicateSongs() = withContext(Dispatchers.IO) {
+        try {
+            val allSongs = db.songDao().getAllSongsList()
+            val seenKeys = mutableSetOf<String>()
+            val duplicatesToDelete = mutableListOf<Long>()
+            for (song in allSongs) {
+                val key = song.filePath.ifEmpty { "${song.title.trim().lowercase()}__${song.artist.trim().lowercase()}" }
+                if (seenKeys.contains(key)) {
+                    duplicatesToDelete.add(song.id)
+                } else {
+                    seenKeys.add(key)
+                }
+            }
+            for (id in duplicatesToDelete) {
+                db.songDao().deleteSongById(id)
+            }
+            if (duplicatesToDelete.isNotEmpty()) {
+                Log.d(TAG, "Removed ${duplicatesToDelete.size} duplicate songs from database")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error removing duplicates: ${e.message}")
+        }
+    }
+
     suspend fun toggleFavorite(song: Song) = withContext(Dispatchers.IO) {
         db.songDao().updateFavorite(song.id, !song.isFavorite)
     }
 
     suspend fun updateSongLyrics(songId: Long, lyrics: String, offsetMs: Long) = withContext(Dispatchers.IO) {
         db.songDao().updateLyrics(songId, lyrics, offsetMs)
+    }
+
+    suspend fun updateSongMetadata(
+        songId: Long,
+        newTitle: String,
+        newArtist: String,
+        newAlbum: String,
+        newFormat: String,
+        newBitrate: Int = 320
+    ): Song? = withContext(Dispatchers.IO) {
+        try {
+            val song = db.songDao().getSongById(songId) ?: return@withContext null
+            val updated = song.copy(
+                title = newTitle.trim(),
+                artist = newArtist.trim(),
+                album = newAlbum.trim(),
+                format = newFormat.trim().uppercase(),
+                bitrateKbps = newBitrate,
+                isHiRes = newFormat.trim().uppercase() in listOf("FLAC", "WAV", "ALAC") || song.isHiRes
+            )
+            db.songDao().updateSong(updated)
+            updated
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating song metadata: ${e.message}")
+            null
+        }
     }
 
     suspend fun createPlaylist(name: String, description: String = ""): Long = withContext(Dispatchers.IO) {

@@ -4,8 +4,6 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import com.example.equalizer.EqualizerManager
 import com.example.model.Song
@@ -32,7 +30,9 @@ data class PlayerUiState(
     val isSleepTimerActive: Boolean = false,
     val queue: List<Song> = emptyList(),
     val currentIndex: Int = -1,
-    val isHiResAudioActive: Boolean = true
+    val isHiResAudioActive: Boolean = true,
+    val isCrossfadeEnabled: Boolean = true,
+    val crossfadeDurationSeconds: Float = 2.0f
 )
 
 class MusicPlayerController(
@@ -43,6 +43,8 @@ class MusicPlayerController(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var mediaPlayer: MediaPlayer? = null
+    private var crossfadeJob: Job? = null
+
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
@@ -78,6 +80,66 @@ class MusicPlayerController(
         }
     }
 
+    fun loadInitialQueue(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
+        val validIndex = startIndex.coerceIn(0, songs.size - 1)
+        val initialSong = songs[validIndex]
+        _uiState.update {
+            it.copy(
+                queue = songs,
+                currentIndex = validIndex,
+                currentSong = initialSong,
+                isPlaying = false,
+                currentPositionMs = 0,
+                totalDurationMs = initialSong.durationMs,
+                isHiResAudioActive = initialSong.isHiRes
+            )
+        }
+    }
+
+    fun updateQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        _uiState.update { current ->
+            val curSong = current.currentSong
+            val newIndex = if (curSong != null) {
+                songs.indexOfFirst { it.id == curSong.id }.let { if (it >= 0) it else 0 }
+            } else {
+                0
+            }
+            current.copy(
+                queue = songs,
+                currentIndex = newIndex,
+                currentSong = curSong ?: songs.firstOrNull()
+            )
+        }
+    }
+
+    fun playAllSequential(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
+        val validIndex = startIndex.coerceIn(0, songs.size - 1)
+        _uiState.update {
+            it.copy(
+                queue = songs,
+                currentIndex = validIndex,
+                isShuffle = false
+            )
+        }
+        playSong(songs[validIndex])
+    }
+
+    fun playAllShuffled(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        val shuffledList = songs.shuffled()
+        _uiState.update {
+            it.copy(
+                queue = shuffledList,
+                currentIndex = 0,
+                isShuffle = true
+            )
+        }
+        playSong(shuffledList[0])
+    }
+
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
         val validIndex = startIndex.coerceIn(0, songs.size - 1)
@@ -92,11 +154,13 @@ class MusicPlayerController(
 
     fun playSong(song: Song) {
         try {
-            mediaPlayer?.stop()
-            mediaPlayer?.release()
-            mediaPlayer = null
+            crossfadeJob?.cancel()
+            val oldPlayer = mediaPlayer
+            val state = _uiState.value
+            val isCrossfade = state.isCrossfadeEnabled && oldPlayer != null && oldPlayer.isPlaying
+            val crossfadeDurationMs = (state.crossfadeDurationSeconds * 1000).toLong().coerceIn(300L, 5000L)
 
-            val player = MediaPlayer().apply {
+            val newPlayer = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -109,6 +173,13 @@ class MusicPlayerController(
                     setDataSource(context, Uri.fromFile(file))
                 } else {
                     setDataSource(song.filePath)
+                }
+
+                // If crossfading, start new player silently and ramp up
+                if (isCrossfade) {
+                    setVolume(0f, 0f)
+                } else {
+                    setVolume(1f, 1f)
                 }
 
                 setOnPreparedListener { mp ->
@@ -135,6 +206,40 @@ class MusicPlayerController(
                             isHiResAudioActive = song.isHiRes
                         )
                     }
+
+                    if (isCrossfade && oldPlayer != null) {
+                        // Smoothly crossfade: oldPlayer down, mp up
+                        crossfadeJob = scope.launch {
+                            val steps = 18
+                            val interval = (crossfadeDurationMs / steps).coerceAtLeast(15L)
+                            for (step in 1..steps) {
+                                val progress = step.toFloat() / steps
+                                val newVol = progress
+                                val oldVol = (1.0f - progress).coerceAtLeast(0f)
+                                try {
+                                    mp.setVolume(newVol, newVol)
+                                    oldPlayer.setVolume(oldVol, oldVol)
+                                } catch (e: Exception) {
+                                    // Player may have finished
+                                }
+                                delay(interval)
+                            }
+                            try {
+                                mp.setVolume(1f, 1f)
+                                oldPlayer.stop()
+                                oldPlayer.release()
+                            } catch (e: Exception) {
+                                // ignore
+                            }
+                        }
+                    } else {
+                        try {
+                            oldPlayer?.stop()
+                            oldPlayer?.release()
+                        } catch (e: Exception) {
+                            // ignore
+                        }
+                    }
                 }
 
                 setOnCompletionListener {
@@ -148,7 +253,7 @@ class MusicPlayerController(
 
                 prepareAsync()
             }
-            mediaPlayer = player
+            mediaPlayer = newPlayer
         } catch (e: Exception) {
             Log.e(TAG, "Error playing song: ${e.message}", e)
         }
@@ -161,16 +266,34 @@ class MusicPlayerController(
             return
         }
 
-        try {
-            if (player.isPlaying) {
-                player.pause()
-                _uiState.update { it.copy(isPlaying = false) }
-            } else {
-                player.start()
-                _uiState.update { it.copy(isPlaying = true) }
+        scope.launch {
+            try {
+                if (player.isPlaying) {
+                    // Gentle 120ms fade out before pause to avoid acoustic pop
+                    val steps = 4
+                    for (i in steps downTo 0) {
+                        val vol = i.toFloat() / steps
+                        try { player.setVolume(vol, vol) } catch (e: Exception) {}
+                        delay(25)
+                    }
+                    player.pause()
+                    try { player.setVolume(1f, 1f) } catch (e: Exception) {}
+                    _uiState.update { it.copy(isPlaying = false) }
+                } else {
+                    player.setVolume(0.1f, 0.1f)
+                    player.start()
+                    _uiState.update { it.copy(isPlaying = true) }
+                    val steps = 4
+                    for (i in 1..steps) {
+                        val vol = i.toFloat() / steps
+                        try { player.setVolume(vol, vol) } catch (e: Exception) {}
+                        delay(25)
+                    }
+                    try { player.setVolume(1f, 1f) } catch (e: Exception) {}
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Toggle play/pause error: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Toggle play/pause error: ${e.message}")
         }
     }
 
@@ -245,8 +368,20 @@ class MusicPlayerController(
         }
     }
 
+    fun setShuffleMode(enabled: Boolean) {
+        _uiState.update { it.copy(isShuffle = enabled) }
+    }
+
     fun toggleShuffle() {
         _uiState.update { it.copy(isShuffle = !it.isShuffle) }
+    }
+
+    fun setCrossfadeEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(isCrossfadeEnabled = enabled) }
+    }
+
+    fun setCrossfadeDuration(seconds: Float) {
+        _uiState.update { it.copy(crossfadeDurationSeconds = seconds.coerceIn(0.5f, 5.0f)) }
     }
 
     fun cycleRepeatMode() {
@@ -308,11 +443,12 @@ class MusicPlayerController(
     }
 
     fun release() {
+        crossfadeJob?.cancel()
         progressJob?.cancel()
         sleepTimerJob?.cancel()
         mediaPlayer?.stop()
         mediaPlayer?.release()
         mediaPlayer = null
-        equalizerManager.releaseEffects()
+        equalizerManager.release()
     }
 }

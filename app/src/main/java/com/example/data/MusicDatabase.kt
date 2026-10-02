@@ -39,6 +39,15 @@ interface SongDao {
     @Query("UPDATE songs SET playCount = playCount + 1 WHERE id = :id")
     suspend fun incrementPlayCount(id: Long)
 
+    @Query("SELECT filePath FROM songs")
+    suspend fun getAllSongPaths(): List<String>
+
+    @Query("SELECT * FROM songs ORDER BY id ASC")
+    suspend fun getAllSongsList(): List<Song>
+
+    @Query("DELETE FROM songs WHERE id = :id")
+    suspend fun deleteSongById(id: Long)
+
     @Delete
     suspend fun deleteSong(song: Song)
 

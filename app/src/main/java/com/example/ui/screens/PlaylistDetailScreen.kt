@@ -172,6 +172,9 @@ fun PlaylistDetailScreen(
                             viewModel.playSong(song)
                             viewModel.setShowEditLyrics(true)
                         },
+                        onEditMetadata = {
+                            viewModel.setShowEditMetadata(song)
+                        },
                         onViewSpecs = {
                             viewModel.playSong(song)
                             viewModel.setShowAudioSpecs(true)

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -13,6 +14,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,6 +36,7 @@ import com.example.model.Song
 import com.example.player.PlayerUiState
 import com.example.ui.LibrarySubTab
 import com.example.ui.MusicAppUiState
+import com.example.ui.MusicFolder
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.*
 
@@ -44,6 +48,7 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val filteredSongs = viewModel.getFilteredSongs()
+    val musicFolders = remember(uiState.songs) { viewModel.getMusicFolders() }
 
     Column(
         modifier = modifier
@@ -117,7 +122,7 @@ fun LibraryScreen(
             IconButton(
                 onClick = {
                     if (filteredSongs.isNotEmpty()) {
-                        viewModel.playQueue(filteredSongs.shuffled(), 0)
+                        viewModel.playAllShuffled(filteredSongs)
                     }
                 },
                 modifier = Modifier
@@ -197,6 +202,7 @@ fun LibraryScreen(
                 val isSelected = uiState.librarySubTab == tab
                 val countLabel = when (tab) {
                     LibrarySubTab.ALL_SONGS -> " (${uiState.songs.size})"
+                    LibrarySubTab.FOLDERS -> " (${musicFolders.size})"
                     LibrarySubTab.HI_RES -> " (${uiState.songs.count { it.isHiRes }})"
                     LibrarySubTab.FAVORITES -> " (${uiState.songs.count { it.isFavorite }})"
                     LibrarySubTab.PLAYLISTS -> " (${uiState.playlists.size})"
@@ -229,82 +235,179 @@ fun LibraryScreen(
 
         Spacer(modifier = Modifier.height(4.dp))
 
-        // Content Area: Playlists or Compact Song List
-        if (uiState.librarySubTab == LibrarySubTab.PLAYLISTS) {
-            PlaylistsView(
-                playlists = uiState.playlists,
-                onCreatePlaylist = { viewModel.setShowCreatePlaylist(true) },
-                onOpenPlaylist = { playlist -> viewModel.openPlaylist(playlist) }
-            )
-        } else {
-            // Song List (Optimized vertical density: fits 8+ songs per screen)
-            if (filteredSongs.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
+        // Content Area: Folders, Playlists or Song List
+        when (uiState.librarySubTab) {
+            LibrarySubTab.FOLDERS -> {
+                FolderBrowserView(
+                    viewModel = viewModel,
+                    uiState = uiState,
+                    playerState = playerState,
+                    folders = musicFolders
+                )
+            }
+            LibrarySubTab.PLAYLISTS -> {
+                PlaylistsView(
+                    playlists = uiState.playlists,
+                    onCreatePlaylist = { viewModel.setShowCreatePlaylist(true) },
+                    onOpenPlaylist = { playlist -> viewModel.openPlaylist(playlist) }
+                )
+            }
+            else -> {
+                // Song List (Optimized vertical density: fits 8+ songs per screen)
+                if (filteredSongs.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.MusicOff,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(52.dp)
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text("Không có bài hát nào phù hợp", color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(24.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MusicOff,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(52.dp)
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Text("Không có bài hát nào phù hợp", color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Spacer(modifier = Modifier.height(6.dp))
 
-                        if (uiState.searchQuery.isNotEmpty()) {
-                            OutlinedButton(
-                                onClick = { viewModel.setSearchQuery("") },
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text("Xóa tìm kiếm", fontSize = 12.sp)
-                            }
-                        } else {
-                            Button(
-                                onClick = { viewModel.scanDeviceAudio() },
-                                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Text("Quét nhạc trong máy", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                            if (uiState.searchQuery.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = { viewModel.setSearchQuery("") },
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Xóa tìm kiếm", fontSize = 12.sp)
+                                }
+                            } else {
+                                Button(
+                                    onClick = { viewModel.scanDeviceAudio() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Text("Quét nhạc trong máy", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                }
                             }
                         }
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    items(filteredSongs, key = { it.id }) { song ->
-                        val isCurrentPlaying = playerState.currentSong?.id == song.id
-                        CompactSongItem(
-                            song = song,
-                            isPlaying = isCurrentPlaying && playerState.isPlaying,
-                            isCurrentSong = isCurrentPlaying,
-                            onClick = { viewModel.playSong(song) },
-                            onFavoriteClick = { viewModel.toggleFavorite(song) },
-                            onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
-                            onEditLyrics = {
-                                viewModel.playSong(song)
-                                viewModel.setShowEditLyrics(true)
-                            },
-                            onViewSpecs = {
-                                viewModel.playSong(song)
-                                viewModel.setShowAudioSpecs(true)
+                } else {
+                    // Quick Playback Mode Bar: Sequential (Phát theo thứ tự) & Shuffle (Phát ngẫu nhiên)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Play Sequential Button
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (!playerState.isShuffle) NeonCyan.copy(alpha = 0.2f) else DarkSurface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (!playerState.isShuffle) NeonCyan else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    viewModel.playAllSequential(filteredSongs, 0)
+                                }
+                                .testTag("play_sequential_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                    contentDescription = null,
+                                    tint = if (!playerState.isShuffle) NeonCyan else TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Phát tất cả (Thứ tự)",
+                                    color = if (!playerState.isShuffle) NeonCyan else TextPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
                             }
-                        )
+                        }
+
+                        // Play Shuffled Button
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (playerState.isShuffle) NeonPurple.copy(alpha = 0.2f) else DarkSurface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (playerState.isShuffle) NeonPurple else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(36.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable {
+                                    viewModel.playAllShuffled(filteredSongs)
+                                }
+                                .testTag("play_shuffled_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Shuffle,
+                                    contentDescription = null,
+                                    tint = if (playerState.isShuffle) NeonPurple else TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Phát ngẫu nhiên",
+                                    color = if (playerState.isShuffle) NeonPurple else TextPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+
+                    // Song List
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filteredSongs, key = { it.id }) { song ->
+                            val isCurrent = playerState.currentSong?.id == song.id
+                            CompactSongItem(
+                                song = song,
+                                isPlaying = isCurrent && playerState.isPlaying,
+                                isCurrentSong = isCurrent,
+                                onClick = {
+                                    val idx = filteredSongs.indexOf(song)
+                                    viewModel.playQueue(filteredSongs, idx)
+                                },
+                                onFavoriteClick = { viewModel.toggleFavorite(song) },
+                                onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
+                                onEditLyrics = {
+                                    viewModel.setShowEditLyrics(true)
+                                },
+                                onEditMetadata = {
+                                    viewModel.setShowEditMetadata(song)
+                                },
+                                onViewSpecs = { viewModel.setShowAudioSpecs(true) }
+                            )
+                        }
                     }
                 }
             }
@@ -313,8 +416,267 @@ fun LibraryScreen(
 }
 
 /**
- * Compact, modern Song Item designed to maximize screen real estate on mobile devices.
- * Slim profile (~50dp height) allows 8+ songs to fit comfortably on screen.
+ * Folder Browser View:
+ * Allows browsing audio files by their directory / folder hierarchy.
+ */
+@Composable
+fun FolderBrowserView(
+    viewModel: MusicViewModel,
+    uiState: MusicAppUiState,
+    playerState: PlayerUiState,
+    folders: List<MusicFolder>
+) {
+    val selectedFolder = uiState.selectedFolder
+
+    if (selectedFolder != null) {
+        // Handle Android system back button to exit folder
+        BackHandler {
+            viewModel.closeFolder()
+        }
+
+        // Inside a selected folder
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp)
+        ) {
+            // Folder Header with Back button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { viewModel.closeFolder() },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Quay lại",
+                        tint = NeonCyan
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = selectedFolder.name,
+                        color = TextPrimary,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "${selectedFolder.songCount} bài hát • ${selectedFolder.path}",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Quick Play Buttons for this Folder
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { viewModel.playAllSequential(selectedFolder.songs, 0) },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Phát thư mục", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+
+                OutlinedButton(
+                    onClick = { viewModel.playAllShuffled(selectedFolder.songs) },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonPurple),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonPurple),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Trộn thư mục", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Song list inside this folder
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(vertical = 4.dp)
+            ) {
+                items(selectedFolder.songs, key = { it.id }) { song ->
+                    val isCurrent = playerState.currentSong?.id == song.id
+                    CompactSongItem(
+                        song = song,
+                        isPlaying = isCurrent && playerState.isPlaying,
+                        isCurrentSong = isCurrent,
+                        onClick = {
+                            val idx = selectedFolder.songs.indexOf(song)
+                            viewModel.playQueue(selectedFolder.songs, idx)
+                        },
+                        onFavoriteClick = { viewModel.toggleFavorite(song) },
+                        onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
+                        onEditLyrics = { viewModel.setShowEditLyrics(true) },
+                        onEditMetadata = { viewModel.setShowEditMetadata(song) },
+                        onViewSpecs = { viewModel.setShowAudioSpecs(true) }
+                    )
+                }
+            }
+        }
+    } else {
+        // Folders List View
+        if (folders.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(imageVector = Icons.Default.FolderOff, contentDescription = null, tint = TextMuted, modifier = Modifier.size(48.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("Chưa tìm thấy thư mục âm nhạc nào", color = TextSecondary, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.scanDeviceAudio() },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground)
+                    ) {
+                        Text("Quét lại bộ nhớ", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Text(
+                        text = "Thư mục chứa tệp âm thanh trên máy",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                    )
+                }
+
+                items(folders) { folder ->
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = DarkSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable { viewModel.openFolder(folder) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Folder Gradient Icon
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = NeonCyan.copy(alpha = 0.15f),
+                                modifier = Modifier.size(44.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            // Folder Info
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = folder.name,
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = folder.path,
+                                    color = TextMuted,
+                                    fontSize = 10.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = DarkSurfaceVariant
+                                    ) {
+                                        Text(
+                                            text = "${folder.songCount} bài hát",
+                                            color = TextSecondary,
+                                            fontSize = 9.5.sp,
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    if (folder.hiResCount > 0) {
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = HiResGold.copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = "${folder.hiResCount} Hi-Res",
+                                                color = HiResGold,
+                                                fontSize = 9.5.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Quick Play button
+                            IconButton(
+                                onClick = { viewModel.playAllSequential(folder.songs, 0) },
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayCircle,
+                                    contentDescription = "Phát tất cả trong thư mục",
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(28.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Ultra-Compact Song Item (Fits 8+ songs per screen)
  */
 @Composable
 fun CompactSongItem(
@@ -325,6 +687,7 @@ fun CompactSongItem(
     onFavoriteClick: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onEditLyrics: () -> Unit,
+    onEditMetadata: () -> Unit,
     onViewSpecs: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -332,7 +695,10 @@ fun CompactSongItem(
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = if (isCurrentSong) DarkSurfaceElevated else DarkSurface,
-        border = if (isCurrentSong) androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.7f)) else androidx.compose.foundation.BorderStroke(0.6.dp, DarkBorder),
+        border = androidx.compose.foundation.BorderStroke(
+            0.8.dp,
+            if (isCurrentSong) NeonCyan.copy(alpha = 0.6f) else DarkBorder
+        ),
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
@@ -340,77 +706,54 @@ fun CompactSongItem(
             .testTag("song_item_${song.id}")
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Compact Album Artwork (38dp x 38dp)
+            // Sized 38.dp Thumbnail
             Box(
                 modifier = Modifier
                     .size(38.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         Brush.linearGradient(
-                            colors = if (isCurrentSong) listOf(NeonCyan, NeonViolet) else listOf(DarkSurfaceVariant, DarkBorder)
+                            colors = if (isCurrentSong) listOf(NeonCyanDim, NeonCyan) else listOf(CardGradientStart, CardGradientEnd)
                         )
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 if (isPlaying) {
                     Icon(
-                        imageVector = Icons.Default.Equalizer,
+                        imageVector = Icons.Default.GraphicEq,
                         contentDescription = "Đang phát",
-                        tint = if (isCurrentSong) DarkBackground else NeonCyan,
-                        modifier = Modifier.size(20.dp)
+                        tint = DarkBackground,
+                        modifier = Modifier.size(18.dp)
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
-                        contentDescription = null,
-                        tint = if (isCurrentSong) DarkBackground else TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                    Text(
+                        text = song.title.take(1).uppercase(),
+                        color = if (isCurrentSong) DarkBackground else TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
                     )
                 }
             }
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Metadata Column
+            // Title & Artist
             Column(modifier = Modifier.weight(1f)) {
-                // Line 1: Song title + Duration
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = song.title,
-                        color = if (isCurrentSong) NeonCyan else TextPrimary,
-                        fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
+                Text(
+                    text = song.title,
+                    color = if (isCurrentSong) NeonCyan else TextPrimary,
+                    fontSize = 13.sp,
+                    fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
-                    val minutes = (song.durationMs / 1000) / 60
-                    val seconds = (song.durationMs / 1000) % 60
-                    Text(
-                        text = String.format("%02d:%02d", minutes, seconds),
-                        color = TextMuted,
-                        fontSize = 10.sp,
-                        modifier = Modifier.padding(start = 6.dp)
-                    )
-                }
+                Spacer(modifier = Modifier.height(1.dp))
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // Line 2: Artist + Format Badge
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = song.artist,
                         color = TextSecondary,
@@ -475,6 +818,14 @@ fun CompactSongItem(
                     modifier = Modifier.background(DarkSurfaceElevated)
                 ) {
                     DropdownMenuItem(
+                        text = { Text("Chỉnh sửa thông tin bài hát", color = TextPrimary) },
+                        leadingIcon = { Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = NeonCyan) },
+                        onClick = {
+                            showMenu = false
+                            onEditMetadata()
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text("Thêm vào danh sách phát", color = TextPrimary) },
                         leadingIcon = { Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = null, tint = NeonCyan) },
                         onClick = {
@@ -513,6 +864,7 @@ fun SongCardItem(
     onFavoriteClick: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onEditLyrics: () -> Unit,
+    onEditMetadata: () -> Unit = {},
     onViewSpecs: () -> Unit
 ) {
     CompactSongItem(
@@ -523,6 +875,7 @@ fun SongCardItem(
         onFavoriteClick = onFavoriteClick,
         onAddToPlaylist = onAddToPlaylist,
         onEditLyrics = onEditLyrics,
+        onEditMetadata = onEditMetadata,
         onViewSpecs = onViewSpecs
     )
 }
@@ -573,52 +926,51 @@ fun PlaylistsView(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = null, tint = TextMuted, modifier = Modifier.size(48.dp))
+                    Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = TextMuted, modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(10.dp))
-                    Text("Chưa có danh sách phát nào", color = TextSecondary, fontSize = 13.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Text("Chưa có danh sách phát nào", color = TextSecondary, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onCreatePlaylist,
                         colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Text("Tạo danh sách phát đầu tiên", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text("Tạo danh sách phát đầu tiên", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(playlists, key = { it.id }) { playlist ->
+                items(playlists) { playlist ->
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         color = DarkSurface,
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { onOpenPlaylist(playlist) }
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
+                            modifier = Modifier.padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(46.dp)
-                                    .clip(RoundedCornerShape(10.dp))
-                                    .background(
-                                        Brush.linearGradient(
-                                            colors = listOf(Color(playlist.coverGradientStart), Color(playlist.coverGradientEnd))
-                                        )
-                                    ),
-                                contentAlignment = Alignment.Center
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = Color(playlist.coverGradientStart),
+                                modifier = Modifier.size(44.dp)
                             ) {
-                                Icon(imageVector = Icons.Default.QueueMusic, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.LibraryMusic,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
@@ -627,19 +979,23 @@ fun PlaylistsView(
                                 Text(
                                     text = playlist.name,
                                     color = TextPrimary,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp
+                                    maxLines = 1
                                 )
-                                Text(
-                                    text = playlist.description.ifEmpty { "Danh sách nhạc cá nhân" },
-                                    color = TextSecondary,
-                                    fontSize = 11.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                if (playlist.description.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = playlist.description,
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
 
-                            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+                            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary)
                         }
                     }
                 }

@@ -69,7 +69,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     ) { permissions ->
         val granted = permissions.values.any { it }
         if (granted) {
-            viewModel.scanDeviceAudio()
+            viewModel.scanDeviceAudioIfEmpty()
         }
     }
 
@@ -111,7 +111,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = "Hi-Res Audio & EQ Toàn Hệ Thống",
+                                    text = "Hi-Res Audio & Equalizer",
                                     fontSize = 10.sp,
                                     color = TextHighlight,
                                     fontWeight = FontWeight.Medium,
@@ -331,6 +331,16 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         AudioSpecsDialog(
             song = playerState.currentSong,
             onDismiss = { viewModel.setShowAudioSpecs(false) }
+        )
+    }
+
+    uiState.showEditMetadataDialog?.let { song ->
+        EditSongMetadataDialog(
+            song = song,
+            onDismiss = { viewModel.setShowEditMetadata(null) },
+            onSave = { title, artist, album, format ->
+                viewModel.saveSongMetadata(song.id, title, artist, album, format)
+            }
         )
     }
 }
