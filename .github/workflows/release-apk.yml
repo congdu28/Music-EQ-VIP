@@ -45,7 +45,20 @@ jobs:
         fi
 
     - name: Build Android Debug APK
-      run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
+      run: |
+        ./gradlew :app:assembleDebug --stacktrace --no-daemon > gradle_build.log 2>&1 || {
+          EXIT_CODE=$?
+          echo "==================== BUILD FAILURE DETECTED ===================="
+          tail -n 120 gradle_build.log
+          exit $EXIT_CODE
+        }
+
+    - name: Upload Build Log On Failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: gradle-build-log
+        path: gradle_build.log
 
     - name: Rename APK for Release
       run: |
