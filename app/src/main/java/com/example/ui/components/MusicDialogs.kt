@@ -19,7 +19,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.compose.ui.platform.LocalContext
+import com.example.lyrics.LrcParser
 import com.example.model.Playlist
 import com.example.model.Song
 import com.example.ui.theme.*
@@ -186,6 +192,8 @@ fun EditLyricsDialog(
     var lyricsText by remember(song) { mutableStateOf(song.lyrics ?: "") }
     var offsetText by remember(song) { mutableStateOf(song.lrcOffsetMs.toString()) }
 
+    val context = LocalContext.current
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
@@ -206,6 +214,65 @@ fun EditLyricsDialog(
                     color = TextHighlight,
                     fontSize = 12.sp
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Quick Tools Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
+                                if (!clip.isNullOrBlank()) {
+                                    val synced = if (clip.contains("[0") || clip.contains("[1")) {
+                                        clip
+                                    } else {
+                                        LrcParser.convertPlainTextToSyncedLrc(clip, song.durationMs)
+                                    }
+                                    lyricsText = synced
+                                    Toast.makeText(context, "Đã dán và tự động đồng bộ mốc thời gian!", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "Bộ nhớ tạm rỗng", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Lỗi đọc bộ nhớ tạm: ${e.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Dán & Tạo mốc LRC", fontSize = 11.sp)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            try {
+                                val query = "lời bài hát ${song.title} ${song.artist} lrc"
+                                val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                // ignore
+                            }
+                        },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonPink),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.6f)),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Tìm trên Google", fontSize = 11.sp)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 

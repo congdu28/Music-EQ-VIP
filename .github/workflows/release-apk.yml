@@ -50,34 +50,35 @@ jobs:
     - name: Rename APK for Release
       run: |
         mkdir -p release-output
-        cp app/build/outputs/apk/debug/app-debug.apk release-output/MusicEQ-v1.0.2.apk
+        cp app/build/outputs/apk/debug/app-debug.apk release-output/MusicEQ-v1.0.3.apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: MusicEQ-APK
-        path: release-output/MusicEQ-v1.0.2.apk
+        path: release-output/MusicEQ-v1.0.3.apk
 
     - name: Create or Update GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.2' }}
-        name: Release Music EQ ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.2' }}
+        tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.3' }}
+        name: Release Music EQ ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.3' }}
         draft: false
         prerelease: false
         body: |
-          ### 🎵 Music EQ v1.0.2 - Responsive UI & Tối ưu hiệu năng / Tiết kiệm Pin
+          ### 🎵 Music EQ v1.0.3 - Tích hợp Gemini AI & Tìm kiếm Lời bài hát Karaoke LRC
 
-          **Có gì mới trong phiên bản v1.0.2:**
-          - 📱 **Sửa triệt để lỗi hiển thị chữ ở thanh điều hướng đáy (Bottom Bar)**:
-            - Chuẩn hóa typography 10sp với cơ chế tự động co giãn / xuống dòng an toàn (`softWrap = false`, `TextOverflow.Ellipsis`).
-            - Thu nhỏ icon kích thước chuẩn (22dp) và căn lề đều đặn giúp nhãn các nút không bao giờ bị cắt chữ trên mọi kích cỡ màn hình và tỷ lệ DPI font của điện thoại.
-          - 🎛️ **Chuẩn hóa thanh công cụ nhanh (Quick Controls Bar)**:
-            - Tinh chỉnh 4 nút chức năng (*Tốc độ phát, Bộ EQ, Hẹn giờ, Lời online*) với layout responsive cân đối, chống tràn chữ tuyệt đối.
-          - ❄️ **Tối ưu hiệu năng, giảm tải CPU & chống nóng máy**:
-            - **graphicsLayer zero-recomposition**: Chuyển đổi toàn bộ hiệu ứng xoay đĩa than sang `graphicsLayer`, triệt tiêu hoàn toàn hiện tượng recomposition liên tục của Compose.
-            - **Giảm 60% chu kỳ polling tiến trình phát nhạc**: Điều chỉnh nhịp polling thông minh xuống 150ms khi hiển thị lời và 500ms khi chạy nền, giữ CPU ở mức tối thiểu.
-            - **Tối ưu hóa Audio Spectrum Visualizer**: Giảm số lượng điểm vẽ sóng nhạc và cột quang phổ, loại bỏ hơn 40% các phép tính lượng giác `sin()` không cần thiết mỗi khung hình, máy mát và tiết kiệm pin vượt trội.
-        files: release-output/MusicEQ-v1.0.2.apk
+          **Có gì mới trong phiên bản v1.0.3:**
+          - 🤖 **Tích hợp Gemini AI tạo lời Karaoke LRC tự động**:
+            - Hỗ trợ model `gemini-3.5-flash` và `gemini-flash-latest` với tốc độ phản hồi cực nhanh.
+            - Tự động sinh toàn bộ lời bài hát chuẩn timestamp `[mm:ss.xx]` phân bổ đều theo thời lượng bài hát thực tế.
+            - Tích hợp cấu hình API Key trong màn hình **Cài đặt** (Settings), có thể tùy chỉnh hoặc khôi phục mặc định bất kỳ lúc nào.
+          - 🔍 **Tìm kiếm nhanh trên Google (Google Search Fallback)**:
+            - Bổ sung nút mở tìm kiếm Google trực tiếp từ menu "Tìm Lời" trong màn hình Đang phát & màn hình Lời bài hát.
+          - 📋 **Dán & Tự động tạo mốc LRC từ bộ nhớ tạm (Clipboard)**:
+            - Trong hộp thoại "Sửa LRC", bổ sung nút **"Dán & Tạo mốc LRC"**: Nếu lời bài hát copy từ web không có sẵn timestamp, ứng dụng sẽ tự động phân bổ mốc thời gian chuẩn xác để hát Karaoke ngay lập tức.
+          - 🔄 **Khả năng cài đặt đè mượt mà (In-place Upgrade)**:
+            - Cố định khóa ký vĩnh viễn (Persistent Keystore) giúp cập nhật từ v1.0.2 lên v1.0.3 đè lên bình thường mà không cần gỡ cài đặt app cũ.
+        files: release-output/MusicEQ-v1.0.3.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

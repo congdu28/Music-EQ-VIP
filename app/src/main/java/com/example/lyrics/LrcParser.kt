@@ -113,4 +113,33 @@ object LrcParser {
             }
         }
     }
+
+    /**
+     * Converts plain text lyrics without timestamps into synced LRC format
+     * by distributing timestamps evenly across the song's duration.
+     */
+    fun convertPlainTextToSyncedLrc(plainText: String, totalDurationMs: Long): String {
+        val nonBlankLines = plainText.lines()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("[ti:") && !it.startsWith("[ar:") && !it.startsWith("[al:") }
+
+        if (nonBlankLines.isEmpty()) return plainText
+
+        val effectiveDuration = if (totalDurationMs > 10000) totalDurationMs else 180000L
+        val startOffsetMs = 3000L // 3 seconds intro
+        val endOffsetMs = 3000L   // 3 seconds outro
+        val playableDuration = maxOf(5000L, effectiveDuration - startOffsetMs - endOffsetMs)
+        val intervalMs = playableDuration / nonBlankLines.size
+
+        return buildString {
+            nonBlankLines.forEachIndexed { index, line ->
+                val timeMs = startOffsetMs + (index * intervalMs)
+                val totalSeconds = timeMs / 1000
+                val minutes = totalSeconds / 60
+                val seconds = totalSeconds % 60
+                val hundredths = (timeMs % 1000) / 10
+                append(String.format("[%02d:%02d.%02d] %s\n", minutes, seconds, hundredths, line))
+            }
+        }
+    }
 }

@@ -21,6 +21,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -121,27 +124,85 @@ fun SyncedLyricsScreen(
                     )
                 }
 
+                val context = LocalContext.current
+                var showSearchOptions by remember { mutableStateOf(false) }
+
                 // Actions: Search Online & Edit / Paste Lyrics
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (song != null) {
-                        Button(
-                            onClick = { viewModel.searchLyricsOnline(song) },
-                            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated, contentColor = NeonPink),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(12.dp),
-                            enabled = !uiState.isSearchingLyrics
-                        ) {
-                            if (uiState.isSearchingLyrics) {
-                                CircularProgressIndicator(color = NeonPink, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
-                            } else {
-                                Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Box {
+                            Button(
+                                onClick = { showSearchOptions = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated, contentColor = NeonPink),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = !uiState.isSearchingLyrics
+                            ) {
+                                if (uiState.isSearchingLyrics) {
+                                    CircularProgressIndicator(color = NeonPink, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                                } else {
+                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(15.dp))
+                                }
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Tìm Lời", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                             }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Tìm Online", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+
+                            DropdownMenu(
+                                expanded = showSearchOptions,
+                                onDismissRequest = { showSearchOptions = false },
+                                modifier = Modifier.background(DarkSurfaceElevated)
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Tạo LRC bằng Gemini AI", color = TextPrimary, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showSearchOptions = false
+                                        viewModel.searchLyricsWithGemini(song)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Tìm LRCLIB & Tự động AI", color = TextPrimary, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showSearchOptions = false
+                                        viewModel.searchLyricsOnline(song)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Tìm kiếm trên Google", color = TextPrimary, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showSearchOptions = false
+                                        try {
+                                            val query = "lời bài hát ${song.title} ${song.artist} lrc"
+                                            val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            // ignore
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
 

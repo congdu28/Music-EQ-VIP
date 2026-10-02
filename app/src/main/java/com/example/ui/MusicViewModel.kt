@@ -68,7 +68,8 @@ data class MusicAppUiState(
     val showSavePresetDialog: Boolean = false,
     val showAudioSpecsDialog: Boolean = false,
     val visualizerStyle: VisualizerStyle = VisualizerStyle.WAVE,
-    val isSearchingLyrics: Boolean = false
+    val isSearchingLyrics: Boolean = false,
+    val geminiApiKey: String = com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY
 )
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
@@ -83,6 +84,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val equalizerState: StateFlow<EqualizerState> = equalizerManager.state
 
     init {
+        val savedKey = repository.getGeminiApiKey()
+        _appUiState.update { it.copy(geminiApiKey = savedKey) }
+
         viewModelScope.launch {
             repository.initializeDefaultDataIfEmpty()
         }
@@ -387,12 +391,24 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setGeminiApiKey(key: String) {
+        val trimmed = key.trim()
+        repository.setGeminiApiKey(trimmed)
+        _appUiState.update { it.copy(geminiApiKey = trimmed, scanResultMessage = "Đã lưu Gemini API Key thành công") }
+    }
+
     fun searchLyricsOnline(song: Song, isAuto: Boolean = false) {
         viewModelScope.launch {
             if (!isAuto) {
                 _appUiState.update { it.copy(isSearchingLyrics = true) }
             }
-            val result = com.example.lyrics.OnlineLyricsService.fetchLyrics(song.title, song.artist, song.durationMs)
+            val apiKey = _appUiState.value.geminiApiKey
+            val result = com.example.lyrics.OnlineLyricsService.fetchLyrics(
+                rawTitle = song.title,
+                rawArtist = song.artist,
+                durationMs = song.durationMs,
+                apiKey = apiKey
+            )
             if (!isAuto) {
                 _appUiState.update { it.copy(isSearchingLyrics = false) }
             }
@@ -423,6 +439,45 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             } else if (!isAuto) {
                 _appUiState.update {
                     it.copy(scanResultMessage = "Không tìm thấy lời trên mạng cho: ${song.title}")
+                }
+            }
+        }
+    }
+
+    fun searchLyricsWithGemini(song: Song) {
+        viewModelScope.launch {
+            _appUiState.update { it.copy(isSearchingLyrics = true) }
+            val apiKey = _appUiState.value.geminiApiKey
+            val result = com.example.lyrics.OnlineLyricsService.fetchLyricsWithGemini(
+                cleanTitle = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(song.title),
+                cleanArtist = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(song.artist),
+                durationMs = song.durationMs,
+                apiKey = apiKey
+            )
+            _appUiState.update { it.copy(isSearchingLyrics = false) }
+
+            if (result != null && !result.syncedLyrics.isNullOrBlank()) {
+                val lyricsText = result.syncedLyrics
+                repository.updateSongLyrics(song.id, lyricsText, 0)
+                val current = playerState.value.currentSong
+                if (current != null && current.id == song.id) {
+                    val updated = current.copy(lyrics = lyricsText, lrcOffsetMs = 0)
+                    playerController.updateQueue(playerState.value.queue.map { if (it.id == song.id) updated else it })
+                    val parsed = LrcParser.parse(lyricsText, 0)
+                    val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
+                    _appUiState.update {
+                        it.copy(
+                            parsedLyrics = parsed,
+                            activeLyricIndex = activeIdx
+                        )
+                    }
+                }
+                _appUiState.update {
+                    it.copy(scanResultMessage = "Gemini AI đã tạo lời Karaoke LRC thành công cho: ${song.title}")
+                }
+            } else {
+                _appUiState.update {
+                    it.copy(scanResultMessage = "Gemini AI chưa thể tạo lời cho bài này, vui lòng thử lại hoặc tìm trên Google")
                 }
             }
         }

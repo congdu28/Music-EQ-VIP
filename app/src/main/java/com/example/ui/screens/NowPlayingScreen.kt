@@ -26,6 +26,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -461,16 +464,79 @@ fun NowPlayingScreen(
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                            val context = LocalContext.current
+                            var showSearchMenu by remember { mutableStateOf(false) }
+
                             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(
-                                    onClick = { viewModel.searchLyricsOnline(song) },
-                                    enabled = !uiState.isSearchingLyrics,
-                                    contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
-                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(14.dp), tint = NeonPink)
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Tìm Online", fontSize = 11.sp, color = NeonPink)
+                                Box {
+                                    TextButton(
+                                        onClick = { showSearchMenu = true },
+                                        enabled = !uiState.isSearchingLyrics,
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        if (uiState.isSearchingLyrics) {
+                                            CircularProgressIndicator(color = NeonPink, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                                        } else {
+                                            Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(14.dp), tint = NeonPink)
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Tìm Lời", fontSize = 11.sp, color = NeonPink)
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showSearchMenu,
+                                        onDismissRequest = { showSearchMenu = false },
+                                        modifier = Modifier.background(DarkSurfaceElevated)
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Tạo LRC bằng Gemini AI", color = TextPrimary, fontSize = 12.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showSearchMenu = false
+                                                viewModel.searchLyricsWithGemini(song)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Tìm LRCLIB & Tự động AI", color = TextPrimary, fontSize = 12.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showSearchMenu = false
+                                                viewModel.searchLyricsOnline(song)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(imageVector = Icons.Default.Search, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Tìm kiếm trên Google", color = TextPrimary, fontSize = 12.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showSearchMenu = false
+                                                try {
+                                                    val query = "lời bài hát ${song.title} ${song.artist} lrc"
+                                                    val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(query, "UTF-8")
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    // ignore
+                                                }
+                                            }
+                                        )
+                                    }
                                 }
+
                                 TextButton(
                                     onClick = { viewModel.setShowEditLyrics(true) },
                                     contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)

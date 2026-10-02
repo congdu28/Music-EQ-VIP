@@ -30,6 +30,17 @@ class MusicRepository(private val context: Context) {
         ).fallbackToDestructiveMigration().build()
     }
 
+    private val prefs = context.getSharedPreferences("nhip_dieu_settings", Context.MODE_PRIVATE)
+
+    fun getGeminiApiKey(): String {
+        return prefs.getString("gemini_api_key", com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY)
+            ?: com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY
+    }
+
+    fun setGeminiApiKey(key: String) {
+        prefs.edit().putString("gemini_api_key", key.trim()).apply()
+    }
+
     val allSongs: Flow<List<Song>> = db.songDao().getAllSongs()
     val favoriteSongs: Flow<List<Song>> = db.songDao().getFavoriteSongs()
     val allPlaylists: Flow<List<Playlist>> = db.playlistDao().getAllPlaylists()

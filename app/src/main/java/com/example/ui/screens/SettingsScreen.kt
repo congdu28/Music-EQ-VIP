@@ -289,6 +289,103 @@ fun SettingsScreen(
             }
         }
 
+        // Section: Cấu hình Gemini AI & Tìm kiếm Lời bài hát
+        var apiKeyInput by remember(uiState.geminiApiKey) { mutableStateOf(uiState.geminiApiKey) }
+        var isEditingKey by remember { mutableStateOf(false) }
+
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = NeonViolet.copy(alpha = 0.2f),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text("Gemini AI & Tìm lời", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("Tạo lời Karaoke LRC tự động bằng AI", color = TextSecondary, fontSize = 11.sp)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = apiKeyInput,
+                    onValueChange = { 
+                        apiKeyInput = it 
+                        isEditingKey = true
+                    },
+                    label = { Text("Gemini API Key") },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = NeonViolet,
+                        unfocusedBorderColor = DarkBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = if (apiKeyInput.isNotBlank()) "Đã cấu hình API Key" else "Chưa có API Key",
+                        color = if (apiKeyInput.isNotBlank()) NeonCyan else TextMuted,
+                        fontSize = 11.sp
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (apiKeyInput != com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY) {
+                            TextButton(
+                                onClick = {
+                                    apiKeyInput = com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY
+                                    viewModel.setGeminiApiKey(com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY)
+                                    isEditingKey = false
+                                }
+                            ) {
+                                Text("Khôi phục mặc định", fontSize = 11.sp, color = TextSecondary)
+                            }
+                        }
+
+                        Button(
+                            onClick = {
+                                viewModel.setGeminiApiKey(apiKeyInput)
+                                isEditingKey = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonViolet, contentColor = Color.White),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Lưu Key", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
         // Section: Thông tin ứng dụng
         Surface(
             shape = RoundedCornerShape(18.dp),
@@ -300,10 +397,10 @@ fun SettingsScreen(
                 Text("Thông tin & Giấy phép", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                InfoRow("Phiên bản", "1.0.0 (Audiophile Release)")
+                InfoRow("Phiên bản", "1.0.3 (Gemini AI & Google Search)")
                 InfoRow("Ngôn ngữ", "Tiếng Việt (100% Native)")
                 InfoRow("Bộ xử lý âm thanh", "Android AudioFX + Native DSP")
-                InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0")
+                InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0 + Gemini AI")
             }
         }
     }
