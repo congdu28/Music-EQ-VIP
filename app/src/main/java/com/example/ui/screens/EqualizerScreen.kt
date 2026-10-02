@@ -178,14 +178,14 @@ fun EqualizerScreen(
             )
 
             val standardPresets = listOf(
-                Pair("Mặc định (Flat)", listOf(0, 0, 0, 0, 0)),
-                Pair("Tăng âm trầm (Bass Boost)", listOf(700, 500, 150, 200, 300)),
-                Pair("Nhạc Pop", listOf(100, 300, 450, 250, 350)),
-                Pair("Nhạc Rock", listOf(450, 200, -100, 300, 500)),
-                Pair("Nhạc Điện Tử EDM", listOf(600, 400, 0, 400, 600)),
-                Pair("Acoustic / Vocal", listOf(-150, 100, 450, 400, 200)),
-                Pair("Nhạc Jazz", listOf(250, 100, -100, 150, 300)),
-                Pair("Nhạc Cổ Điển", listOf(350, 200, -50, 200, 350))
+                Pair("Mặc định (Flat)", listOf(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+                Pair("Tăng âm trầm (Bass Boost)", listOf(800, 650, 500, 300, 100, 0, 0, 100, 200, 250)),
+                Pair("Nhạc Pop", listOf(-100, 100, 250, 400, 500, 400, 200, 0, 200, 350)),
+                Pair("Nhạc Rock", listOf(500, 400, 300, 100, -100, 0, 200, 400, 550, 600)),
+                Pair("Nhạc Điện Tử EDM", listOf(750, 650, 400, 100, -100, 200, 350, 500, 650, 750)),
+                Pair("Acoustic / Vocal", listOf(-250, -150, 0, 200, 400, 550, 450, 300, 150, 0)),
+                Pair("Nhạc Jazz", listOf(300, 250, 150, 200, 0, -100, 0, 150, 250, 350)),
+                Pair("Nhạc Cổ Điển", listOf(400, 300, 200, 150, 0, -100, 0, 200, 300, 400))
             )
 
             LazyRow(
@@ -265,21 +265,37 @@ fun EqualizerScreen(
             border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
+            Column(modifier = Modifier.padding(14.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "10 Dải Tần Âm Thanh",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = NeonCyan.copy(alpha = 0.15f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f))
+                            ) {
+                                Text(
+                                    text = "10 BANDS",
+                                    color = NeonCyan,
+                                    fontSize = 8.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
                         Text(
-                            "Dải Tần Âm Thanh (Bands)",
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            "Kéo từng thanh gạt để tăng / giảm dB",
+                            "Kéo từng thanh gạt để tăng / giảm ±12dB",
                             color = TextSecondary,
                             fontSize = 11.sp
                         )
@@ -290,23 +306,23 @@ fun EqualizerScreen(
                         color = DarkSurfaceVariant
                     ) {
                         Text(
-                            text = "-12dB  /  +12dB",
+                            text = "-12dB / +12dB",
                             color = TextHighlight,
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
-                // Vertical Band Faders Row
+                // Vertical Band Faders Row (10 Bands)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(230.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(1.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     equalizerState.bands.forEach { band ->
