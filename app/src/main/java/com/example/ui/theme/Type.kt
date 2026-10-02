@@ -8,103 +8,107 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
 
-// High-fidelity font with 100% native Vietnamese tone marks, Latin Extended, and special character support
-val BeVietnamProFontFamily = FontFamily(
-    Font(R.font.be_vietnam_pro, FontWeight.Normal)
+// Google Sans Font Family with full Vietnamese tone marks & multiple weight support
+val GoogleSansFontFamily = FontFamily(
+    Font(R.font.google_sans_regular, FontWeight.Normal),
+    Font(R.font.google_sans_medium, FontWeight.Medium),
+    Font(R.font.google_sans_medium, FontWeight.SemiBold),
+    Font(R.font.google_sans_bold, FontWeight.Bold),
+    Font(R.font.google_sans_bold, FontWeight.ExtraBold)
 )
 
 val Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 57.sp,
         lineHeight = 64.sp
     ),
     displayMedium = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 45.sp,
         lineHeight = 52.sp
     ),
     displaySmall = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 36.sp,
         lineHeight = 44.sp
     ),
     headlineLarge = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 30.sp,
         lineHeight = 38.sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 26.sp,
         lineHeight = 34.sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 20.sp,
         lineHeight = 26.sp
     ),
     titleMedium = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
         lineHeight = 22.sp
     ),
     titleSmall = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp
     ),
     bodyLarge = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 15.sp,
         lineHeight = 22.sp,
         letterSpacing = 0.2.sp
     ),
     bodyMedium = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
         lineHeight = 18.sp,
         letterSpacing = 0.2.sp
     ),
     bodySmall = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.3.sp
     ),
     labelLarge = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
         letterSpacing = 0.4.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = BeVietnamProFontFamily,
+        fontFamily = GoogleSansFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         lineHeight = 14.sp,

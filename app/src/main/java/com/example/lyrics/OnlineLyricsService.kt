@@ -64,9 +64,22 @@ object OnlineLyricsService {
     }
 
     /**
+     * Removes Vietnamese diacritics / tone marks for robust query matching on international databases (LRCLIB).
+     */
+    fun removeVietnameseDiacritics(str: String): String {
+        return try {
+            val normalized = java.text.Normalizer.normalize(str, java.text.Normalizer.Form.NFD)
+            val withoutDiacritics = Regex("\\p{InCombiningDiacriticalMarks}+").replace(normalized, "")
+            withoutDiacritics.replace('đ', 'd').replace('Đ', 'D')
+        } catch (e: Exception) {
+            str
+        }
+    }
+
+    /**
      * Attempts to fetch lyrics from LRCLIB.
-     * First queries the exact /get endpoint, and if not found, falls back to /search,
-     * and finally invokes Gemini AI if lyrics are still not found or unsynced.
+     * Queries /get endpoint and /search with multiple queries (both accented and non-accented),
+     * and automatically falls back to Gemini AI if lyrics are not found or unsynced.
      */
     suspend fun fetchLyrics(
         rawTitle: String,
@@ -78,7 +91,7 @@ object OnlineLyricsService {
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
 
-        // If artist is part of title (e.g. "Artist - Song Title" or "Song Title - Artist")
+        // If artist is embedded inside title (e.g. "Artist - Song Title" or "Song Title - Artist")
         if (isGenericArtist(cleanArtist) && cleanTitle.contains(" - ")) {
             val parts = cleanTitle.split(" - ", limit = 2)
             if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
@@ -128,14 +141,28 @@ object OnlineLyricsService {
             }
         }
 
-        // 2. Fallback to /search endpoint (try with title + artist, or just title if artist generic)
+        // 2. Fallback to /search endpoint with comprehensive query variations:
+        // - "Title Artist"
+        // - "Title"
+        // - Non-accented "Title Artist" (critical for Vietnamese songs on LRCLIB)
+        // - Non-accented "Title"
+        val rawNoAccentTitle = removeVietnameseDiacritics(cleanTitle)
+        val rawNoAccentArtist = removeVietnameseDiacritics(cleanArtist)
+
         val queriesToTry = mutableListOf<String>()
         if (!isGenericArtist(cleanArtist)) {
             queriesToTry.add("$cleanTitle $cleanArtist".trim())
         }
         queriesToTry.add(cleanTitle)
 
-        for (q in queriesToTry) {
+        if (rawNoAccentTitle != cleanTitle) {
+            if (!isGenericArtist(cleanArtist)) {
+                queriesToTry.add("$rawNoAccentTitle $rawNoAccentArtist".trim())
+            }
+            queriesToTry.add(rawNoAccentTitle)
+        }
+
+        for (q in queriesToTry.distinct()) {
             try {
                 val encodedQuery = URLEncoder.encode(q, "UTF-8")
                 val url = "$BASE_URL/search?q=$encodedQuery"
@@ -150,16 +177,28 @@ object OnlineLyricsService {
                         val body = response.body?.string()
                         if (!body.isNullOrBlank()) {
                             val array = JSONArray(body)
-                            // Look for result with synced or plain lyrics
+                            // Prioritize synchronized lyrics first
                             for (i in 0 until array.length()) {
                                 val item = array.getJSONObject(i)
                                 val synced = item.optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" }
-                                val plain = item.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
-                                if (synced != null || plain != null) {
+                                if (synced != null) {
                                     return@withContext OnlineLyricsResult(
                                         title = item.optString("trackName", cleanTitle),
                                         artist = item.optString("artistName", cleanArtist),
                                         syncedLyrics = synced,
+                                        plainLyrics = item.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
+                                    )
+                                }
+                            }
+                            // If no synced found, check plain lyrics
+                            for (i in 0 until array.length()) {
+                                val item = array.getJSONObject(i)
+                                val plain = item.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
+                                if (plain != null) {
+                                    return@withContext OnlineLyricsResult(
+                                        title = item.optString("trackName", cleanTitle),
+                                        artist = item.optString("artistName", cleanArtist),
+                                        syncedLyrics = null,
                                         plainLyrics = plain
                                     )
                                 }
@@ -172,7 +211,7 @@ object OnlineLyricsService {
             }
         }
 
-        // 3. Fallback to Gemini AI if API key is present
+        // 3. High-Intelligence Fallback: Gemini AI
         if (!effectiveApiKey.isNullOrBlank()) {
             val geminiResult = fetchLyricsWithGemini(cleanTitle, cleanArtist, durationMs, effectiveApiKey)
             if (geminiResult != null) {
@@ -184,8 +223,8 @@ object OnlineLyricsService {
     }
 
     /**
-     * Uses Google Gemini AI to generate synchronized Karaoke LRC lyrics.
-     * Tries gemini-3.5-flash first, falling back to gemini-flash-latest.
+     * Uses Google Gemini AI to generate accurate synchronized Karaoke LRC lyrics.
+     * Uses resilient fallback list of models starting with lightweight high-speed flash models.
      */
     suspend fun fetchLyricsWithGemini(
         cleanTitle: String,
@@ -197,17 +236,26 @@ object OnlineLyricsService {
 
         val durationSec = if (durationMs > 10000) (durationMs / 1000).toInt() else 210
         val prompt = """
-Bạn là chuyên gia âm nhạc và đồng bộ lời bài hát (Karaoke LRC).
-Hãy tạo toàn bộ lời bài hát chính xác cho bài: "$cleanTitle" của nghệ sĩ: "$cleanArtist".
+Bạn là chuyên gia âm nhạc hàng đầu. Hãy tạo toàn bộ lời bài hát chính xác và tạo file Karaoke LRC đồng bộ cho bài hát:
+Ca khúc: "$cleanTitle"
+Nghệ sĩ: "$cleanArtist"
+
 Yêu cầu bắt buộc:
-1. Định dạng chuẩn Karaoke LRC có mốc thời gian [mm:ss.xx] ở từng dòng.
-2. Dòng đầu tiên bắt đầu từ [00:02.00] hoặc mốc dạo đầu hợp lý.
-3. Phân bổ các câu hát trải đều phù hợp với tổng thời lượng bài hát khoảng $durationSec giây.
-4. Chỉ xuất ra nội dung file LRC thuần túy (bắt đầu bằng các dòng [mm:ss.xx] lời hát).
-5. TUYỆT ĐỐI KHÔNG xuất hiện giải thích, ghi chú, chào hỏi, hoặc bọc trong markdown code block (như ```lrc).
+1. Định dạng chuẩn Karaoke LRC có mốc thời gian [mm:ss.xx] ở đầu mỗi dòng (ví dụ: [00:15.50] Lời câu hát).
+2. Phân bổ các câu hát trải đều phù hợp với tổng thời lượng bài hát khoảng $durationSec giây.
+3. Chỉ xuất ra nội dung file LRC thuần túy (các dòng bắt đầu bằng [mm:ss.xx]).
+4. TUYỆT ĐỐI KHÔNG thêm lời giải thích, chào hỏi, hoặc bọc trong code block (như ```lrc).
 """.trimIndent()
 
-        val modelsToTry = listOf("gemini-3.5-flash", "gemini-flash-latest")
+        // Resilient model hierarchy: Flash-lite models are lightning fast and have generous quotas
+        val modelsToTry = listOf(
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite",
+            "gemini-3.8-flash",
+            "gemini-3.7-flash",
+            "gemini-flash-lite-latest",
+            "gemini-flash-latest"
+        )
 
         for (model in modelsToTry) {
             try {
