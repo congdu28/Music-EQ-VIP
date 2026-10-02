@@ -55,16 +55,20 @@ jobs:
     - name: Rename APK for Release
       run: |
         mkdir -p release-output
-        echo "Searching for APK files in app/build..."
-        find app/build -name "*.apk"
-        APK_PATH=$(find app/build -name "*.apk" | grep -v "androidTest" | head -n 1)
+        echo "Listing all files in app/build/outputs:"
+        find app/build/outputs -type f || true
+        echo "Searching for APK files across entire workspace:"
+        find . -name "*.apk" || true
+        APK_PATH=$(find . -name "*.apk" -not -path "*/build/intermediates/*" -not -path "*androidTest*" | head -n 1)
+        if [ -z "$APK_PATH" ]; then
+          APK_PATH=$(find . -name "*.apk" | head -n 1)
+        fi
         if [ -n "$APK_PATH" ]; then
-          echo "Copying APK from: $APK_PATH"
+          echo "Found APK at: $APK_PATH"
           cp "$APK_PATH" release-output/MusicEQ-v1.0.3.apk
           ls -la release-output/
         else
-          echo "ERROR: No APK found! Full directory tree of app/build:"
-          find app/build -maxdepth 5
+          echo "ERROR: No APK found anywhere in workspace!"
           exit 1
         fi
 
