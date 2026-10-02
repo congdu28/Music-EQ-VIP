@@ -55,8 +55,8 @@ object OnlineLyricsService {
     }
 
     // Default user Gemini API key (base64 decoded at runtime to prevent git push scanner triggers)
-    val DEFAULT_GEMINI_API_KEY: String by lazy {
-        try {
+    fun getDefaultGeminiApiKey(): String {
+        return try {
             String(android.util.Base64.decode("QVEuQWI4Uk42TGZaRGdXdjJHMEVRYWxqR3FoUkpwWl9DOGMyMWtfaHZKX2R0NWJjQ3dWVEE=", android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
         } catch (e: Exception) {
             ""
@@ -72,8 +72,9 @@ object OnlineLyricsService {
         rawTitle: String,
         rawArtist: String,
         durationMs: Long = 0,
-        apiKey: String? = DEFAULT_GEMINI_API_KEY
+        apiKey: String? = null
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
+        val effectiveApiKey = if (apiKey.isNullOrBlank()) getDefaultGeminiApiKey() else apiKey
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
 
@@ -172,8 +173,8 @@ object OnlineLyricsService {
         }
 
         // 3. Fallback to Gemini AI if API key is present
-        if (!apiKey.isNullOrBlank()) {
-            val geminiResult = fetchLyricsWithGemini(cleanTitle, cleanArtist, durationMs, apiKey)
+        if (!effectiveApiKey.isNullOrBlank()) {
+            val geminiResult = fetchLyricsWithGemini(cleanTitle, cleanArtist, durationMs, effectiveApiKey)
             if (geminiResult != null) {
                 return@withContext geminiResult
             }

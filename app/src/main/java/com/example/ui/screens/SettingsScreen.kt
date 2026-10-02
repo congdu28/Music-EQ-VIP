@@ -356,11 +356,12 @@ fun SettingsScreen(
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (apiKeyInput != com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY) {
+                        val defaultKey = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
+                        if (apiKeyInput != defaultKey) {
                             TextButton(
                                 onClick = {
-                                    apiKeyInput = com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY
-                                    viewModel.setGeminiApiKey(com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY)
+                                    apiKeyInput = defaultKey
+                                    viewModel.setGeminiApiKey(defaultKey)
                                     isEditingKey = false
                                 }
                             ) {

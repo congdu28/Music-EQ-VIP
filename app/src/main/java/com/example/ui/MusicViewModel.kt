@@ -69,7 +69,7 @@ data class MusicAppUiState(
     val showAudioSpecsDialog: Boolean = false,
     val visualizerStyle: VisualizerStyle = VisualizerStyle.WAVE,
     val isSearchingLyrics: Boolean = false,
-    val geminiApiKey: String = com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY
+    val geminiApiKey: String = ""
 )
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {

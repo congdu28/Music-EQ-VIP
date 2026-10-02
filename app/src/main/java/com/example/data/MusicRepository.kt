@@ -33,8 +33,8 @@ class MusicRepository(private val context: Context) {
     private val prefs = context.getSharedPreferences("nhip_dieu_settings", Context.MODE_PRIVATE)
 
     fun getGeminiApiKey(): String {
-        return prefs.getString("gemini_api_key", com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY)
-            ?: com.example.lyrics.OnlineLyricsService.DEFAULT_GEMINI_API_KEY
+        val def = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
+        return prefs.getString("gemini_api_key", def) ?: def
     }
 
     fun setGeminiApiKey(key: String) {
