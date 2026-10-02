@@ -67,7 +67,8 @@ data class MusicAppUiState(
     val showSleepTimerDialog: Boolean = false,
     val showSavePresetDialog: Boolean = false,
     val showAudioSpecsDialog: Boolean = false,
-    val visualizerStyle: VisualizerStyle = VisualizerStyle.WAVE
+    val visualizerStyle: VisualizerStyle = VisualizerStyle.WAVE,
+    val isSearchingLyrics: Boolean = false
 )
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
@@ -117,17 +118,47 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Observe player position & song to parse and sync lyrics in real-time
+        var lastObservedSongId: Long? = null
+        var lastObservedLyrics: String? = null
+        var lastObservedOffset: Long = 0
+        val autoSearchedSongIds = mutableSetOf<Long>()
+
         viewModelScope.launch {
             playerState.collect { pState ->
                 val song = pState.currentSong
                 if (song != null) {
-                    val parsed = LrcParser.parse(song.lyrics, song.lrcOffsetMs)
-                    val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, pState.currentPositionMs)
-                    _appUiState.update {
-                        it.copy(
-                            parsedLyrics = parsed,
-                            activeLyricIndex = activeIdx
-                        )
+                    val songChanged = song.id != lastObservedSongId ||
+                            song.lyrics != lastObservedLyrics ||
+                            song.lrcOffsetMs != lastObservedOffset
+
+                    if (songChanged) {
+                        lastObservedSongId = song.id
+                        lastObservedLyrics = song.lyrics
+                        lastObservedOffset = song.lrcOffsetMs
+
+                        val parsed = LrcParser.parse(song.lyrics, song.lrcOffsetMs)
+                        val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, pState.currentPositionMs)
+                        _appUiState.update {
+                            it.copy(
+                                parsedLyrics = parsed,
+                                activeLyricIndex = activeIdx
+                            )
+                        }
+
+                        // Tự động tìm kiếm lời bài hát trên internet nếu bài hát chưa có lời
+                        if (song.lyrics.isNullOrBlank() && !autoSearchedSongIds.contains(song.id)) {
+                            autoSearchedSongIds.add(song.id)
+                            searchLyricsOnline(song, isAuto = true)
+                        }
+                    } else {
+                        // Song unchanged, only position progressed
+                        val parsed = _appUiState.value.parsedLyrics
+                        val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, pState.currentPositionMs)
+                        if (activeIdx != _appUiState.value.activeLyricIndex) {
+                            _appUiState.update {
+                                it.copy(activeLyricIndex = activeIdx)
+                            }
+                        }
                     }
                 }
             }
@@ -348,6 +379,47 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val newOffset = song.lrcOffsetMs + deltaMs
         viewModelScope.launch {
             repository.updateSongLyrics(song.id, song.lyrics ?: "", newOffset)
+        }
+    }
+
+    fun searchLyricsOnline(song: Song, isAuto: Boolean = false) {
+        viewModelScope.launch {
+            if (!isAuto) {
+                _appUiState.update { it.copy(isSearchingLyrics = true) }
+            }
+            val result = com.example.lyrics.OnlineLyricsService.fetchLyrics(song.title, song.artist, song.durationMs)
+            if (!isAuto) {
+                _appUiState.update { it.copy(isSearchingLyrics = false) }
+            }
+
+            if (result != null && result.bestLyrics != null) {
+                val lyricsText = result.bestLyrics!!
+                repository.updateSongLyrics(song.id, lyricsText, 0)
+                // If this is the currently playing song, update currentSong in player
+                val current = playerState.value.currentSong
+                if (current != null && current.id == song.id) {
+                    val updated = current.copy(lyrics = lyricsText, lrcOffsetMs = 0)
+                    playerController.updateQueue(playerState.value.queue.map { if (it.id == song.id) updated else it })
+                    // Also parse into uiState immediately
+                    val parsed = LrcParser.parse(lyricsText, 0)
+                    val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
+                    _appUiState.update {
+                        it.copy(
+                            parsedLyrics = parsed,
+                            activeLyricIndex = activeIdx
+                        )
+                    }
+                }
+                val formatType = if (!result.syncedLyrics.isNullOrBlank()) "Karaoke LRC đồng bộ" else "văn bản"
+                val prefix = if (isAuto) "Tự động tải lời" else "Đã tìm thấy lời"
+                _appUiState.update {
+                    it.copy(scanResultMessage = "$prefix $formatType từ internet cho: ${song.title}")
+                }
+            } else if (!isAuto) {
+                _appUiState.update {
+                    it.copy(scanResultMessage = "Không tìm thấy lời trên mạng cho: ${song.title}")
+                }
+            }
         }
     }
 

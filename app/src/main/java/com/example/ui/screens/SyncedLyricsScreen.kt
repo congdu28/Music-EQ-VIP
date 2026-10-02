@@ -121,18 +121,42 @@ fun SyncedLyricsScreen(
                     )
                 }
 
-                // Edit / Paste Lyrics button
-                Button(
-                    onClick = { viewModel.setShowEditLyrics(true) },
-                    colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated, contentColor = NeonCyan),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.testTag("edit_lyrics_button")
+                // Actions: Search Online & Edit / Paste Lyrics
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Sửa LRC", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    if (song != null) {
+                        Button(
+                            onClick = { viewModel.searchLyricsOnline(song) },
+                            colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated, contentColor = NeonPink),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = !uiState.isSearchingLyrics
+                        ) {
+                            if (uiState.isSearchingLyrics) {
+                                CircularProgressIndicator(color = NeonPink, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
+                            } else {
+                                Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(15.dp))
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Tìm Online", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    Button(
+                        onClick = { viewModel.setShowEditLyrics(true) },
+                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated, contentColor = NeonCyan),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("edit_lyrics_button")
+                    ) {
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Sửa LRC", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
                 }
             }
 
@@ -195,15 +219,34 @@ fun SyncedLyricsScreen(
                         Text("Chưa có lời bài hát cho ca khúc này", color = TextSecondary, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text("Dán file định dạng [00:12.34] để hát karaoke đồng bộ", color = TextMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Button(
-                            onClick = { viewModel.setShowEditLyrics(true) },
-                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Thêm lời bài hát (LRC)", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            if (song != null) {
+                                Button(
+                                    onClick = { viewModel.searchLyricsOnline(song) },
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DarkBackground),
+                                    shape = RoundedCornerShape(12.dp),
+                                    enabled = !uiState.isSearchingLyrics
+                                ) {
+                                    if (uiState.isSearchingLyrics) {
+                                        CircularProgressIndicator(color = DarkBackground, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                                    } else {
+                                        Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Tìm lời online", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
+                                }
+                            }
+                            OutlinedButton(
+                                onClick = { viewModel.setShowEditLyrics(true) },
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Dán file LRC", fontSize = 12.5.sp)
+                            }
                         }
                     }
                 }
