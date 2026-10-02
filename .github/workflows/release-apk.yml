@@ -55,13 +55,16 @@ jobs:
     - name: Rename APK for Release
       run: |
         mkdir -p release-output
-        APK_PATH=$(find app/build/outputs/apk -name "*.apk" | head -n 1)
+        echo "Searching for APK files in app/build..."
+        find app/build -name "*.apk"
+        APK_PATH=$(find app/build -name "*.apk" | grep -v "androidTest" | head -n 1)
         if [ -n "$APK_PATH" ]; then
-          echo "Found APK at: $APK_PATH"
+          echo "Copying APK from: $APK_PATH"
           cp "$APK_PATH" release-output/MusicEQ-v1.0.3.apk
+          ls -la release-output/
         else
-          echo "ERROR: No APK file found in app/build/outputs/apk!"
-          find app/build -type f | head -n 50
+          echo "ERROR: No APK found! Full directory tree of app/build:"
+          find app/build -maxdepth 5
           exit 1
         fi
 
