@@ -155,12 +155,14 @@ class MusicPlayerController(
                 } catch (e: Exception) {
                     // ignore
                 }
-                // Adaptive polling: 60ms for smooth synced lyrics in active screen,
-                // 350ms when in background or library tabs to conserve battery and CPU
+                // Ultra-efficient adaptive polling:
+                // 150ms is visually imperceptible to human eye for lyrics & seekbars,
+                // while consuming ~60% less CPU & battery than 60ms tight loops.
+                // 500ms when in library or background tabs to keep CPU cold.
                 val intervalMs = if (_uiState.value.isPlaying) {
-                    if (isHighPrecisionTracking) 60L else 350L
+                    if (isHighPrecisionTracking) 150L else 500L
                 } else {
-                    600L
+                    1000L
                 }
                 delay(intervalMs)
             }

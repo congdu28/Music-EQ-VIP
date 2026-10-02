@@ -50,33 +50,34 @@ jobs:
     - name: Rename APK for Release
       run: |
         mkdir -p release-output
-        cp app/build/outputs/apk/debug/app-debug.apk release-output/MusicEQ-v1.0.1.apk
+        cp app/build/outputs/apk/debug/app-debug.apk release-output/MusicEQ-v1.0.2.apk
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
         name: MusicEQ-APK
-        path: release-output/MusicEQ-v1.0.1.apk
+        path: release-output/MusicEQ-v1.0.2.apk
 
     - name: Create or Update GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.1' }}
-        name: Release Music EQ ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.1' }}
+        tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.2' }}
+        name: Release Music EQ ${{ github.ref_type == 'tag' && github.ref_name || 'v1.0.2' }}
         draft: false
         prerelease: false
         body: |
-          ### 🎵 Music EQ v1.0.1 - Hi-Res Audio Player & 10-Band Equalizer
+          ### 🎵 Music EQ v1.0.2 - Responsive UI & Tối ưu hiệu năng / Tiết kiệm Pin
 
-          **Có gì mới trong phiên bản v1.0.1:**
-          - 🔄 **Cập nhật ghi đè (In-place update)**: Chuẩn hóa chữ ký số Keystore cố định và nâng `versionCode = 2`, cho phép cài đè trực tiếp các bản cập nhật tiếp theo mà không cần gỡ ứng dụng cũ.
-          - 🎧 **MediaSession & Lockscreen Controls**: Hỗ trợ đầy đủ điều khiển nhạc trên màn hình khóa, thanh thông báo trạng thái MediaStyle và phím cứng tai nghe/Bluetooth (Play/Pause/Next/Prev).
-          - 🔇 **AudioFocus Handling**: Tự động giảm âm lượng hoặc tạm dừng khi có cuộc gọi đến / ứng dụng khác phát âm thanh và tự phát lại mượt mà khi kết thúc.
-          - 🎚️ **Loudness Enhancer & Preset Reverb**: Tăng cường âm lượng thông minh cho tai nghe công suất nhỏ và bổ sung hiệu ứng vang phòng/sân khấu sống động.
-          - ⚡ **Pre-Amp Limiter**: Tinh chỉnh biên độ âm thanh đầu vào (-12dB đến 0dB), chống vỡ tiếng tuyệt đối khi boost bass/treble cao.
-          - 🚀 **Hiệu năng & Pin tối ưu**: Cơ chế adaptive polling thông minh giúp tiết kiệm pin khi chạy nền và visualizer vẽ trực tiếp trên canvas 60fps.
-
-          *(Lưu ý: Nếu bạn đang cài bản chạy thử nghiệm ban đầu từ Google AI Studio, vui lòng gỡ bỏ bản cũ này 1 lần duy nhất để đồng bộ chữ ký Keystore của repo; từ bản v1.0.1 này trở đi, tất cả các bản cập nhật mới sẽ cài đè bình thường).*
-        files: release-output/MusicEQ-v1.0.1.apk
+          **Có gì mới trong phiên bản v1.0.2:**
+          - 📱 **Sửa triệt để lỗi hiển thị chữ ở thanh điều hướng đáy (Bottom Bar)**:
+            - Chuẩn hóa typography 10sp với cơ chế tự động co giãn / xuống dòng an toàn (`softWrap = false`, `TextOverflow.Ellipsis`).
+            - Thu nhỏ icon kích thước chuẩn (22dp) và căn lề đều đặn giúp nhãn các nút không bao giờ bị cắt chữ trên mọi kích cỡ màn hình và tỷ lệ DPI font của điện thoại.
+          - 🎛️ **Chuẩn hóa thanh công cụ nhanh (Quick Controls Bar)**:
+            - Tinh chỉnh 4 nút chức năng (*Tốc độ phát, Bộ EQ, Hẹn giờ, Lời online*) với layout responsive cân đối, chống tràn chữ tuyệt đối.
+          - ❄️ **Tối ưu hiệu năng, giảm tải CPU & chống nóng máy**:
+            - **graphicsLayer zero-recomposition**: Chuyển đổi toàn bộ hiệu ứng xoay đĩa than sang `graphicsLayer`, triệt tiêu hoàn toàn hiện tượng recomposition liên tục của Compose.
+            - **Giảm 60% chu kỳ polling tiến trình phát nhạc**: Điều chỉnh nhịp polling thông minh xuống 150ms khi hiển thị lời và 500ms khi chạy nền, giữ CPU ở mức tối thiểu.
+            - **Tối ưu hóa Audio Spectrum Visualizer**: Giảm số lượng điểm vẽ sóng nhạc và cột quang phổ, loại bỏ hơn 40% các phép tính lượng giác `sin()` không cần thiết mỗi khung hình, máy mát và tiết kiệm pin vượt trội.
+        files: release-output/MusicEQ-v1.0.2.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -171,7 +171,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                     )
                 }
 
-                // Bottom Navigation Bar
+                // Bottom Navigation Bar with responsive typography & compact paddings
                 NavigationBar(
                     containerColor = DarkSurface,
                     contentColor = TextPrimary,
@@ -201,18 +201,21 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                                     imageVector = icon,
                                     contentDescription = label,
                                     tint = if (isSelected) NeonCyan else TextMuted,
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             },
                             label = {
                                 Text(
                                     text = label,
                                     color = if (isSelected) NeonCyan else TextMuted,
-                                    fontSize = 11.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    maxLines = 1
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             },
+                            alwaysShowLabel = true,
                             colors = NavigationBarItemDefaults.colors(
                                 indicatorColor = NeonCyan.copy(alpha = 0.15f)
                             ),

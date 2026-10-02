@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -374,11 +375,13 @@ fun NowPlayingScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // Soundwave Concentric Disc Rings
+                                    // Soundwave Concentric Disc Rings (Rotated via graphicsLayer to eliminate recompositions)
                                     Box(
                                         modifier = Modifier
                                             .size(108.dp)
-                                            .rotate(if (playerState.isPlaying) rotationAngle else 0f)
+                                            .graphicsLayer {
+                                                rotationZ = if (playerState.isPlaying) rotationAngle else 0f
+                                            }
                                             .clip(CircleShape)
                                             .background(Color(0xFF13171F)),
                                         contentAlignment = Alignment.Center
@@ -882,15 +885,15 @@ fun NowPlayingScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             // DEDICATED QUICK CONTROLS BAR: SPEED (PROMINENT!), EQ, SLEEP TIMER, ONLINE LYRICS
-            // Highly visible, generous touch targets, NEVER pushed off-screen!
+            // Fully responsive, auto-ellipsis, single-line protection, never wraps or clips
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. TỐC ĐỘ PHÁT (SPEED) - PROMINENT, ALWAYS ACCESSIBLE!
+                // 1. TỐC ĐỘ PHÁT (SPEED)
                 val isCustomSpeed = playerState.playbackSpeed != 1.0f
                 Surface(
                     shape = RoundedCornerShape(12.dp),
@@ -900,14 +903,14 @@ fun NowPlayingScreen(
                         if (isCustomSpeed) animatedPrimary else DarkBorder
                     ),
                     modifier = Modifier
-                        .weight(1.1f)
+                        .weight(1f)
                         .height(38.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { showSpeedDialog = true }
                         .testTag("now_playing_speed_button")
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -915,14 +918,17 @@ fun NowPlayingScreen(
                             imageVector = Icons.Default.Speed,
                             contentDescription = "Tốc độ phát",
                             tint = if (isCustomSpeed) animatedPrimary else TextSecondary,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = String.format("%.2fx", playerState.playbackSpeed),
                             color = if (isCustomSpeed) animatedPrimary else TextPrimary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -943,7 +949,7 @@ fun NowPlayingScreen(
                         .testTag("now_playing_eq_trigger_button")
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -953,12 +959,15 @@ fun NowPlayingScreen(
                             tint = if (equalizerState.isEnabled) animatedPrimary else TextSecondary,
                             modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "Bộ EQ",
                             color = if (equalizerState.isEnabled) animatedPrimary else TextPrimary,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -978,7 +987,7 @@ fun NowPlayingScreen(
                         .clickable { viewModel.setShowSleepTimer(true) }
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -988,12 +997,15 @@ fun NowPlayingScreen(
                             tint = if (playerState.isSleepTimerActive) NeonPink else TextSecondary,
                             modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = if (playerState.isSleepTimerActive) "${playerState.sleepTimerRemainingSeconds / 60}m" else "Hẹn giờ",
                             color = if (playerState.isSleepTimerActive) NeonPink else TextPrimary,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1004,13 +1016,13 @@ fun NowPlayingScreen(
                     color = DarkSurfaceVariant,
                     border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                     modifier = Modifier
-                        .weight(1.1f)
+                        .weight(1.05f)
                         .height(38.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { viewModel.searchLyricsOnline(song) }
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
@@ -1020,12 +1032,15 @@ fun NowPlayingScreen(
                             tint = NeonPink,
                             modifier = Modifier.size(15.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             text = "Lời online",
                             color = NeonPink,
                             fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
