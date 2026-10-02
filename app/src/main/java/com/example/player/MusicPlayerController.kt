@@ -50,6 +50,11 @@ class MusicPlayerController(
 
     private var progressJob: Job? = null
     private var sleepTimerJob: Job? = null
+    private var isHighPrecisionTracking: Boolean = true
+
+    fun setHighPrecisionTracking(enabled: Boolean) {
+        isHighPrecisionTracking = enabled
+    }
 
     init {
         startProgressLoop()
@@ -75,7 +80,14 @@ class MusicPlayerController(
                 } catch (e: Exception) {
                     // ignore
                 }
-                delay(60) // High frequency for smooth synced lyrics scroll
+                // Adaptive polling: 60ms for smooth synced lyrics in active screen,
+                // 350ms when in background or library tabs to conserve battery and CPU
+                val intervalMs = if (_uiState.value.isPlaying) {
+                    if (isHighPrecisionTracking) 60L else 350L
+                } else {
+                    600L
+                }
+                delay(intervalMs)
             }
         }
     }

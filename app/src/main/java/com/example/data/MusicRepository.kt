@@ -333,6 +333,26 @@ class MusicRepository(private val context: Context) {
 
                     val isHiRes = format in listOf("FLAC", "WAV", "ALAC") || duration > 0
 
+                    // Check if a local .lrc file exists alongside the audio file
+                    var localLyrics: String? = null
+                    if (path.isNotEmpty()) {
+                        try {
+                            val dotIndex = path.lastIndexOf('.')
+                            if (dotIndex > 0) {
+                                val lrcPath = path.substring(0, dotIndex) + ".lrc"
+                                val lrcFile = File(lrcPath)
+                                if (lrcFile.exists() && lrcFile.isFile && lrcFile.canRead()) {
+                                    val text = lrcFile.readText().trim()
+                                    if (text.isNotEmpty()) {
+                                        localLyrics = text
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // ignore file reading errors
+                        }
+                    }
+
                     scannedSongs.add(
                         Song(
                             title = title,
@@ -345,7 +365,7 @@ class MusicRepository(private val context: Context) {
                             sampleRateHz = if (isHiRes) 96000 else 44100,
                             bitDepth = if (isHiRes) 24 else 16,
                             isHiRes = isHiRes,
-                            lyrics = "[00:00.00] $title\n[00:04.00] $artist\n[00:08.00] Chúc bạn có những phút giây nghe nhạc tuyệt vời!"
+                            lyrics = localLyrics
                         )
                     )
                 }
@@ -396,6 +416,20 @@ class MusicRepository(private val context: Context) {
 
     suspend fun updateSongLyrics(songId: Long, lyrics: String, offsetMs: Long) = withContext(Dispatchers.IO) {
         db.songDao().updateLyrics(songId, lyrics, offsetMs)
+        try {
+            val song = db.songDao().getSongById(songId)
+            if (song != null && song.filePath.isNotEmpty()) {
+                val dotIndex = song.filePath.lastIndexOf('.')
+                if (dotIndex > 0) {
+                    val lrcFile = File(song.filePath.substring(0, dotIndex) + ".lrc")
+                    if (!lrcFile.exists() || lrcFile.canWrite()) {
+                        lrcFile.writeText(lyrics)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // ignore filesystem permissions issues on external storage
+        }
     }
 
     suspend fun updateSongMetadata(

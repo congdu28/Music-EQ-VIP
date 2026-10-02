@@ -167,6 +167,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setTab(tab: MainTab) {
         _appUiState.update { it.copy(currentTab = tab) }
+        val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.SYNCED_LYRICS)
+        playerController.setHighPrecisionTracking(needsHighPrecision)
     }
 
     fun setLibrarySubTab(subTab: LibrarySubTab) {

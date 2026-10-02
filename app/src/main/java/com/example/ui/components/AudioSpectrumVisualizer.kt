@@ -46,7 +46,7 @@ fun AudioSpectrumVisualizer(
     onToggleStyle: (() -> Unit)? = null
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "visualizer_anim")
-    val phase by infiniteTransition.animateFloat(
+    val phaseAnimState = infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * Math.PI).toFloat(),
         animationSpec = infiniteRepeatable(
@@ -117,6 +117,7 @@ fun AudioSpectrumVisualizer(
                 .then(if (onToggleStyle != null) Modifier.clickable(onClick = onToggleStyle) else Modifier)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
+                val phase = if (isPlaying) phaseAnimState.value else 0f
                 val canvasWidth = size.width
                 val canvasHeight = size.height
 
