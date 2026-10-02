@@ -264,7 +264,7 @@ Yêu cầu bắt buộc:
                             }
                         }
                     } else {
-                        Log.w(TAG, "Gemini $model returned error HTTP ${response.code()}: ${response.message()}")
+                        Log.w(TAG, "Gemini $model returned error HTTP ${response.code}: ${response.message}")
                     }
                 }
             } catch (e: Exception) {
