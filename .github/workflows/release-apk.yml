@@ -45,12 +45,7 @@ jobs:
         fi
 
     - name: Build Android Debug APK
-      run: |
-        ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee build.log || {
-          echo "=== BUILD FAILED. LAST 100 LINES OF LOG: ==="
-          tail -n 100 build.log
-          exit 1
-        }
+      run: ./gradlew :app:assembleDebug --stacktrace --no-daemon
 
     - name: Rename APK for Release
       run: |
