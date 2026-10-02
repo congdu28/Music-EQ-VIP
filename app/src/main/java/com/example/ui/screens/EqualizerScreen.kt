@@ -480,6 +480,201 @@ fun EqualizerScreen(
                         modifier = Modifier.testTag("virtualizer_slider")
                     )
                 }
+
+                HorizontalDivider(color = DarkBorder)
+
+                // Pre-Amp Limiter Gain (-12dB to 0dB)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = NeonGreen.copy(alpha = 0.2f),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Tune,
+                                        contentDescription = null,
+                                        tint = NeonGreen,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "Pre-Amp Limiter (Chống rè loa)",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Hạ mức tín hiệu vào để tránh vỡ âm khi đẩy bass cao",
+                                    color = TextSecondary,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        val preAmpDb = equalizerState.preAmpLevelMilliBels / 100f
+                        Text(
+                            text = String.format(java.util.Locale.US, "%.1fdB", preAmpDb),
+                            color = NeonGreen,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Slider(
+                        value = (equalizerState.preAmpLevelMilliBels / 100f),
+                        onValueChange = { viewModel.setPreAmpLevel(it) },
+                        valueRange = -12f..0f,
+                        enabled = equalizerState.isEnabled,
+                        colors = SliderDefaults.colors(
+                            thumbColor = NeonGreen,
+                            activeTrackColor = NeonGreen,
+                            inactiveTrackColor = DarkSurfaceVariant
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = DarkBorder)
+
+                // Loudness Enhancer (+0dB to +8dB)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = NeonPink.copy(alpha = 0.2f),
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = null,
+                                        tint = NeonPink,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    "Khuếch đại âm lượng (Loudness Enhancer)",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    "Khuếch đại phần cứng cho tai nghe âm lượng nhỏ",
+                                    color = TextSecondary,
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+
+                        val loudDb = String.format(java.util.Locale.US, "+%.1fdB", equalizerState.loudnessBoostMilliBels / 100f)
+                        Text(
+                            text = loudDb,
+                            color = NeonPink,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Slider(
+                        value = equalizerState.loudnessBoostMilliBels.toFloat(),
+                        onValueChange = { viewModel.setLoudnessBoost(it.toInt()) },
+                        valueRange = 0f..800f,
+                        enabled = equalizerState.isEnabled,
+                        colors = SliderDefaults.colors(
+                            thumbColor = NeonPink,
+                            activeTrackColor = NeonPink,
+                            inactiveTrackColor = DarkSurfaceVariant
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = DarkBorder)
+
+                // Acoustic Space Reverb Presets
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = NeonAmber.copy(alpha = 0.2f),
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.MeetingRoom,
+                                    contentDescription = null,
+                                    tint = NeonAmber,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "Hiệu ứng không gian (Preset Reverb)",
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                "Mô phỏng độ vang của phòng nhạc hoặc khán phòng",
+                                color = TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+
+                    val reverbOptions = listOf(
+                        Pair(0.toShort(), "Tắt vang"),
+                        Pair(1.toShort(), "Phòng nhỏ"),
+                        Pair(2.toShort(), "Phòng vừa"),
+                        Pair(3.toShort(), "Hội trường"),
+                        Pair(4.toShort(), "Sân khấu")
+                    )
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(reverbOptions) { (id, label) ->
+                            val isSelected = equalizerState.reverbPreset == id
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = if (isSelected) NeonAmber else DarkSurfaceVariant,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSelected) NeonAmber else DarkBorder
+                                ),
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .clickable(enabled = equalizerState.isEnabled) {
+                                        viewModel.setReverbPreset(id)
+                                    }
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) DarkBackground else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 

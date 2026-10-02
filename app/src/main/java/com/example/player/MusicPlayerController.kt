@@ -2,8 +2,11 @@ package com.example.player
 
 import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import com.example.equalizer.EqualizerManager
 import com.example.model.Song
@@ -39,6 +42,11 @@ class MusicPlayerController(
     private val context: Context,
     val equalizerManager: EqualizerManager
 ) {
+    companion object {
+        var activeInstance: MusicPlayerController? = null
+            private set
+    }
+
     private val TAG = "MusicPlayerController"
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
@@ -52,11 +60,78 @@ class MusicPlayerController(
     private var sleepTimerJob: Job? = null
     private var isHighPrecisionTracking: Boolean = true
 
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var resumeOnFocusGain = false
+    private var isDucked = false
+
+    private val audioFocusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                resumeOnFocusGain = false
+                pausePlayback()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                resumeOnFocusGain = _uiState.value.isPlaying
+                pausePlayback()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                isDucked = true
+                try { mediaPlayer?.setVolume(0.2f, 0.2f) } catch (e: Exception) {}
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (isDucked) {
+                    isDucked = false
+                    try { mediaPlayer?.setVolume(1.0f, 1.0f) } catch (e: Exception) {}
+                } else if (resumeOnFocusGain) {
+                    resumeOnFocusGain = false
+                    resumePlayback()
+                }
+            }
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        val am = audioManager ?: return true
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val req = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setOnAudioFocusChangeListener(audioFocusChangeListener)
+                .setAcceptsDelayedFocusGain(true)
+                .build()
+            audioFocusRequest = req
+            am.requestAudioFocus(req) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        } else {
+            @Suppress("DEPRECATION")
+            am.requestAudioFocus(
+                audioFocusChangeListener,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            ) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+        }
+    }
+
+    private fun abandonAudioFocus() {
+        val am = audioManager ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            audioFocusRequest?.let { am.abandonAudioFocusRequest(it) }
+        } else {
+            @Suppress("DEPRECATION")
+            am.abandonAudioFocus(audioFocusChangeListener)
+        }
+    }
+
     fun setHighPrecisionTracking(enabled: Boolean) {
         isHighPrecisionTracking = enabled
     }
 
     init {
+        activeInstance = this
         startProgressLoop()
     }
 
@@ -165,6 +240,7 @@ class MusicPlayerController(
     }
 
     fun playSong(song: Song) {
+        requestAudioFocus()
         try {
             crossfadeJob?.cancel()
             val oldPlayer = mediaPlayer
@@ -218,6 +294,7 @@ class MusicPlayerController(
                             isHiResAudioActive = song.isHiRes
                         )
                     }
+                    MusicPlaybackService.startOrUpdate(context, song, true)
 
                     if (isCrossfade && oldPlayer != null) {
                         // Smoothly crossfade: oldPlayer down, mp up
@@ -271,41 +348,46 @@ class MusicPlayerController(
         }
     }
 
-    fun togglePlayPause() {
+    fun resumePlayback() {
         val player = mediaPlayer ?: run {
             val song = _uiState.value.currentSong ?: _uiState.value.queue.firstOrNull()
             if (song != null) playSong(song)
             return
         }
-
-        scope.launch {
+        if (!player.isPlaying) {
+            requestAudioFocus()
             try {
-                if (player.isPlaying) {
-                    // Gentle 120ms fade out before pause to avoid acoustic pop
-                    val steps = 4
-                    for (i in steps downTo 0) {
-                        val vol = i.toFloat() / steps
-                        try { player.setVolume(vol, vol) } catch (e: Exception) {}
-                        delay(25)
-                    }
-                    player.pause()
-                    try { player.setVolume(1f, 1f) } catch (e: Exception) {}
-                    _uiState.update { it.copy(isPlaying = false) }
-                } else {
-                    player.setVolume(0.1f, 0.1f)
-                    player.start()
-                    _uiState.update { it.copy(isPlaying = true) }
-                    val steps = 4
-                    for (i in 1..steps) {
-                        val vol = i.toFloat() / steps
-                        try { player.setVolume(vol, vol) } catch (e: Exception) {}
-                        delay(25)
-                    }
-                    try { player.setVolume(1f, 1f) } catch (e: Exception) {}
+                player.start()
+                _uiState.update { it.copy(isPlaying = true) }
+                _uiState.value.currentSong?.let {
+                    MusicPlaybackService.startOrUpdate(context, it, true)
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Toggle play/pause error: ${e.message}")
+                Log.w(TAG, "Resume playback error: ${e.message}")
             }
+        }
+    }
+
+    fun pausePlayback() {
+        val player = mediaPlayer ?: return
+        if (player.isPlaying) {
+            try {
+                player.pause()
+                _uiState.update { it.copy(isPlaying = false) }
+                _uiState.value.currentSong?.let {
+                    MusicPlaybackService.startOrUpdate(context, it, false)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Pause playback error: ${e.message}")
+            }
+        }
+    }
+
+    fun togglePlayPause() {
+        if (_uiState.value.isPlaying) {
+            pausePlayback()
+        } else {
+            resumePlayback()
         }
     }
 
@@ -455,6 +537,9 @@ class MusicPlayerController(
     }
 
     fun release() {
+        abandonAudioFocus()
+        MusicPlaybackService.stop(context)
+        if (activeInstance == this) activeInstance = null
         crossfadeJob?.cancel()
         progressJob?.cancel()
         sleepTimerJob?.cancel()

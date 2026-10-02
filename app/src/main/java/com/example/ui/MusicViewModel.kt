@@ -167,7 +167,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setTab(tab: MainTab) {
         _appUiState.update { it.copy(currentTab = tab) }
-        val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.SYNCED_LYRICS)
+        val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.LYRICS)
         playerController.setHighPrecisionTracking(needsHighPrecision)
     }
 
@@ -323,6 +323,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setBandLevel(bandIndex: Int, levelDb: Float) = equalizerManager.updateBandLevel(bandIndex.toShort(), (levelDb * 100).toInt().toShort())
     fun setBassBoost(strength: Int) = equalizerManager.setBassBoost(strength)
     fun setVirtualizer(strength: Int) = equalizerManager.setVirtualizer(strength)
+    fun setLoudnessBoost(gainMilliBels: Int) = equalizerManager.setLoudnessBoost(gainMilliBels)
+    fun setReverbPreset(preset: Short) = equalizerManager.setReverbPreset(preset)
+    fun setPreAmpLevel(levelDb: Float) = equalizerManager.setPreAmpLevel((levelDb * 100).toInt().toShort())
     fun resetEqualizer() = equalizerManager.resetToFlat()
     fun resetEqualizerToFlat() = equalizerManager.resetToFlat()
 
