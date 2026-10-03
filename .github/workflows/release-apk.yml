@@ -46,12 +46,13 @@ jobs:
 
     - name: Build Android Debug APK
       run: |
-        ./gradlew :app:assembleDebug --stacktrace --no-daemon > gradle_build.log 2>&1 || {
-          EXIT_CODE=$?
+        ./gradlew :app:assembleDebug --stacktrace --no-daemon 2>&1 | tee gradle_build.log
+        BUILD_STATUS=${PIPESTATUS[0]}
+        if [ $BUILD_STATUS -ne 0 ]; then
           echo "==================== BUILD FAILURE DETECTED ===================="
-          tail -n 120 gradle_build.log
-          exit $EXIT_CODE
-        }
+          tail -n 200 gradle_build.log
+          exit $BUILD_STATUS
+        fi
 
     - name: Upload Build Log On Failure
       if: failure()
