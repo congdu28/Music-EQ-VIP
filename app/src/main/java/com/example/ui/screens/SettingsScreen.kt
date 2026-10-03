@@ -458,7 +458,7 @@ fun SettingsScreen(
                 Text("Thông tin & Giấy phép", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                InfoRow("Phiên bản", "1.0.5 (Gemini 3.6/3.7/3.8 & AI Căn chỉnh)")
+                InfoRow("Phiên bản", "1.0.6 (Hotfix Font & Crash, Gemini 3.6/3.7/3.8)")
                 InfoRow("Ngôn ngữ", "Tiếng Việt (100% Native)")
                 InfoRow("Bộ xử lý âm thanh", "Android AudioFX + Native DSP")
                 InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0 + Gemini AI")

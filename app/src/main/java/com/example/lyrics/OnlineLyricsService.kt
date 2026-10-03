@@ -58,8 +58,12 @@ object OnlineLyricsService {
     fun getDefaultGeminiApiKey(): String {
         return try {
             String(android.util.Base64.decode("QVEuQWI4Uk42TGZaRGdXdjJHMEVRYWxqR3FoUkpwWl9DOGMyMWtfaHZKX2R0NWJjQ3dWVEE=", android.util.Base64.DEFAULT), Charsets.UTF_8).trim()
-        } catch (e: Exception) {
-            ""
+        } catch (e: Throwable) {
+            try {
+                String(java.util.Base64.getDecoder().decode("QVEuQWI4Uk42TGZaRGdXdjJHMEVRYWxqR3FoUkpwWl9DOGMyMWtfaHZKX2R0NWJjQ3dWVEE="), Charsets.UTF_8).trim()
+            } catch (e2: Throwable) {
+                ""
+            }
         }
     }
 
