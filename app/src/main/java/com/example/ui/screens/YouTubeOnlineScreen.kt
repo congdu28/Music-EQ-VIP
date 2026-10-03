@@ -418,17 +418,11 @@ fun YouTubeOnlineScreen(
                         ) { index, song ->
                             val current = playerState.currentSong
                             val isPlayingOnline = current != null && (
-                                current.format.contains("YouTube") ||
                                 current.album == "YouTube Online" ||
+                                current.format.contains("YouTube") ||
                                 current.filePath.startsWith("yt://")
                             )
-                            val isCurrent = isPlayingOnline && (
-                                (current?.id != 0L && current?.id == song.id) ||
-                                (song.filePath.startsWith("yt://") && (
-                                    current?.filePath == song.filePath ||
-                                    current?.filePath?.contains(song.filePath.removePrefix("yt://")) == true
-                                ))
-                            )
+                            val isCurrent = isPlayingOnline && (current?.id == song.id)
                             YouTubeSongItem(
                                 song = song,
                                 isPlaying = isCurrent && playerState.isPlaying,

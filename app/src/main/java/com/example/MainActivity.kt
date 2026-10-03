@@ -137,18 +137,45 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                             )
                         }
 
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
 
-                        // Quick Equalizer Button
-                        IconButton(
-                            onClick = { viewModel.setTab(MainTab.EQUALIZER) },
-                            modifier = Modifier.testTag("top_app_bar_eq_button")
+                        // Prominent Equalizer (Bộ EQ) Button in Top Bar
+                        val isEqActive = uiState.currentTab == MainTab.EQUALIZER || equalizerState.isEnabled
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = if (isEqActive) NeonCyan.copy(alpha = 0.2f) else DarkSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isEqActive) NeonCyan else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    if (uiState.selectedPlaylist != null) {
+                                        viewModel.closePlaylist()
+                                    }
+                                    viewModel.setTab(MainTab.EQUALIZER)
+                                }
+                                .testTag("top_app_bar_eq_button")
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Equalizer,
-                                contentDescription = "Bộ chỉnh âm",
-                                tint = if (equalizerState.isEnabled) NeonCyan else TextMuted
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = "Bộ EQ",
+                                    tint = if (isEqActive) NeonCyan else TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Bộ EQ",
+                                    color = if (isEqActive) NeonCyan else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -183,7 +210,6 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         Triple(MainTab.YOUTUBE, Icons.Default.Subscriptions, "YouTube"),
                         Triple(MainTab.NOW_PLAYING, Icons.Default.PlayCircleFilled, "Đang phát"),
                         Triple(MainTab.LYRICS, Icons.Default.Lyrics, "Lời nhạc"),
-                        Triple(MainTab.EQUALIZER, Icons.Default.Tune, "Bộ EQ"),
                         Triple(MainTab.SETTINGS, Icons.Default.Settings, "Cài đặt")
                     )
 
@@ -205,14 +231,14 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                                     imageVector = icon,
                                     contentDescription = label,
                                     tint = if (isSelected) activeColor else TextMuted,
-                                    modifier = Modifier.size(21.dp)
+                                    modifier = Modifier.size(22.dp)
                                 )
                             },
                             label = {
                                 Text(
                                     text = label,
                                     color = if (isSelected) activeColor else TextMuted,
-                                    fontSize = 9.5.sp,
+                                    fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1,
                                     softWrap = false,

@@ -351,9 +351,33 @@ class MusicPlayerController(
             val isCrossfade = state.isCrossfadeEnabled && oldPlayer != null && oldPlayer.isPlaying && !isOnline
             val crossfadeDurationMs = (state.crossfadeDurationSeconds * 1000).toLong().coerceIn(300L, 5000L)
 
-            // If not crossfading (or if loading online stream), immediately stop any previous player
+            // Safely stop and release previous media players without canceling the active stream resolution coroutine
             if (!isCrossfade) {
-                stopAllPlayback()
+                crossfadeJob?.cancel()
+                crossfadeJob = null
+
+                preparingPlayer?.let { p ->
+                    try {
+                        p.setOnPreparedListener(null)
+                        p.setOnCompletionListener(null)
+                        p.setOnErrorListener(null)
+                        p.reset()
+                        p.release()
+                    } catch (t: Throwable) {}
+                }
+                preparingPlayer = null
+
+                mediaPlayer?.let { p ->
+                    try {
+                        p.setOnPreparedListener(null)
+                        p.setOnCompletionListener(null)
+                        p.setOnErrorListener(null)
+                        if (p.isPlaying) p.stop()
+                        p.reset()
+                        p.release()
+                    } catch (t: Throwable) {}
+                }
+                mediaPlayer = null
             } else {
                 preparingPlayer?.let { p ->
                     try {
