@@ -22,7 +22,7 @@ object YouTubeMusicService {
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
-    private const val VISION_OS_UA =
+    const val AUDIO_USER_AGENT =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
 
     @Volatile
@@ -33,10 +33,10 @@ object YouTubeMusicService {
     /**
      * Obtains or refreshes the visitorData token from YouTube's visitor_id endpoint.
      */
-    suspend fun getVisitorData(): String = withContext(Dispatchers.IO) {
+    suspend fun getVisitorData(forceRefresh: Boolean = false): String = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val current = cachedVisitorData
-        if (current != null && now < visitorDataExpiryTimestamp) {
+        if (!forceRefresh && current != null && now < visitorDataExpiryTimestamp && current.isNotBlank()) {
             return@withContext current
         }
 
@@ -55,7 +55,7 @@ object YouTubeMusicService {
             val request = Request.Builder()
                 .url("https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false")
                 .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", VISION_OS_UA)
+                .header("User-Agent", AUDIO_USER_AGENT)
                 .header("X-Goog-Api-Format-Version", "2")
                 .build()
 
@@ -67,6 +67,7 @@ object YouTubeMusicService {
                     if (!visitorData.isNullOrBlank()) {
                         cachedVisitorData = visitorData
                         visitorDataExpiryTimestamp = now + (2 * 3600 * 1000) // valid for 2 hours
+                        Log.d(TAG, "Successfully acquired fresh visitorData token")
                         return@withContext visitorData
                     }
                 }
@@ -83,9 +84,68 @@ object YouTubeMusicService {
     suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
         if (videoId.isBlank()) return@withContext null
 
-        // Strategy 1: VISIONOS client with visitorData (returns unthrottled direct audio URLs)
+        // Pass 1: Try with cached/fresh visitorData
+        var streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = false)
+        if (streamUrl != null) {
+            return@withContext streamUrl
+        }
+
+        // Pass 2: Retry with explicitly refreshed visitorData (fixes session expiry / bot guard)
+        Log.d(TAG, "Pass 1 failed for $videoId, retrying with fresh visitorData...")
+        streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true)
+        if (streamUrl != null) {
+            return@withContext streamUrl
+        }
+
+        // Pass 3: Fallback to ANDROID_VR with fresh visitorData
         try {
-            val visitorData = getVisitorData()
+            val visitorData = getVisitorData(forceRefresh = false)
+            val vrPayload = JSONObject().apply {
+                put("context", JSONObject().apply {
+                    put("client", JSONObject().apply {
+                        put("clientName", "ANDROID_VR")
+                        put("clientVersion", "1.56.21")
+                        put("hl", "vi")
+                        put("gl", "VN")
+                        if (visitorData.isNotBlank()) {
+                            put("visitorData", visitorData)
+                        }
+                    })
+                })
+                put("videoId", videoId)
+                put("contentCheckOk", true)
+                put("racyCheckOk", true)
+            }
+
+            val vrRequest = Request.Builder()
+                .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+                .post(vrPayload.toString().toRequestBody(JSON_MEDIA_TYPE))
+                .header("User-Agent", AUDIO_USER_AGENT)
+                .header("X-Goog-Api-Format-Version", "2")
+                .build()
+
+            client.newCall(vrRequest).execute().use { response ->
+                if (response.isSuccessful) {
+                    val bodyStr = response.body?.string() ?: ""
+                    val json = JSONObject(bodyStr)
+                    val url = extractDirectAudioUrl(json)
+                    if (url != null) {
+                        Log.d(TAG, "Resolved stream via ANDROID_VR fallback for $videoId")
+                        return@withContext url
+                    }
+                }
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "ANDROID_VR fallback stream resolution failed for $videoId: ${e.message}")
+        }
+
+        Log.e(TAG, "All stream resolution passes failed for videoId: $videoId")
+        return@withContext null
+    }
+
+    private suspend fun queryVisionOsStream(videoId: String, forceFreshVisitorData: Boolean): String? = withContext(Dispatchers.IO) {
+        try {
+            val visitorData = getVisitorData(forceRefresh = forceFreshVisitorData)
             val payload = JSONObject().apply {
                 put("context", JSONObject().apply {
                     put("client", JSONObject().apply {
@@ -106,7 +166,7 @@ object YouTubeMusicService {
             val request = Request.Builder()
                 .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
                 .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", VISION_OS_UA)
+                .header("User-Agent", AUDIO_USER_AGENT)
                 .header("X-Goog-Api-Format-Version", "2")
                 .build()
 
@@ -114,52 +174,21 @@ object YouTubeMusicService {
                 if (response.isSuccessful) {
                     val bodyStr = response.body?.string() ?: ""
                     val json = JSONObject(bodyStr)
+                    val playability = json.optJSONObject("playabilityStatus")?.optString("status", "")
+                    if (playability != null && (playability == "LOGIN_REQUIRED" || playability == "UNPLAYABLE")) {
+                        Log.w(TAG, "VISIONOS returned $playability for $videoId")
+                        return@withContext null
+                    }
                     val url = extractDirectAudioUrl(json)
                     if (url != null) {
+                        Log.d(TAG, "Successfully resolved VISIONOS audio stream for $videoId")
                         return@withContext url
                     }
                 }
             }
         } catch (e: Throwable) {
-            Log.w(TAG, "VISIONOS stream resolution failed for $videoId: ${e.message}")
+            Log.w(TAG, "VISIONOS query error for $videoId: ${e.message}")
         }
-
-        // Strategy 2: Fallback to ANDROID_VR client
-        try {
-            val vrPayload = JSONObject().apply {
-                put("context", JSONObject().apply {
-                    put("client", JSONObject().apply {
-                        put("clientName", "ANDROID_VR")
-                        put("clientVersion", "1.56.21")
-                        put("hl", "vi")
-                        put("gl", "VN")
-                    })
-                })
-                put("videoId", videoId)
-                put("contentCheckOk", true)
-                put("racyCheckOk", true)
-            }
-
-            val vrRequest = Request.Builder()
-                .url("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
-                .post(vrPayload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36")
-                .build()
-
-            client.newCall(vrRequest).execute().use { response ->
-                if (response.isSuccessful) {
-                    val bodyStr = response.body?.string() ?: ""
-                    val json = JSONObject(bodyStr)
-                    val url = extractDirectAudioUrl(json)
-                    if (url != null) {
-                        return@withContext url
-                    }
-                }
-            }
-        } catch (e: Throwable) {
-            Log.w(TAG, "ANDROID_VR fallback stream resolution failed for $videoId: ${e.message}")
-        }
-
         return@withContext null
     }
 

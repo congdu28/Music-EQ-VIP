@@ -331,6 +331,15 @@ class MusicPlayerController(
                     } else {
                         Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
                         _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                        withContext(Dispatchers.Main) {
+                            try {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Không thể phát bài hát này từ YouTube. Vui lòng chọn bài khác.",
+                                    android.widget.Toast.LENGTH_SHORT
+                                ).show()
+                            } catch (t: Throwable) {}
+                        }
                     }
                 }
             }
@@ -401,7 +410,7 @@ class MusicPlayerController(
 
                 if (isOnline) {
                     val headers = mapOf(
-                        "User-Agent" to "Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36"
+                        "User-Agent" to com.example.data.YouTubeMusicService.AUDIO_USER_AGENT
                     )
                     setDataSource(context, Uri.parse(song.filePath), headers)
                 } else {
