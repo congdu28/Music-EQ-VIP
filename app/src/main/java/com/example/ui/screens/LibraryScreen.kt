@@ -1086,7 +1086,7 @@ fun YouTubeOnlineView(
                         textStyle = TextStyle(
                             color = TextPrimary,
                             fontSize = 13.sp,
-                            fontFamily = GoogleSansFamily,
+                            fontFamily = GoogleSansFontFamily,
                             fontWeight = FontWeight.Normal
                         ),
                         singleLine = true,

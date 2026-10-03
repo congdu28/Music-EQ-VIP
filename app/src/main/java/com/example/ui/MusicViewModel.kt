@@ -659,6 +659,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             LibrarySubTab.FOLDERS -> _appUiState.value.songs
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }
+            LibrarySubTab.YOUTUBE -> _appUiState.value.youtubeSongs
             LibrarySubTab.ARTISTS, LibrarySubTab.PLAYLISTS -> _appUiState.value.songs
         }
         if (query.isEmpty()) return all
