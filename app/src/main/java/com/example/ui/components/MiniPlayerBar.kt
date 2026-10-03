@@ -89,13 +89,23 @@ fun MiniPlayerBar(
                         ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = song.title.take(1).uppercase(),
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
-                    )
+                    if (!song.albumArtUri.isNullOrBlank()) {
+                        coil.compose.AsyncImage(
+                            model = song.albumArtUri,
+                            contentDescription = null,
+                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(
+                            text = song.title.take(1).uppercase(),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
                 }
+
 
                 Spacer(modifier = Modifier.width(12.dp))
 
@@ -163,13 +173,22 @@ fun MiniPlayerBar(
                         .testTag("mini_play_pause_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playerState.isPlaying) "Tạm dừng" else "Phát",
-                            tint = DarkBackground,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        if (playerState.isLoadingOnlineStream) {
+                            CircularProgressIndicator(
+                                color = DarkBackground,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playerState.isPlaying) "Tạm dừng" else "Phát",
+                                tint = DarkBackground,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
                     }
+
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))

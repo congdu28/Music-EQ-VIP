@@ -35,8 +35,10 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val isHiResAudioActive: Boolean = true,
     val isCrossfadeEnabled: Boolean = true,
-    val crossfadeDurationSeconds: Float = 2.0f
+    val crossfadeDurationSeconds: Float = 2.0f,
+    val isLoadingOnlineStream: Boolean = false
 )
+
 
 class MusicPlayerController(
     private val context: Context,
@@ -248,6 +250,41 @@ class MusicPlayerController(
 
     fun playSong(song: Song) {
         requestAudioFocus()
+
+        // Handle YouTube online tracks that need stream URL resolution
+        if (song.filePath.startsWith("yt://") || (song.format.contains("YouTube") && !song.filePath.startsWith("http"))) {
+            val videoId = song.filePath.removePrefix("yt://").trim()
+            _uiState.update {
+                it.copy(
+                    currentSong = song,
+                    isPlaying = false,
+                    isLoadingOnlineStream = true,
+                    currentPositionMs = 0
+                )
+            }
+            scope.launch {
+                val streamUrl = withContext(Dispatchers.IO) {
+                    com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
+                }
+                if (streamUrl != null) {
+                    val resolvedSong = song.copy(filePath = streamUrl)
+                    _uiState.update { current ->
+                        val updatedQueue = current.queue.map { if (it.id == song.id) resolvedSong else it }
+                        current.copy(queue = updatedQueue, currentSong = resolvedSong)
+                    }
+                    playSongInternal(resolvedSong)
+                } else {
+                    Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
+                    _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                }
+            }
+            return
+        }
+
+        playSongInternal(song)
+    }
+
+    private fun playSongInternal(song: Song) {
         try {
             crossfadeJob?.cancel()
             val oldPlayer = mediaPlayer
@@ -263,11 +300,18 @@ class MusicPlayerController(
                         .build()
                 )
 
-                val file = File(song.filePath)
-                if (file.exists()) {
-                    setDataSource(context, Uri.fromFile(file))
+                if (song.filePath.startsWith("http://") || song.filePath.startsWith("https://")) {
+                    val headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+                    )
+                    setDataSource(context, Uri.parse(song.filePath), headers)
                 } else {
-                    setDataSource(song.filePath)
+                    val file = File(song.filePath)
+                    if (file.exists()) {
+                        setDataSource(context, Uri.fromFile(file))
+                    } else {
+                        setDataSource(song.filePath)
+                    }
                 }
 
                 // If crossfading, start new player silently and ramp up
@@ -296,6 +340,7 @@ class MusicPlayerController(
                         it.copy(
                             currentSong = song,
                             isPlaying = true,
+                            isLoadingOnlineStream = false,
                             totalDurationMs = mp.duration.toLong().coerceAtLeast(song.durationMs),
                             currentPositionMs = 0,
                             isHiResAudioActive = song.isHiRes
@@ -344,6 +389,7 @@ class MusicPlayerController(
 
                 setOnErrorListener { _, what, extra ->
                     Log.w(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
                     false
                 }
 
@@ -352,8 +398,10 @@ class MusicPlayerController(
             mediaPlayer = newPlayer
         } catch (e: Exception) {
             Log.e(TAG, "Error playing song: ${e.message}", e)
+            _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
         }
     }
+
 
     fun resumePlayback() {
         val player = mediaPlayer ?: run {

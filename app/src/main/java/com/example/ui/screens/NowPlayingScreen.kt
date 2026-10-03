@@ -43,6 +43,8 @@ import com.example.ui.MainTab
 import com.example.ui.MusicViewModel
 import com.example.ui.components.AudioSpectrumVisualizer
 import com.example.ui.theme.*
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 enum class NowPlayingDisplayMode {
     ALBUM_ART,
@@ -378,44 +380,67 @@ fun NowPlayingScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    // Soundwave Concentric Disc Rings (Rotated via graphicsLayer to eliminate recompositions)
-                                    Box(
-                                        modifier = Modifier
-                                            .size(108.dp)
-                                            .graphicsLayer {
-                                                rotationZ = if (playerState.isPlaying) rotationAngle else 0f
-                                            }
-                                            .clip(CircleShape)
-                                            .background(Color(0xFF13171F)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = Color.Transparent,
-                                            border = androidx.compose.foundation.BorderStroke(2.5.dp, animatedPrimary),
-                                            modifier = Modifier.size(100.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                // Central Core
-                                                Surface(
-                                                    shape = CircleShape,
-                                                    color = animatedPrimary,
-                                                    modifier = Modifier.size(68.dp)
-                                                ) {
-                                                    Box(contentAlignment = Alignment.Center) {
-                                                        Icon(
-                                                            imageVector = Icons.Default.MusicNote,
-                                                            contentDescription = null,
-                                                            tint = Color.White,
-                                                            modifier = Modifier.size(30.dp)
+                                    if (song.albumArtUri != null) {
+                                        AsyncImage(
+                                            model = song.albumArtUri,
+                                            contentDescription = song.title,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(28.dp))
+                                        )
+                                        // Subtle top-bottom gradient overlay for badge readability
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(
+                                                    Brush.verticalGradient(
+                                                        colors = listOf(
+                                                            Color.Black.copy(alpha = 0.35f),
+                                                            Color.Transparent,
+                                                            Color.Black.copy(alpha = 0.45f)
                                                         )
+                                                    )
+                                                )
+                                        )
+                                    } else {
+                                        // Soundwave Concentric Disc Rings (Rotated via graphicsLayer to eliminate recompositions)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(108.dp)
+                                                .graphicsLayer {
+                                                    rotationZ = if (playerState.isPlaying) rotationAngle else 0f
+                                                }
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF13171F)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = Color.Transparent,
+                                                border = androidx.compose.foundation.BorderStroke(2.5.dp, animatedPrimary),
+                                                modifier = Modifier.size(100.dp)
+                                            ) {
+                                                Box(contentAlignment = Alignment.Center) {
+                                                    // Central Core
+                                                    Surface(
+                                                        shape = CircleShape,
+                                                        color = animatedPrimary,
+                                                        modifier = Modifier.size(68.dp)
+                                                    ) {
+                                                        Box(contentAlignment = Alignment.Center) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.MusicNote,
+                                                                contentDescription = null,
+                                                                tint = Color.White,
+                                                                modifier = Modifier.size(30.dp)
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
 
-                                    // Top-Right HI-RES Badge
+                                    // Top-Right HI-RES / FORMAT Badge
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
                                         color = animatedPrimary.copy(alpha = 0.2f),
@@ -908,12 +933,20 @@ fun NowPlayingScreen(
                         .testTag("now_playing_play_pause_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (playerState.isPlaying) "Tạm dừng" else "Phát",
-                            tint = PlayButtonContent,
-                            modifier = Modifier.size(32.dp)
-                        )
+                        if (playerState.isLoadingOnlineStream) {
+                            CircularProgressIndicator(
+                                color = PlayButtonContent,
+                                strokeWidth = 3.dp,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (playerState.isPlaying) "Tạm dừng" else "Phát",
+                                tint = PlayButtonContent,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
                     }
                 }
 

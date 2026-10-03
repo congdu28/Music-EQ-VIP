@@ -29,6 +29,7 @@ enum class MainTab(val title: String) {
 
 enum class LibrarySubTab(val title: String) {
     ALL_SONGS("Tất cả"),
+    YOUTUBE("YouTube Online"),
     FOLDERS("Thư mục"),
     HI_RES("Hi-Res FLAC/WAV"),
     FAVORITES("Yêu thích"),
@@ -71,8 +72,14 @@ data class MusicAppUiState(
     val isSearchingLyrics: Boolean = false,
     val isAligningLyrics: Boolean = false,
     val geminiApiKey: String = "",
-    val geminiModel: String = "gemini-3.7-flash"
+    val geminiModel: String = "gemini-3.7-flash",
+    val youtubeQuery: String = "",
+    val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
+    val youtubeSongs: List<Song> = emptyList(),
+    val isSearchingYouTube: Boolean = false,
+    val youtubeErrorMessage: String? = null
 )
+
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val repository = MusicRepository(application)
@@ -180,11 +187,62 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setLibrarySubTab(subTab: LibrarySubTab) {
         _appUiState.update { it.copy(librarySubTab = subTab, selectedFolder = null) }
+        if (subTab == LibrarySubTab.YOUTUBE && _appUiState.value.youtubeSongs.isEmpty() && !_appUiState.value.isSearchingYouTube) {
+            selectYouTubeCategory(_appUiState.value.selectedYouTubeCategory)
+        }
+    }
+
+    fun setYouTubeQuery(query: String) {
+        _appUiState.update { it.copy(youtubeQuery = query) }
+    }
+
+    fun searchYouTube(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null, youtubeQuery = trimmed) }
+            val results = com.example.data.YouTubeMusicService.searchSongs(trimmed)
+            _appUiState.update {
+                it.copy(
+                    isSearchingYouTube = false,
+                    youtubeSongs = results,
+                    youtubeErrorMessage = if (results.isEmpty()) "Không tìm thấy bài hát nào trên YouTube cho '$trimmed'" else null
+                )
+            }
+        }
+    }
+
+    fun selectYouTubeCategory(category: String) {
+        _appUiState.update { it.copy(selectedYouTubeCategory = category, youtubeQuery = "") }
+        viewModelScope.launch {
+            _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }
+            val query = com.example.data.YouTubeMusicService.getCategoryQuery(category)
+            val results = com.example.data.YouTubeMusicService.searchSongs(query)
+            _appUiState.update {
+                it.copy(
+                    isSearchingYouTube = false,
+                    youtubeSongs = results,
+                    youtubeErrorMessage = if (results.isEmpty()) "Không thể tải danh mục '$category' từ YouTube" else null
+                )
+            }
+        }
+    }
+
+    fun playYouTubeSong(song: Song) {
+        val currentQueue = playerController.uiState.value.queue.toMutableList()
+        val index = currentQueue.indexOfFirst { it.id == song.id }
+        if (index >= 0) {
+            playerController.playQueue(currentQueue, index)
+        } else {
+            currentQueue.add(song)
+            playerController.playQueue(currentQueue, currentQueue.size - 1)
+        }
     }
 
     fun setSearchQuery(query: String) {
         _appUiState.update { it.copy(searchQuery = query) }
     }
+
 
     fun scanDeviceAudio() {
         viewModelScope.launch {
