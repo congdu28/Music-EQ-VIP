@@ -69,6 +69,10 @@ fun NowPlayingScreen(
     var displayMode by remember { mutableStateOf(NowPlayingDisplayMode.ALBUM_ART) }
     var showSpeedDialog by remember { mutableStateOf(false) }
 
+    LaunchedEffect(song?.filePath) {
+        if (song != null) displayMode = NowPlayingDisplayMode.FULL_LYRICS
+    }
+
     if (song == null) {
         Box(
             modifier = modifier
@@ -141,6 +145,10 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
+
+    LaunchedEffect(song.filePath, hasLyrics) {
+        if (hasLyrics) displayMode = NowPlayingDisplayMode.FULL_LYRICS
+    }
 
     // Dynamic Color Palette extracted from current album art / song
     val dynamicPalette = remember(song.id, song.title) {
@@ -581,10 +589,21 @@ fun NowPlayingScreen(
                                 contentAlignment = Alignment.Center
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Chưa có file lời bài hát", color = TextSecondary, fontSize = 13.sp)
+                                    if (uiState.isSearchingLyrics) {
+                                        CircularProgressIndicator(
+                                            color = animatedPrimary,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+                                        Text("Đang tìm lời bài hát…", color = TextSecondary, fontSize = 13.sp)
+                                    } else {
+                                        Text("Chưa tìm thấy lời bài hát", color = TextSecondary, fontSize = 13.sp)
+                                    }
                                     Spacer(modifier = Modifier.height(10.dp))
                                     Button(
                                         onClick = { viewModel.searchLyricsOnline(song) },
+                                        enabled = !uiState.isSearchingLyrics,
                                         colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DarkBackground),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {

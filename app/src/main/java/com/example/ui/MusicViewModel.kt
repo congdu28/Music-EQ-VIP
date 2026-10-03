@@ -132,21 +132,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         // Observe player position & song to parse and sync lyrics in real-time
-        var lastObservedSongId: Long? = null
+        var lastObservedSongPath: String? = null
         var lastObservedLyrics: String? = null
         var lastObservedOffset: Long = 0
-        val autoSearchedSongIds = mutableSetOf<Long>()
+        val autoSearchedSongPaths = mutableSetOf<String>()
 
         viewModelScope.launch {
             playerState.collect { pState ->
                 val song = pState.currentSong
                 if (song != null) {
-                    val songChanged = song.id != lastObservedSongId ||
+                    val songChanged = song.filePath != lastObservedSongPath ||
                             song.lyrics != lastObservedLyrics ||
                             song.lrcOffsetMs != lastObservedOffset
 
                     if (songChanged) {
-                        lastObservedSongId = song.id
+                        lastObservedSongPath = song.filePath
                         lastObservedLyrics = song.lyrics
                         lastObservedOffset = song.lrcOffsetMs
 
@@ -160,8 +160,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         }
 
                         // Tự động tìm kiếm lời bài hát trên internet nếu bài hát chưa có lời
-                        if (song.lyrics.isNullOrBlank() && !autoSearchedSongIds.contains(song.id)) {
-                            autoSearchedSongIds.add(song.id)
+                        val isDemoPreview = song.album == "Bài nghe thử" && song.artist == "Music EQ"
+                        if (song.lyrics.isNullOrBlank() && !isDemoPreview && autoSearchedSongPaths.add(song.filePath)) {
                             searchLyricsOnline(song, isAuto = true)
                         }
                     } else {
@@ -262,9 +262,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val ytSongs = _appUiState.value.youtubeSongs
         val index = ytSongs.indexOfFirst { it.filePath == song.filePath }
         if (index >= 0) {
-            playerController.playQueue(ytSongs, index)
+            playQueue(ytSongs, index)
         } else {
-            playerController.playQueue(listOf(song), 0)
+            playQueue(listOf(song), 0)
         }
     }
 
@@ -306,18 +306,23 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     // Playback Order controls
     fun playAllSequential(songs: List<Song>, startIndex: Int = 0) {
+        setTab(MainTab.NOW_PLAYING)
         playerController.playAllSequential(songs, startIndex)
     }
 
     fun playAllShuffled(songs: List<Song>) {
+        setTab(MainTab.NOW_PLAYING)
         playerController.playAllShuffled(songs)
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
+        setTab(MainTab.NOW_PLAYING)
         playerController.playQueue(songs, startIndex)
     }
 
     fun playSong(song: Song) {
+        setTab(MainTab.NOW_PLAYING)
         playerController.playSong(song)
     }
 
@@ -474,7 +479,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             val current = playerState.value.currentSong
             if (current != null && current.id == songId) {
                 val updated = current.copy(lyrics = lyrics, lrcOffsetMs = offsetMs)
-                val updatedQueue = playerState.value.queue.map { if (it.id == songId) updated else it }
+                val updatedQueue = playerState.value.queue.map {
+                    if (it.filePath == current.filePath) updated else it
+                }
                 playerController.updateQueue(updatedQueue)
                 val parsed = LrcParser.parse(lyrics, offsetMs)
                 val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
@@ -500,7 +507,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.updateSongLyrics(song.id, song.lyrics ?: "", newOffset)
             val updated = song.copy(lrcOffsetMs = newOffset)
-            val updatedQueue = playerState.value.queue.map { if (it.id == song.id) updated else it }
+            val updatedQueue = playerState.value.queue.map {
+                if (it.filePath == song.filePath) updated else it
+            }
             playerController.updateQueue(updatedQueue)
             val parsed = LrcParser.parse(song.lyrics ?: "", newOffset)
             val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
@@ -526,30 +535,39 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun searchLyricsOnline(song: Song, isAuto: Boolean = false) {
         viewModelScope.launch {
-            if (!isAuto) {
-                _appUiState.update { it.copy(isSearchingLyrics = true) }
-            }
+            _appUiState.update { it.copy(isSearchingLyrics = true) }
             val apiKey = _appUiState.value.geminiApiKey
             val preferredModel = _appUiState.value.geminiModel
-            val result = com.example.lyrics.OnlineLyricsService.fetchLyrics(
-                rawTitle = song.title,
-                rawArtist = song.artist,
-                durationMs = song.durationMs,
-                apiKey = apiKey,
-                preferredModel = preferredModel
-            )
-            if (!isAuto) {
-                _appUiState.update { it.copy(isSearchingLyrics = false) }
+            val result = try {
+                com.example.lyrics.OnlineLyricsService.fetchLyrics(
+                    rawTitle = song.title,
+                    rawArtist = song.artist,
+                    durationMs = song.durationMs,
+                    apiKey = apiKey,
+                    preferredModel = preferredModel
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (t: Throwable) {
+                android.util.Log.w("MusicViewModel", "Lyrics lookup failed for '${song.title}': ${t.message}", t)
+                null
             }
+            _appUiState.update { it.copy(isSearchingLyrics = false) }
 
             if (result != null && result.bestLyrics != null) {
-                val lyricsText = result.bestLyrics!!
+                val lyricsText = result.syncedLyrics?.takeIf { it.isNotBlank() }
+                    ?: result.plainLyrics?.let {
+                        LrcParser.convertPlainTextToSyncedLrc(it, song.durationMs)
+                    }
+                    ?: result.bestLyrics!!
                 repository.updateSongLyrics(song.id, lyricsText, 0)
                 // If this is the currently playing song, update currentSong in player
                 val current = playerState.value.currentSong
-                if (current != null && current.id == song.id) {
+                if (current != null && current.filePath == song.filePath) {
                     val updated = current.copy(lyrics = lyricsText, lrcOffsetMs = 0)
-                    playerController.updateQueue(playerState.value.queue.map { if (it.id == song.id) updated else it })
+                    playerController.updateQueue(playerState.value.queue.map {
+                        if (it.filePath == song.filePath) updated else it
+                    })
                     // Also parse into uiState immediately
                     val parsed = LrcParser.parse(lyricsText, 0)
                     val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
@@ -560,7 +578,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
-                val formatType = if (!result.syncedLyrics.isNullOrBlank()) "Karaoke LRC đồng bộ" else "văn bản"
+                val formatType = if (!result.syncedLyrics.isNullOrBlank()) {
+                    "Karaoke LRC đồng bộ"
+                } else {
+                    "lời căn thời gian ước tính"
+                }
                 val prefix = if (isAuto) "Tự động tải lời" else "Đã tìm thấy lời"
                 _appUiState.update {
                     it.copy(scanResultMessage = "$prefix $formatType từ internet cho: ${song.title}")
@@ -591,9 +613,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val lyricsText = result.syncedLyrics
                 repository.updateSongLyrics(song.id, lyricsText, 0)
                 val current = playerState.value.currentSong
-                if (current != null && current.id == song.id) {
+                if (current != null && current.filePath == song.filePath) {
                     val updated = current.copy(lyrics = lyricsText, lrcOffsetMs = 0)
-                    playerController.updateQueue(playerState.value.queue.map { if (it.id == song.id) updated else it })
+                    playerController.updateQueue(playerState.value.queue.map {
+                        if (it.filePath == song.filePath) updated else it
+                    })
                     val parsed = LrcParser.parse(lyricsText, 0)
                     val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
                     _appUiState.update {

@@ -123,23 +123,6 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         }
                     },
                     actions = {
-                        // Hi-Res Lossless badge
-                        Surface(
-                            shape = RoundedCornerShape(6.dp),
-                            color = HiResGold.copy(alpha = 0.15f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, HiResGold)
-                        ) {
-                            Text(
-                                text = "LOSSLESS",
-                                color = HiResGold,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Black,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.width(6.dp))
-
                         // Prominent Equalizer (Bộ EQ) Button in Top Bar
                         val isEqActive = uiState.currentTab == MainTab.EQUALIZER || equalizerState.isEnabled
                         Surface(
@@ -188,6 +171,36 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         },
         bottomBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
+                if (playerState.isLoadingOnlineStream) {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = DarkSurfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                color = NeonCyan,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(9.dp))
+                            Text(
+                                text = "Đang tải dữ liệu bài hát…",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
                 // Persistent Floating MiniPlayer above Bottom Navigation when not on NOW_PLAYING screen
                 if (uiState.currentTab != MainTab.NOW_PLAYING && playerState.currentSong != null) {
                     MiniPlayerBar(

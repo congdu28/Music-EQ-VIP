@@ -56,48 +56,39 @@ class MusicRepository(private val context: Context) {
 
     suspend fun initializeDefaultDataIfEmpty() = withContext(Dispatchers.IO) {
         removeDuplicateSongs()
-        val existingSongs = db.songDao().getAllSongs().firstOrNull()
-        if (existingSongs.isNullOrEmpty()) {
-            val sampleSongs = createSampleSongs()
-            db.songDao().insertSongs(sampleSongs)
 
-            val samplePlaylists = listOf(
-                Playlist(
-                    name = "Nhạc Việt Tuyệt Đỉnh 2026",
-                    description = "Những giai điệu acoustic ballad và pop thịnh hành",
-                    coverGradientStart = 0xFFEC4899,
-                    coverGradientEnd = 0xFF8B5CF6
-                ),
-                Playlist(
-                    name = "Audiophile Hi-Res FLAC & WAV",
-                    description = "Âm thanh chuẩn phòng thu 24-bit/96kHz cực chi tiết",
-                    coverGradientStart = 0xFF06B6D4,
-                    coverGradientEnd = 0xFF3B82F6
-                ),
-                Playlist(
-                    name = "Chill Buổi Tối & Lofi Beat",
-                    description = "Giai điệu thư giãn giảm căng thẳng sau giờ làm việc",
-                    coverGradientStart = 0xFF10B981,
-                    coverGradientEnd = 0xFF6366F1
-                ),
-                Playlist(
-                    name = "EDM Siêu Bass Cực Căng",
-                    description = "Âm trầm bùng nổ, thử nghiệm hiệu ứng Bass Boost 1000mB",
-                    coverGradientStart = 0xFFF59E0B,
-                    coverGradientEnd = 0xFFEF4444
+        // Older builds generated six demo WAV files in cache. Remove only those exact app-owned
+        // paths and rows when upgrading, then seed one short, truthful WAV preview if no songs remain.
+        val legacySampleNames = listOf(
+            "viet_ballad_nhip_tim.wav",
+            "chill_lofi_ha_noi_mua.wav",
+            "piano_sonata_dem_sai_gon.wav",
+            "edm_cyber_neon_bass.wav",
+            "acoustic_chieu_tay_ho.wav",
+            "synthwave_audiophile_96k.wav"
+        )
+        val legacySampleFiles = legacySampleNames.map { File(context.cacheDir, it) }
+        val legacyPaths = legacySampleFiles.map { it.absolutePath }
+        val currentSongs = db.songDao().getAllSongs().firstOrNull().orEmpty()
+        val legacyRows = currentSongs.filter { it.filePath in legacyPaths }
+        if (legacyRows.isNotEmpty()) {
+            db.playlistDao().removeSongReferences(legacyRows.map { it.id })
+            db.songDao().deleteSongsByPaths(legacyRows.map { it.filePath })
+            db.playlistDao().deletePlaylistsByNames(
+                listOf(
+                    "Nhạc Việt Tuyệt Đỉnh 2026",
+                    "Audiophile Hi-Res FLAC & WAV",
+                    "Chill Buổi Tối & Lofi Beat",
+                    "EDM Siêu Bass Cực Căng"
                 )
             )
+        }
+        legacySampleFiles.forEach { it.delete() }
 
-            for (p in samplePlaylists) {
-                val pId = db.playlistDao().insertPlaylist(p)
-                // Add some songs to each playlist
-                val insertedSongs = db.songDao().getAllSongs().firstOrNull() ?: emptyList()
-                insertedSongs.take(3).forEachIndexed { idx, s ->
-                    db.playlistDao().addSongToPlaylist(PlaylistSongCrossRef(pId, s.id, idx))
-                }
-            }
-
-            // Seed equalizer presets
+        if (db.songDao().getAllSongs().firstOrNull().isNullOrEmpty()) {
+            db.songDao().insertSong(createSampleSong())
+        }
+        if (db.equalizerDao().getAllPresetsList().isEmpty()) {
             val defaultPresets = listOf(
                 EqualizerPreset(name = "Mặc định (Flat)", bandLevelsCsv = "0,0,0,0,0,0,0,0,0,0", bassBoost = 0, virtualizer = 0, reverbPreset = 0),
                 EqualizerPreset(name = "Tăng âm trầm (Bass Boost)", bandLevelsCsv = "800,600,450,200,0,0,100,200,300,350", bassBoost = 650, virtualizer = 300, reverbPreset = 1),
@@ -112,188 +103,25 @@ class MusicRepository(private val context: Context) {
         }
     }
 
-    private fun createSampleSongs(): List<Song> {
-        val file1 = AudioSynthesizer.generateSampleAudioFile(context, "viet_ballad_nhip_tim.wav", 185, AudioSynthesizer.TrackStyle.VIET_BALLAD)
-        val file2 = AudioSynthesizer.generateSampleAudioFile(context, "chill_lofi_ha_noi_mua.wav", 195, AudioSynthesizer.TrackStyle.CHILL_LOFI)
-        val file3 = AudioSynthesizer.generateSampleAudioFile(context, "piano_sonata_dem_sai_gon.wav", 210, AudioSynthesizer.TrackStyle.PIANO_BALLAD)
-        val file4 = AudioSynthesizer.generateSampleAudioFile(context, "edm_cyber_neon_bass.wav", 175, AudioSynthesizer.TrackStyle.EDM_BASS)
-        val file5 = AudioSynthesizer.generateSampleAudioFile(context, "acoustic_chieu_tay_ho.wav", 168, AudioSynthesizer.TrackStyle.ACOUSTIC_FOLK)
-        val file6 = AudioSynthesizer.generateSampleAudioFile(context, "synthwave_audiophile_96k.wav", 225, AudioSynthesizer.TrackStyle.SYNTHWAVE)
-
-        return listOf(
-            Song(
-                title = "Nhịp Tim Em Và Nắng Mùa Thu",
-                artist = "Vũ & Hà Anh Tuấn (HQ Remaster)",
-                album = "Thành Phố Sương Mù FLAC",
-                durationMs = 185000,
-                filePath = file1.absolutePath,
-                format = "FLAC",
-                bitrateKbps = 1411,
-                sampleRateHz = 96000,
-                bitDepth = 24,
-                isHiRes = true,
-                isFavorite = true,
-                lyrics = """
-[ti:Nhịp Tim Em Và Nắng Mùa Thu]
-[ar:Vũ & Hà Anh Tuấn]
-[al:Thành Phố Sương Mù FLAC]
-[00:00.00]Nhịp Tim Em Và Nắng Mùa Thu - Hi-Res Audio 24-bit/96kHz
-[00:04.50]Gió heo may thổi nhẹ qua từng góc phố quen
-[00:09.80]Từng chiếc lá vàng rơi nghiêng mình bên hiên vắng
-[00:15.20]Anh nhớ tiếng cười trong veo của em ngày nắng hạ
-[00:21.00]Như khúc ca dịu êm vỗ về những giấc mơ xưa
-[00:28.40]Có những chiều ta cùng dạo bước trên phố dài
-[00:34.10]Tay nắm chặt bàn tay ngỡ ngàng trước hoàng hôn
-[00:40.50]Thời gian ơi trôi chậm lại để ta còn giữ lấy
-[00:47.20]Từng nhịp đập yêu thương gửi trọn vào tiếng dương cầm
-[00:54.80]Dẫu mai này đường đời chia đôi ngả sóng gió
-[01:01.30]Thì tình anh trao em vẫn vẹn nguyên như thuở ban đầu
-[01:08.50]Nghe tiếng thu sang ngập tràn bao nỗi nhớ
-[01:15.90]Nguyện yêu em đến muôn đời sau mãi mãi không phai...
-[01:25.00]♪ Giai điệu Solo Acoustic Guitar & Bass Hi-Res ♪
-[01:38.20]Hãy nhắm mắt lại lắng nghe từng nốt nhạc
-[01:44.60]Từng rung động ngân vang khắp không gian tĩnh lặng
-[01:52.00]Trái tim anh thuộc về em từ muôn kiếp trước
-[02:00.00]Nhịp Điệu tình yêu ngân vang mãi không bao giờ tắt.
-                """.trimIndent()
-            ),
-            Song(
-                title = "Hà Nội Mưa & Khúc Lofi Đêm",
-                artist = "Chillies & Suni Hạ Linh",
-                album = "Góc Phố Mưa Bay Vol.1",
-                durationMs = 195000,
-                filePath = file2.absolutePath,
-                format = "WAV",
-                bitrateKbps = 2304,
-                sampleRateHz = 48000,
-                bitDepth = 24,
-                isHiRes = true,
-                isFavorite = true,
-                lyrics = """
-[ti:Hà Nội Mưa & Khúc Lofi Đêm]
-[ar:Chillies & Suni Hạ Linh]
-[al:Góc Phố Mưa Bay Vol.1]
-[00:00.00]Hà Nội Mưa & Khúc Lofi Đêm - Master Lossless
-[00:05.10]Tiếng mưa rào rơi tí tách trên mái tôn
-[00:11.20]Ngồi bên tách cà phê ấm nghe điệu lofi dìu dịu
-[00:18.00]Phố phường thưa người chỉ còn ánh đèn vàng le lói
-[00:25.30]Tâm tư trôi theo những hạt mưa đêm dài
-[00:33.40]Gửi một chút bình yên đến người phương xa
-[00:41.20]Liệu em có đang nghe bản nhạc này cùng anh không?
-[00:49.00]Giai điệu lofi vỗ về bao mỏi mệt ngày qua
-[00:57.30]Để lòng nhẹ tênh tìm lại những nụ cười...
-[01:06.00]Mưa ơi xin đừng làm em buốt giá
-[01:14.20]Hãy mang ấm áp đến từng giấc mơ đêm nay
-[01:22.50]Nhịp Điệu lofi êm đềm ru êm mọi giác quan...
-                """.trimIndent()
-            ),
-            Song(
-                title = "Đêm Sài Gòn & Khúc Sonata Tình Nhân",
-                artist = "Đức Trí & Nguyên Hà (Studio Master)",
-                album = "Hòa Âm Không Gian 3D",
-                durationMs = 210000,
-                filePath = file3.absolutePath,
-                format = "ALAC",
-                bitrateKbps = 1411,
-                sampleRateHz = 96000,
-                bitDepth = 24,
-                isHiRes = true,
-                isFavorite = false,
-                lyrics = """
-[ti:Đêm Sài Gòn & Khúc Sonata Tình Nhân]
-[ar:Đức Trí & Nguyên Hà]
-[al:Hòa Âm Không Gian 3D]
-[00:00.00]Đêm Sài Gòn & Khúc Sonata Tình Nhân (Spatial Audio 3D)
-[00:06.00]Dưới ánh đèn neon rực rỡ phố Sài Gòn
-[00:13.50]Tiếng piano vang lên tha thiết từng hồi
-[00:21.00]Em bước qua như giấc mộng giữa đời thực
-[00:29.20]Để lại mùi hương hoa sữa vương trên áo anh
-[00:38.00]Bản Sonata đưa ta qua bao miền ký ức
-[00:46.50]Những nốt thăng trầm như chính cuộc đời này
-[00:55.00]Dù năm tháng đổi thay tình ta vẫn thế
-[01:04.00]Trong trẻo như giọt sương mai trên đầu cành...
-[01:14.00]♪ Điệp khúc hòa tấu Piano & Cello Dịu Êm ♪
-[01:30.00]Hãy để âm thanh này bao bọc lấy tâm hồn bạn.
-                """.trimIndent()
-            ),
-            Song(
-                title = "Cyberpunk Neon & Sub-Bass Extreme",
-                artist = "Hoaprox & K-ICM (Hi-Res EDM)",
-                album = "Future Bass Universe 2026",
-                durationMs = 175000,
-                filePath = file4.absolutePath,
-                format = "FLAC",
-                bitrateKbps = 3072,
-                sampleRateHz = 192000,
-                bitDepth = 32,
-                isHiRes = true,
-                isFavorite = true,
-                lyrics = """
-[ti:Cyberpunk Neon & Sub-Bass Extreme]
-[ar:Hoaprox & K-ICM]
-[al:Future Bass Universe 2026]
-[00:00.00]Cyberpunk Neon & Sub-Bass Extreme [Ultra Hi-Res 192kHz/32-bit]
-[00:03.50]Kích hoạt hệ thống Equalizer 10 dải tần...
-[00:07.20]Tăng cường Bass Boost lên cực đại 1000mB!
-[00:12.00]3... 2... 1... DROP THE BASS!
-[00:16.80]Cảm nhận từng đợt sóng âm trầm rung chuyển không gian
-[00:24.00]Âm thanh vòm 3D Virtualizer lan tỏa đa chiều
-[00:32.50]Sức mạnh âm nhạc bùng nổ mọi giới hạn!
-[00:41.00]Đắm chìm trong thế giới tương lai của ánh sáng và nhịp đập!
-[00:50.00]Cùng nhảy theo điệu nhạc EDM cuồng nhiệt nhất!
-[01:05.00]BASS BOOST SYSTEM IS ACTIVATED!
-                """.trimIndent()
-            ),
-            Song(
-                title = "Chiều Tây Hồ Gió Lộng",
-                artist = "Trần Tiến & Tùng Dương",
-                album = "Sắc Màu Quê Hương",
-                durationMs = 168000,
-                filePath = file5.absolutePath,
-                format = "AAC",
-                bitrateKbps = 320,
-                sampleRateHz = 44100,
-                bitDepth = 16,
-                isHiRes = false,
-                isFavorite = false,
-                lyrics = """
-[ti:Chiều Tây Hồ Gió Lộng]
-[ar:Trần Tiến & Tùng Dương]
-[al:Sắc Màu Quê Hương]
-[00:00.00]Chiều Tây Hồ Gió Lộng - Acoustic Studio
-[00:04.80]Mặt nước Tây Hồ mênh mông sóng biếc
-[00:11.00]Tiếng sáo diều vi vu giữa bầu trời cao
-[00:18.20]Hoa sen tỏa ngát hương thơm mùa hạ
-[00:25.50]Gửi gắm nỗi lòng người lữ khách phương xa
-[00:33.40]Yêu biết bao quê hương Việt Nam mình
-[00:41.00]Từng góc phố, mái chùa, dòng sông ngàn năm...
-                """.trimIndent()
-            ),
-            Song(
-                title = "Chuyến Tàu Đêm & Hoàng Hôn Synthwave",
-                artist = "The Midnight & Vũ Cát Tường",
-                album = "Retro Wave Master Edition",
-                durationMs = 225000,
-                filePath = file6.absolutePath,
-                format = "FLAC",
-                bitrateKbps = 2400,
-                sampleRateHz = 96000,
-                bitDepth = 24,
-                isHiRes = true,
-                isFavorite = true,
-                lyrics = """
-[ti:Chuyến Tàu Đêm & Hoàng Hôn Synthwave]
-[ar:The Midnight & Vũ Cát Tường]
-[al:Retro Wave Master Edition]
-[00:00.00]Chuyến Tàu Đêm & Hoàng Hôn Synthwave (24-bit Hi-Res)
-[00:05.00]Chuyến tàu đêm lăn bánh qua miền hoàng hôn tím
-[00:12.30]Tia nắng cuối ngày tắt dần nơi chân trời xa
-[00:19.80]Giai điệu Synthwave cổ điển pha lẫn hiện đại
-[00:27.50]Đưa ta trở về những giấc mơ ngọt ngào năm xưa
-[00:36.00]Cùng đắm mình trong bản hòa tấu bất tận
-[00:44.20]Nơi âm nhạc kết nối mọi tâm hồn đồng điệu...
-                """.trimIndent()
-            )
+    private fun createSampleSong(): Song {
+        val file = AudioSynthesizer.generateSampleAudioFile(
+            context,
+            fileName = "music_eq_demo_preview.wav",
+            durationSeconds = 30,
+            style = AudioSynthesizer.TrackStyle.VIET_BALLAD
+        )
+        return Song(
+            title = "Bản nhạc thử",
+            artist = "Music EQ",
+            album = "Bài nghe thử",
+            durationMs = 30_000,
+            filePath = file.absolutePath,
+            format = "WAV",
+            bitrateKbps = 1411,
+            sampleRateHz = 44_100,
+            bitDepth = 16,
+            isHiRes = false,
+            isFavorite = false
         )
     }
 
@@ -350,7 +178,7 @@ class MusicRepository(private val context: Context) {
                         else -> "MP3"
                     }
 
-                    val isHiRes = format in listOf("FLAC", "WAV", "ALAC") || duration > 0
+                    val isHiRes = format in listOf("FLAC", "WAV", "ALAC")
 
                     // Check if a local .lrc file exists alongside the audio file
                     var localLyrics: String? = null

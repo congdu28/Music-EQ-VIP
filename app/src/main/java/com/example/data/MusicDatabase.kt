@@ -48,6 +48,9 @@ interface SongDao {
     @Query("DELETE FROM songs WHERE id = :id")
     suspend fun deleteSongById(id: Long)
 
+    @Query("DELETE FROM songs WHERE filePath IN (:paths)")
+    suspend fun deleteSongsByPaths(paths: List<String>)
+
     @Delete
     suspend fun deleteSong(song: Song)
 
@@ -78,6 +81,12 @@ interface PlaylistDao {
     @Query("DELETE FROM playlist_song_cross_ref WHERE playlistId = :playlistId AND songId = :songId")
     suspend fun removeSongFromPlaylist(playlistId: Long, songId: Long)
 
+    @Query("DELETE FROM playlist_song_cross_ref WHERE songId IN (:songIds)")
+    suspend fun removeSongReferences(songIds: List<Long>)
+
+    @Query("DELETE FROM playlists WHERE name IN (:names)")
+    suspend fun deletePlaylistsByNames(names: List<String>)
+
     @Query("""
         SELECT songs.* FROM songs 
         INNER JOIN playlist_song_cross_ref ON songs.id = playlist_song_cross_ref.songId 
@@ -94,6 +103,9 @@ interface PlaylistDao {
 interface EqualizerDao {
     @Query("SELECT * FROM equalizer_presets ORDER BY id ASC")
     fun getAllPresets(): Flow<List<EqualizerPreset>>
+
+    @Query("SELECT * FROM equalizer_presets ORDER BY id ASC")
+    suspend fun getAllPresetsList(): List<EqualizerPreset>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPreset(preset: EqualizerPreset): Long
