@@ -41,6 +41,14 @@ class MusicRepository(private val context: Context) {
         prefs.edit().putString("gemini_api_key", key.trim()).apply()
     }
 
+    fun getGeminiModel(): String {
+        return prefs.getString("gemini_model", "gemini-3.7-flash") ?: "gemini-3.7-flash"
+    }
+
+    fun setGeminiModel(model: String) {
+        prefs.edit().putString("gemini_model", model.trim()).apply()
+    }
+
     val allSongs: Flow<List<Song>> = db.songDao().getAllSongs()
     val favoriteSongs: Flow<List<Song>> = db.songDao().getFavoriteSongs()
     val allPlaylists: Flow<List<Playlist>> = db.playlistDao().getAllPlaylists()

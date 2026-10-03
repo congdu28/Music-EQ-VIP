@@ -187,11 +187,19 @@ fun AddToPlaylistDialog(
 @Composable
 fun EditLyricsDialog(
     song: Song,
+    isAligning: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (lyricsText: String, offsetMs: Long) -> Unit
+    onSave: (lyricsText: String, offsetMs: Long) -> Unit,
+    onAlignLyrics: ((plainLyrics: String) -> Unit)? = null
 ) {
-    var lyricsText by remember(song) { mutableStateOf(song.lyrics ?: "") }
-    var offsetText by remember(song) { mutableStateOf(song.lrcOffsetMs.toString()) }
+    var lyricsText by remember(song.id) { mutableStateOf(song.lyrics ?: "") }
+    var offsetText by remember(song.id) { mutableStateOf(song.lrcOffsetMs.toString()) }
+
+    LaunchedEffect(song.lyrics) {
+        if (!song.lyrics.isNullOrBlank() && song.lyrics != lyricsText) {
+            lyricsText = song.lyrics
+        }
+    }
 
     val context = LocalContext.current
 
@@ -218,7 +226,7 @@ fun EditLyricsDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Quick Tools Row
+                // Quick Tools Row 1
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -250,7 +258,7 @@ fun EditLyricsDialog(
                     ) {
                         Icon(imageVector = Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dán & Tạo mốc LRC", fontSize = 11.sp)
+                        Text("Dán & Mốc cơ bản", fontSize = 11.sp)
                     }
 
                     OutlinedButton(
@@ -272,6 +280,35 @@ fun EditLyricsDialog(
                         Icon(imageVector = Icons.Default.Search, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("Tìm trên Google", fontSize = 11.sp)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Quick Tools Row 2: AI Căn chỉnh chuẩn nhạc
+                Button(
+                    onClick = {
+                        if (lyricsText.isBlank()) {
+                            Toast.makeText(context, "Vui lòng nhập hoặc dán lời bài hát vào khung trước", Toast.LENGTH_SHORT).show()
+                        } else {
+                            onAlignLyrics?.invoke(lyricsText)
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonViolet.copy(alpha = 0.25f), contentColor = NeonViolet),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonViolet),
+                    shape = RoundedCornerShape(10.dp),
+                    enabled = !isAligning,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isAligning) {
+                        CircularProgressIndicator(color = NeonViolet, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Gemini AI đang căn chỉnh chuẩn nhạc...", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                    } else {
+                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = NeonViolet)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("AI Căn chỉnh chuẩn nhạc (Khớp lời tự động)", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 

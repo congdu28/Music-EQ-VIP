@@ -307,8 +307,10 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         playerState.currentSong?.let { song ->
             EditLyricsDialog(
                 song = song,
+                isAligning = uiState.isAligningLyrics,
                 onDismiss = { viewModel.setShowEditLyrics(false) },
-                onSave = { lrcText, offset -> viewModel.updateLyrics(song.id, lrcText, offset) }
+                onSave = { lrcText, offset -> viewModel.updateLyrics(song.id, lrcText, offset) },
+                onAlignLyrics = { rawLyrics -> viewModel.alignLyricsWithGemini(rawLyrics) }
             )
         }
     }

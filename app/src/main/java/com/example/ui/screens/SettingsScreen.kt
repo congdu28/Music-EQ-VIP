@@ -384,6 +384,66 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                HorizontalDivider(color = DarkBorder)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text("Mô hình AI ưu tiên", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text("Chọn phiên bản Gemini dùng để tìm kiếm và căn chỉnh mốc thời gian karaoke", color = TextSecondary, fontSize = 11.sp)
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                val models = listOf(
+                    Triple("gemini-3.7-flash", "Gemini 3.7 Flash", "Khuyên dùng • Chuẩn nhạc & Lời chính xác"),
+                    Triple("gemini-3.8-flash", "Gemini 3.8 Flash", "Mới nhất • Khả năng suy luận cao cấp"),
+                    Triple("gemini-3.6-flash", "Gemini 3.6 Flash", "Tốc độ cao • Phản hồi nhanh & Ổn định")
+                )
+
+                models.forEach { (modelId, modelName, modelDesc) ->
+                    val isSelected = uiState.geminiModel == modelId
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (isSelected) NeonViolet.copy(alpha = 0.15f) else DarkSurfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            if (isSelected) NeonViolet else Color.Transparent
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { viewModel.setGeminiModel(modelId) }
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { viewModel.setGeminiModel(modelId) },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = NeonViolet,
+                                    unselectedColor = TextMuted
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = modelName,
+                                    color = if (isSelected) NeonViolet else TextPrimary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = modelDesc,
+                                    color = TextMuted,
+                                    fontSize = 10.5.sp
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -398,7 +458,7 @@ fun SettingsScreen(
                 Text("Thông tin & Giấy phép", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                InfoRow("Phiên bản", "1.0.3 (Gemini AI & Google Search)")
+                InfoRow("Phiên bản", "1.0.5 (Gemini 3.6/3.7/3.8 & AI Căn chỉnh)")
                 InfoRow("Ngôn ngữ", "Tiếng Việt (100% Native)")
                 InfoRow("Bộ xử lý âm thanh", "Android AudioFX + Native DSP")
                 InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0 + Gemini AI")

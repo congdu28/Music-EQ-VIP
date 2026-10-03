@@ -85,7 +85,8 @@ object OnlineLyricsService {
         rawTitle: String,
         rawArtist: String,
         durationMs: Long = 0,
-        apiKey: String? = null
+        apiKey: String? = null,
+        preferredModel: String? = null
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
         val effectiveApiKey = if (apiKey.isNullOrBlank()) getDefaultGeminiApiKey() else apiKey
         var cleanTitle = cleanSearchTerm(rawTitle)
@@ -142,10 +143,6 @@ object OnlineLyricsService {
         }
 
         // 2. Fallback to /search endpoint with comprehensive query variations:
-        // - "Title Artist"
-        // - "Title"
-        // - Non-accented "Title Artist" (critical for Vietnamese songs on LRCLIB)
-        // - Non-accented "Title"
         val rawNoAccentTitle = removeVietnameseDiacritics(cleanTitle)
         val rawNoAccentArtist = removeVietnameseDiacritics(cleanArtist)
 
@@ -213,7 +210,7 @@ object OnlineLyricsService {
 
         // 3. High-Intelligence Fallback: Gemini AI
         if (!effectiveApiKey.isNullOrBlank()) {
-            val geminiResult = fetchLyricsWithGemini(cleanTitle, cleanArtist, durationMs, effectiveApiKey)
+            val geminiResult = fetchLyricsWithGemini(cleanTitle, cleanArtist, durationMs, effectiveApiKey, preferredModel)
             if (geminiResult != null) {
                 return@withContext geminiResult
             }
@@ -224,38 +221,47 @@ object OnlineLyricsService {
 
     /**
      * Uses Google Gemini AI to generate accurate synchronized Karaoke LRC lyrics.
-     * Uses resilient fallback list of models starting with lightweight high-speed flash models.
+     * Respects user's preferred model (e.g. gemini-3.6-flash, gemini-3.7-flash, gemini-3.8-flash)
+     * and seamlessly falls back if a specific model encounters capacity limits.
      */
     suspend fun fetchLyricsWithGemini(
         cleanTitle: String,
         cleanArtist: String,
         durationMs: Long,
-        apiKey: String
+        apiKey: String,
+        preferredModel: String? = null
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
         if (apiKey.isBlank()) return@withContext null
 
         val durationSec = if (durationMs > 10000) (durationMs / 1000).toInt() else 210
         val prompt = """
-Bạn là chuyên gia âm nhạc hàng đầu. Hãy tạo toàn bộ lời bài hát chính xác và tạo file Karaoke LRC đồng bộ cho bài hát:
+Bạn là chuyên gia âm nhạc hàng đầu. Hãy tạo toàn bộ lời bài hát chính xác và đồng bộ file Karaoke LRC cho bài hát:
 Ca khúc: "$cleanTitle"
 Nghệ sĩ: "$cleanArtist"
 
 Yêu cầu bắt buộc:
 1. Định dạng chuẩn Karaoke LRC có mốc thời gian [mm:ss.xx] ở đầu mỗi dòng (ví dụ: [00:15.50] Lời câu hát).
-2. Phân bổ các câu hát trải đều phù hợp với tổng thời lượng bài hát khoảng $durationSec giây.
+2. Phân bổ các mốc thời gian thật khớp với giai điệu và cấu trúc bài hát trong tổng thời lượng $durationSec giây.
 3. Chỉ xuất ra nội dung file LRC thuần túy (các dòng bắt đầu bằng [mm:ss.xx]).
 4. TUYỆT ĐỐI KHÔNG thêm lời giải thích, chào hỏi, hoặc bọc trong code block (như ```lrc).
 """.trimIndent()
 
-        // Resilient model hierarchy: Flash-lite models are lightning fast and have generous quotas
-        val modelsToTry = listOf(
+        val allModels = listOf(
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
             "gemini-3.1-flash-lite",
             "gemini-3.5-flash-lite",
-            "gemini-3.8-flash",
-            "gemini-3.7-flash",
             "gemini-flash-lite-latest",
             "gemini-flash-latest"
         )
+
+        // Prioritize preferred model first
+        val modelsToTry = if (!preferredModel.isNullOrBlank()) {
+            listOf(preferredModel) + allModels.filter { it != preferredModel }
+        } else {
+            allModels
+        }
 
         for (model in modelsToTry) {
             try {
@@ -294,7 +300,6 @@ Yêu cầu bắt buộc:
                                 val parts = content?.optJSONArray("parts")
                                 if (parts != null && parts.length() > 0) {
                                     var text = parts.getJSONObject(0).optString("text", "")
-                                    // Clean any markdown fences if present
                                     text = text.replace(Regex("^```(?:lrc)?\\s*", RegexOption.IGNORE_CASE), "")
                                         .replace(Regex("```\\s*$", RegexOption.IGNORE_CASE), "")
                                         .trim()
@@ -317,6 +322,107 @@ Yêu cầu bắt buộc:
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Gemini API error ($model): ${e.message}")
+            }
+        }
+        null
+    }
+
+    /**
+     * Uses Gemini AI to intelligently align user-provided plain lyrics or inaccurate LRC to match the song's actual rhythm and duration.
+     */
+    suspend fun alignLyricsWithGemini(
+        plainLyrics: String,
+        cleanTitle: String,
+        cleanArtist: String,
+        durationMs: Long,
+        apiKey: String,
+        preferredModel: String? = null
+    ): String? = withContext(Dispatchers.IO) {
+        if (apiKey.isBlank() || plainLyrics.isBlank()) return@withContext null
+
+        val durationSec = if (durationMs > 10000) (durationMs / 1000).toInt() else 210
+        val prompt = """
+Bạn là chuyên gia âm nhạc và đồng bộ Karaoke chuyên nghiệp.
+Dưới đây là lời bài hát của ca khúc "$cleanTitle" (Nghệ sĩ: "$cleanArtist"):
+
+---
+$plainLyrics
+---
+
+Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên theo định dạng Karaoke LRC chuẩn:
+1. Mốc thời gian phải bám sát cấu trúc bài hát, đoạn dạo đầu và kết thúc trải đều trong khoảng $durationSec giây.
+2. Giữ nguyên câu chữ và ý nghĩa lời bài hát, chia dòng hợp lý cho từng nhịp hát.
+3. Chỉ xuất ra các dòng LRC (bắt đầu bằng [mm:ss.xx]).
+4. TUYỆT ĐỐI KHÔNG thêm lời giải thích, chào hỏi, hay bọc trong markdown code block (như ```lrc).
+""".trimIndent()
+
+        val allModels = listOf(
+            "gemini-3.6-flash",
+            "gemini-3.7-flash",
+            "gemini-3.8-flash",
+            "gemini-3.1-flash-lite",
+            "gemini-3.5-flash-lite"
+        )
+        val modelsToTry = if (!preferredModel.isNullOrBlank()) {
+            listOf(preferredModel) + allModels.filter { it != preferredModel }
+        } else {
+            allModels
+        }
+
+        for (model in modelsToTry) {
+            try {
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+                val jsonPayload = JSONObject().apply {
+                    val contentsArray = JSONArray().apply {
+                        val partObj = JSONObject().apply {
+                            put("text", prompt)
+                        }
+                        val contentObj = JSONObject().apply {
+                            put("parts", JSONArray().apply { put(partObj) })
+                        }
+                        put(contentObj)
+                    }
+                    put("contents", contentsArray)
+                }
+
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = jsonPayload.toString().toRequestBody(mediaType)
+
+                val request = Request.Builder()
+                    .url(url)
+                    .post(body)
+                    .header("User-Agent", "NhipDieuHiResPlayer/1.0 (Android; Audiophile)")
+                    .build()
+
+                client.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val respBody = response.body?.string()
+                        if (!respBody.isNullOrBlank()) {
+                            val respJson = JSONObject(respBody)
+                            val candidates = respJson.optJSONArray("candidates")
+                            if (candidates != null && candidates.length() > 0) {
+                                val firstCand = candidates.getJSONObject(0)
+                                val content = firstCand.optJSONObject("content")
+                                val parts = content?.optJSONArray("parts")
+                                if (parts != null && parts.length() > 0) {
+                                    var text = parts.getJSONObject(0).optString("text", "")
+                                    text = text.replace(Regex("^```(?:lrc)?\\s*", RegexOption.IGNORE_CASE), "")
+                                        .replace(Regex("```\\s*$", RegexOption.IGNORE_CASE), "")
+                                        .trim()
+
+                                    if (text.isNotBlank() && (text.contains("[0") || text.contains("[1") || text.lines().size >= 3)) {
+                                        Log.d(TAG, "Successfully aligned LRC lyrics via Gemini ($model) for '$cleanTitle'")
+                                        return@withContext text
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Log.w(TAG, "Gemini $model returned error HTTP ${response.code}: ${response.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Gemini align error ($model): ${e.message}")
             }
         }
         null

@@ -195,10 +195,15 @@ class MusicPlayerController(
             } else {
                 0
             }
+            val updatedCurSong = if (curSong != null) {
+                songs.find { it.id == curSong.id } ?: curSong
+            } else {
+                songs.firstOrNull()
+            }
             current.copy(
                 queue = songs,
                 currentIndex = newIndex,
-                currentSong = curSong ?: songs.firstOrNull()
+                currentSong = updatedCurSong
             )
         }
     }
