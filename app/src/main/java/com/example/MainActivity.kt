@@ -180,6 +180,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 ) {
                     val tabs = listOf(
                         Triple(MainTab.LIBRARY, Icons.Default.LibraryMusic, "Thư viện"),
+                        Triple(MainTab.YOUTUBE, Icons.Default.Subscriptions, "YouTube"),
                         Triple(MainTab.NOW_PLAYING, Icons.Default.PlayCircleFilled, "Đang phát"),
                         Triple(MainTab.LYRICS, Icons.Default.Lyrics, "Lời nhạc"),
                         Triple(MainTab.EQUALIZER, Icons.Default.Tune, "Bộ EQ"),
@@ -188,6 +189,9 @@ fun MainAppScreen(viewModel: MusicViewModel) {
 
                     tabs.forEach { (tab, icon, label) ->
                         val isSelected = uiState.currentTab == tab
+                        val isYt = tab == MainTab.YOUTUBE
+                        val activeColor = if (isYt) Color(0xFFFF0033) else NeonCyan
+
                         NavigationBarItem(
                             selected = isSelected,
                             onClick = {
@@ -200,15 +204,15 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                                 Icon(
                                     imageVector = icon,
                                     contentDescription = label,
-                                    tint = if (isSelected) NeonCyan else TextMuted,
-                                    modifier = Modifier.size(22.dp)
+                                    tint = if (isSelected) activeColor else TextMuted,
+                                    modifier = Modifier.size(21.dp)
                                 )
                             },
                             label = {
                                 Text(
                                     text = label,
-                                    color = if (isSelected) NeonCyan else TextMuted,
-                                    fontSize = 10.sp,
+                                    color = if (isSelected) activeColor else TextMuted,
+                                    fontSize = 9.5.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                     maxLines = 1,
                                     softWrap = false,
@@ -217,7 +221,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                             },
                             alwaysShowLabel = true,
                             colors = NavigationBarItemDefaults.colors(
-                                indicatorColor = NeonCyan.copy(alpha = 0.15f)
+                                indicatorColor = activeColor.copy(alpha = 0.15f)
                             ),
                             modifier = Modifier.testTag("nav_tab_${tab.name.lowercase()}")
                         )
@@ -244,6 +248,13 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 }
                 uiState.currentTab == MainTab.LIBRARY -> {
                     LibraryScreen(
+                        viewModel = viewModel,
+                        uiState = uiState,
+                        playerState = playerState
+                    )
+                }
+                uiState.currentTab == MainTab.YOUTUBE -> {
+                    YouTubeOnlineScreen(
                         viewModel = viewModel,
                         uiState = uiState,
                         playerState = playerState

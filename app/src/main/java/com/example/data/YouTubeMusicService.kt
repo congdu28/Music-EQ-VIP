@@ -71,7 +71,7 @@ object YouTubeMusicService {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "Error fetching visitorData: ${e.message}")
         }
         return@withContext cachedVisitorData ?: ""
@@ -120,7 +120,7 @@ object YouTubeMusicService {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "VISIONOS stream resolution failed for $videoId: ${e.message}")
         }
 
@@ -156,7 +156,7 @@ object YouTubeMusicService {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "ANDROID_VR fallback stream resolution failed for $videoId: ${e.message}")
         }
 
@@ -226,7 +226,7 @@ object YouTubeMusicService {
                 val root = JSONObject(bodyStr)
                 return@withContext parseSearchResults(root)
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.e(TAG, "Search failed for '$query': ${e.message}")
             return@withContext emptyList()
         }
@@ -269,7 +269,7 @@ object YouTubeMusicService {
                     }
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             Log.w(TAG, "Error traversing search results: ${e.message}")
         }
 
@@ -380,7 +380,7 @@ object YouTubeMusicService {
                 isHiRes = false,
                 isFavorite = false
             )
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             return null
         }
     }

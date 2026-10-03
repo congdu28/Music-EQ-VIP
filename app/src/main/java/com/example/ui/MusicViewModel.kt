@@ -21,6 +21,7 @@ import java.io.File
 
 enum class MainTab(val title: String) {
     LIBRARY("Thư viện"),
+    YOUTUBE("YouTube"),
     NOW_PLAYING("Đang phát"),
     LYRICS("Lời bài hát"),
     EQUALIZER("Bộ chỉnh âm"),
@@ -29,7 +30,6 @@ enum class MainTab(val title: String) {
 
 enum class LibrarySubTab(val title: String) {
     ALL_SONGS("Tất cả"),
-    YOUTUBE("YouTube Online"),
     FOLDERS("Thư mục"),
     HI_RES("Hi-Res FLAC/WAV"),
     FAVORITES("Yêu thích"),
@@ -183,13 +183,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _appUiState.update { it.copy(currentTab = tab) }
         val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.LYRICS)
         playerController.setHighPrecisionTracking(needsHighPrecision)
+        if (tab == MainTab.YOUTUBE && _appUiState.value.youtubeSongs.isEmpty() && !_appUiState.value.isSearchingYouTube) {
+            selectYouTubeCategory(_appUiState.value.selectedYouTubeCategory)
+        }
     }
 
     fun setLibrarySubTab(subTab: LibrarySubTab) {
         _appUiState.update { it.copy(librarySubTab = subTab, selectedFolder = null) }
-        if (subTab == LibrarySubTab.YOUTUBE && _appUiState.value.youtubeSongs.isEmpty() && !_appUiState.value.isSearchingYouTube) {
-            selectYouTubeCategory(_appUiState.value.selectedYouTubeCategory)
-        }
     }
 
     fun setYouTubeQuery(query: String) {
@@ -200,14 +200,29 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return
         viewModelScope.launch {
-            _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null, youtubeQuery = trimmed) }
-            val results = com.example.data.YouTubeMusicService.searchSongs(trimmed)
-            _appUiState.update {
-                it.copy(
-                    isSearchingYouTube = false,
-                    youtubeSongs = results,
-                    youtubeErrorMessage = if (results.isEmpty()) "Không tìm thấy bài hát nào trên YouTube cho '$trimmed'" else null
-                )
+            try {
+                _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null, youtubeQuery = trimmed) }
+                val results = try {
+                    com.example.data.YouTubeMusicService.searchSongs(trimmed)
+                } catch (t: Throwable) {
+                    android.util.Log.e("MusicViewModel", "Error searching YouTube: ${t.message}", t)
+                    emptyList()
+                }
+                _appUiState.update {
+                    it.copy(
+                        isSearchingYouTube = false,
+                        youtubeSongs = results,
+                        youtubeErrorMessage = if (results.isEmpty()) "Không tìm thấy bài hát nào trên YouTube cho '$trimmed'" else null
+                    )
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("MusicViewModel", "Error in searchYouTube: ${t.message}", t)
+                _appUiState.update {
+                    it.copy(
+                        isSearchingYouTube = false,
+                        youtubeErrorMessage = "Lỗi tìm kiếm YouTube: ${t.message}"
+                    )
+                }
             }
         }
     }
@@ -215,15 +230,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun selectYouTubeCategory(category: String) {
         _appUiState.update { it.copy(selectedYouTubeCategory = category, youtubeQuery = "") }
         viewModelScope.launch {
-            _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }
-            val query = com.example.data.YouTubeMusicService.getCategoryQuery(category)
-            val results = com.example.data.YouTubeMusicService.searchSongs(query)
-            _appUiState.update {
-                it.copy(
-                    isSearchingYouTube = false,
-                    youtubeSongs = results,
-                    youtubeErrorMessage = if (results.isEmpty()) "Không thể tải danh mục '$category' từ YouTube" else null
-                )
+            try {
+                _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }
+                val query = com.example.data.YouTubeMusicService.getCategoryQuery(category)
+                val results = try {
+                    com.example.data.YouTubeMusicService.searchSongs(query)
+                } catch (t: Throwable) {
+                    android.util.Log.e("MusicViewModel", "Error fetching YouTube category songs: ${t.message}", t)
+                    emptyList()
+                }
+                _appUiState.update {
+                    it.copy(
+                        isSearchingYouTube = false,
+                        youtubeSongs = results,
+                        youtubeErrorMessage = if (results.isEmpty()) "Không thể tải danh mục '$category' từ YouTube. Vui lòng thử lại." else null
+                    )
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("MusicViewModel", "Error in selectYouTubeCategory: ${t.message}", t)
+                _appUiState.update {
+                    it.copy(
+                        isSearchingYouTube = false,
+                        youtubeErrorMessage = "Lỗi tải YouTube: ${t.message}"
+                    )
+                }
             }
         }
     }
@@ -659,7 +689,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             LibrarySubTab.FOLDERS -> _appUiState.value.songs
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }
-            LibrarySubTab.YOUTUBE -> _appUiState.value.youtubeSongs
             LibrarySubTab.ARTISTS, LibrarySubTab.PLAYLISTS -> _appUiState.value.songs
         }
         if (query.isEmpty()) return all
