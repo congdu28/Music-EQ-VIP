@@ -342,8 +342,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         viewModel = viewModel,
                         uiState = uiState,
                         playerState = playerState,
-                        equalizerState = equalizerState,
-                        onRequestScan = requestMusicScan
+                        equalizerState = equalizerState
                     )
                 }
                 uiState.currentTab == MainTab.SETTINGS -> {
@@ -351,7 +350,8 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         viewModel = viewModel,
                         uiState = uiState,
                         playerState = playerState,
-                        equalizerState = equalizerState
+                        equalizerState = equalizerState,
+                        onRequestScan = requestMusicScan
                     )
                 }
             }
