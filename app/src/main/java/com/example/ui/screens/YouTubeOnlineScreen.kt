@@ -422,15 +422,20 @@ fun YouTubeOnlineScreen(
                                 current.format.contains("YouTube") ||
                                 current.filePath.startsWith("yt://")
                             )
-                            val isCurrent = isPlayingOnline && (current?.id == song.id)
+                            val isCurrent = isPlayingOnline && (
+                                current?.id == song.id ||
+                                (current?.filePath?.removePrefix("yt://") == song.filePath.removePrefix("yt://"))
+                            )
                             YouTubeSongItem(
                                 song = song,
                                 isPlaying = isCurrent && playerState.isPlaying,
                                 isLoadingStream = isCurrent && playerState.isLoadingOnlineStream,
                                 isCurrentSong = isCurrent,
                                 onClick = {
-                                    if (isCurrent) {
-                                        viewModel.togglePlayPause()
+                                    if (isCurrent && playerState.isPlaying) {
+                                        viewModel.pausePlayback()
+                                    } else if (isCurrent && !playerState.isPlaying && !playerState.isLoadingOnlineStream) {
+                                        viewModel.resumePlayback()
                                     } else {
                                         viewModel.playQueue(uiState.youtubeSongs, index)
                                     }

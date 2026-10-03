@@ -194,29 +194,45 @@ object YouTubeMusicService {
 
     private fun extractDirectAudioUrl(playerResponseJson: JSONObject): String? {
         val streamingData = playerResponseJson.optJSONObject("streamingData") ?: return null
-        val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return null
+        val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats")
+        val formats = streamingData.optJSONArray("formats")
 
         var bestAacUrl: String? = null
         var bestAacBitrate = 0
         var bestAlternativeAudioUrl: String? = null
         var maxAltBitrate = 0
 
-        for (i in 0 until adaptiveFormats.length()) {
-            val format = adaptiveFormats.optJSONObject(i) ?: continue
-            val mimeType = format.optString("mimeType", "")
-            if (mimeType.contains("audio")) {
+        // 1. Scan adaptiveFormats (dedicated audio streams)
+        if (adaptiveFormats != null) {
+            for (i in 0 until adaptiveFormats.length()) {
+                val format = adaptiveFormats.optJSONObject(i) ?: continue
+                val mimeType = format.optString("mimeType", "")
+                if (mimeType.contains("audio")) {
+                    val url = format.optString("url", "")
+                    if (url.isNotBlank()) {
+                        val itag = format.optInt("itag", 0)
+                        val bitrate = format.optInt("bitrate", 0)
+                        val isAac = mimeType.contains("mp4") || itag == 140 || itag == 139
+                        if (isAac && bitrate >= bestAacBitrate) {
+                            bestAacBitrate = bitrate
+                            bestAacUrl = url
+                        } else if (bitrate > maxAltBitrate) {
+                            maxAltBitrate = bitrate
+                            bestAlternativeAudioUrl = url
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Scan formats (muxed audio+video streams like itag 18, 22 as fallback)
+        if (bestAacUrl == null && bestAlternativeAudioUrl == null && formats != null) {
+            for (i in 0 until formats.length()) {
+                val format = formats.optJSONObject(i) ?: continue
                 val url = format.optString("url", "")
                 if (url.isNotBlank()) {
-                    val itag = format.optInt("itag", 0)
-                    val bitrate = format.optInt("bitrate", 0)
-                    val isAac = mimeType.contains("mp4") || itag == 140 || itag == 139
-                    if (isAac && bitrate >= bestAacBitrate) {
-                        bestAacBitrate = bitrate
-                        bestAacUrl = url
-                    } else if (bitrate > maxAltBitrate) {
-                        maxAltBitrate = bitrate
-                        bestAlternativeAudioUrl = url
-                    }
+                    Log.d(TAG, "Using fallback muxed format stream URL")
+                    return url
                 }
             }
         }

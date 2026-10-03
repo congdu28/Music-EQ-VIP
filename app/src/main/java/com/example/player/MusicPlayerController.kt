@@ -250,6 +250,9 @@ class MusicPlayerController(
         playSong(songs[validIndex])
     }
 
+    @Volatile
+    private var currentPlaybackSessionId: Long = 0L
+
     /**
      * Completely stops, cleans up, and releases all active and preparing media players and coroutine jobs.
      * Prevents dual playback, overlapping audio, or memory leaks.
@@ -262,36 +265,33 @@ class MusicPlayerController(
         crossfadeJob = null
 
         preparingPlayer?.let { player ->
-            try {
-                player.setOnPreparedListener(null)
-                player.setOnCompletionListener(null)
-                player.setOnErrorListener(null)
-                player.reset()
-                player.release()
-            } catch (t: Throwable) {
-                Log.w(TAG, "Notice releasing preparingPlayer: ${t.message}")
-            }
+            try { player.setOnPreparedListener(null) } catch (t: Throwable) {}
+            try { player.setOnCompletionListener(null) } catch (t: Throwable) {}
+            try { player.setOnErrorListener(null) } catch (t: Throwable) {}
+            try { player.reset() } catch (t: Throwable) {}
+            try { player.release() } catch (t: Throwable) {}
         }
         preparingPlayer = null
 
         mediaPlayer?.let { player ->
+            try { player.setOnPreparedListener(null) } catch (t: Throwable) {}
+            try { player.setOnCompletionListener(null) } catch (t: Throwable) {}
+            try { player.setOnErrorListener(null) } catch (t: Throwable) {}
             try {
-                player.setOnPreparedListener(null)
-                player.setOnCompletionListener(null)
-                player.setOnErrorListener(null)
                 if (player.isPlaying) {
                     player.stop()
                 }
-                player.reset()
-                player.release()
-            } catch (t: Throwable) {
-                Log.w(TAG, "Notice releasing mediaPlayer: ${t.message}")
-            }
+            } catch (t: Throwable) {}
+            try { player.reset() } catch (t: Throwable) {}
+            try { player.release() } catch (t: Throwable) {}
         }
         mediaPlayer = null
     }
 
     fun playSong(song: Song) {
+        val sessionId = System.currentTimeMillis()
+        currentPlaybackSessionId = sessionId
+
         requestAudioFocus()
 
         // Handle YouTube online tracks that need stream URL resolution
@@ -320,14 +320,14 @@ class MusicPlayerController(
                         null
                     }
                 }
-                if (isActive) {
+                if (isActive && currentPlaybackSessionId == sessionId) {
                     if (streamUrl != null) {
                         val resolvedSong = song.copy(filePath = streamUrl)
                         _uiState.update { current ->
                             val updatedQueue = current.queue.map { if (it.id == song.id) resolvedSong else it }
                             current.copy(queue = updatedQueue, currentSong = resolvedSong)
                         }
-                        playSongInternal(resolvedSong)
+                        playSongInternal(resolvedSong, sessionId)
                     } else {
                         Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
                         _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
@@ -346,10 +346,10 @@ class MusicPlayerController(
             return
         }
 
-        playSongInternal(song)
+        playSongInternal(song, sessionId)
     }
 
-    private fun playSongInternal(song: Song) {
+    private fun playSongInternal(song: Song, sessionId: Long = currentPlaybackSessionId) {
         try {
             crossfadeJob?.cancel()
             crossfadeJob = null
@@ -366,36 +366,32 @@ class MusicPlayerController(
                 crossfadeJob = null
 
                 preparingPlayer?.let { p ->
-                    try {
-                        p.setOnPreparedListener(null)
-                        p.setOnCompletionListener(null)
-                        p.setOnErrorListener(null)
-                        p.reset()
-                        p.release()
-                    } catch (t: Throwable) {}
+                    try { p.setOnPreparedListener(null) } catch (t: Throwable) {}
+                    try { p.setOnCompletionListener(null) } catch (t: Throwable) {}
+                    try { p.setOnErrorListener(null) } catch (t: Throwable) {}
+                    try { p.reset() } catch (t: Throwable) {}
+                    try { p.release() } catch (t: Throwable) {}
                 }
                 preparingPlayer = null
 
                 mediaPlayer?.let { p ->
+                    try { p.setOnPreparedListener(null) } catch (t: Throwable) {}
+                    try { p.setOnCompletionListener(null) } catch (t: Throwable) {}
+                    try { p.setOnErrorListener(null) } catch (t: Throwable) {}
                     try {
-                        p.setOnPreparedListener(null)
-                        p.setOnCompletionListener(null)
-                        p.setOnErrorListener(null)
                         if (p.isPlaying) p.stop()
-                        p.reset()
-                        p.release()
                     } catch (t: Throwable) {}
+                    try { p.reset() } catch (t: Throwable) {}
+                    try { p.release() } catch (t: Throwable) {}
                 }
                 mediaPlayer = null
             } else {
                 preparingPlayer?.let { p ->
-                    try {
-                        p.setOnPreparedListener(null)
-                        p.setOnCompletionListener(null)
-                        p.setOnErrorListener(null)
-                        p.reset()
-                        p.release()
-                    } catch (t: Throwable) {}
+                    try { p.setOnPreparedListener(null) } catch (t: Throwable) {}
+                    try { p.setOnCompletionListener(null) } catch (t: Throwable) {}
+                    try { p.setOnErrorListener(null) } catch (t: Throwable) {}
+                    try { p.reset() } catch (t: Throwable) {}
+                    try { p.release() } catch (t: Throwable) {}
                 }
                 preparingPlayer = null
             }
@@ -409,10 +405,12 @@ class MusicPlayerController(
                 )
 
                 if (isOnline) {
-                    val headers = mapOf(
-                        "User-Agent" to com.example.data.YouTubeMusicService.AUDIO_USER_AGENT
-                    )
-                    setDataSource(context, Uri.parse(song.filePath), headers)
+                    try {
+                        setDataSource(song.filePath)
+                    } catch (e: Exception) {
+                        val headers = mapOf("User-Agent" to com.example.data.YouTubeMusicService.AUDIO_USER_AGENT)
+                        setDataSource(context, Uri.parse(song.filePath), headers)
+                    }
                 } else {
                     val file = File(song.filePath)
                     if (file.exists()) {
@@ -431,7 +429,7 @@ class MusicPlayerController(
 
                 setOnPreparedListener { mp ->
                     // Guard against superseded / outdated players
-                    if (preparingPlayer != mp) {
+                    if (currentPlaybackSessionId != sessionId || preparingPlayer != mp) {
                         try {
                             mp.reset()
                             mp.release()
