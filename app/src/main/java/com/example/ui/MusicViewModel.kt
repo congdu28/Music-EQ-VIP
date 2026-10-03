@@ -322,6 +322,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun togglePlayPause() = playerController.togglePlayPause()
+    fun pausePlayback() = playerController.pausePlayback()
+    fun resumePlayback() = playerController.resumePlayback()
     fun seekTo(positionMs: Long) = playerController.seekTo(positionMs)
     fun playNext() = playerController.playNext()
     fun playPrevious() = playerController.playPrevious()
