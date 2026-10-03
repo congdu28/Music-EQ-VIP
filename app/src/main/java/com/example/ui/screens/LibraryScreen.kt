@@ -1025,6 +1025,8 @@ fun PlaylistsView(
                 }
             }
         }
+    }
 }
+
 
 
