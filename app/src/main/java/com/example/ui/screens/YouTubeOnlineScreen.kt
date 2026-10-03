@@ -415,7 +415,7 @@ fun YouTubeOnlineScreen(
                         itemsIndexed(
                             items = uiState.youtubeSongs,
                             key = { index, song -> "${song.filePath}_$index" }
-                        ) { _, song ->
+                        ) { index, song ->
                             val isCurrent = playerState.currentSong?.id == song.id
                             YouTubeSongItem(
                                 song = song,
@@ -423,7 +423,11 @@ fun YouTubeOnlineScreen(
                                 isLoadingStream = isCurrent && playerState.isLoadingOnlineStream,
                                 isCurrentSong = isCurrent,
                                 onClick = {
-                                    viewModel.playYouTubeSong(song)
+                                    if (isCurrent) {
+                                        viewModel.togglePlayPause()
+                                    } else {
+                                        viewModel.playQueue(uiState.youtubeSongs, index)
+                                    }
                                 },
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                                 onViewSpecs = { viewModel.setShowAudioSpecs(true) }

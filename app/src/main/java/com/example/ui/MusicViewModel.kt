@@ -259,13 +259,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun playYouTubeSong(song: Song) {
-        val currentQueue = playerController.uiState.value.queue.toMutableList()
-        val index = currentQueue.indexOfFirst { it.id == song.id }
+        val ytSongs = _appUiState.value.youtubeSongs
+        val index = ytSongs.indexOfFirst { it.id == song.id }
         if (index >= 0) {
-            playerController.playQueue(currentQueue, index)
+            playerController.playQueue(ytSongs, index)
         } else {
-            currentQueue.add(song)
-            playerController.playQueue(currentQueue, currentQueue.size - 1)
+            playerController.playQueue(listOf(song), 0)
         }
     }
 

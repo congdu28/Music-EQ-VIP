@@ -53,7 +53,9 @@ class MusicPlayerController(
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     private var mediaPlayer: MediaPlayer? = null
+    private var preparingPlayer: MediaPlayer? = null
     private var crossfadeJob: Job? = null
+    private var resolveStreamJob: Job? = null
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -248,12 +250,58 @@ class MusicPlayerController(
         playSong(songs[validIndex])
     }
 
+    /**
+     * Completely stops, cleans up, and releases all active and preparing media players and coroutine jobs.
+     * Prevents dual playback, overlapping audio, or memory leaks.
+     */
+    fun stopAllPlayback() {
+        resolveStreamJob?.cancel()
+        resolveStreamJob = null
+
+        crossfadeJob?.cancel()
+        crossfadeJob = null
+
+        preparingPlayer?.let { player ->
+            try {
+                player.setOnPreparedListener(null)
+                player.setOnCompletionListener(null)
+                player.setOnErrorListener(null)
+                player.reset()
+                player.release()
+            } catch (t: Throwable) {
+                Log.w(TAG, "Notice releasing preparingPlayer: ${t.message}")
+            }
+        }
+        preparingPlayer = null
+
+        mediaPlayer?.let { player ->
+            try {
+                player.setOnPreparedListener(null)
+                player.setOnCompletionListener(null)
+                player.setOnErrorListener(null)
+                if (player.isPlaying) {
+                    player.stop()
+                }
+                player.reset()
+                player.release()
+            } catch (t: Throwable) {
+                Log.w(TAG, "Notice releasing mediaPlayer: ${t.message}")
+            }
+        }
+        mediaPlayer = null
+    }
+
     fun playSong(song: Song) {
         requestAudioFocus()
 
         // Handle YouTube online tracks that need stream URL resolution
         if (song.filePath.startsWith("yt://") || (song.format.contains("YouTube") && !song.filePath.startsWith("http"))) {
             val videoId = song.filePath.removePrefix("yt://").trim()
+
+            // IMMEDIATELY stop any existing playback (including library music)
+            // so audio never overlaps while the online stream is being fetched!
+            stopAllPlayback()
+
             _uiState.update {
                 it.copy(
                     currentSong = song,
@@ -262,20 +310,28 @@ class MusicPlayerController(
                     currentPositionMs = 0
                 )
             }
-            scope.launch {
+            MusicPlaybackService.startOrUpdate(context, song, false)
+
+            resolveStreamJob = scope.launch {
                 val streamUrl = withContext(Dispatchers.IO) {
-                    com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
-                }
-                if (streamUrl != null) {
-                    val resolvedSong = song.copy(filePath = streamUrl)
-                    _uiState.update { current ->
-                        val updatedQueue = current.queue.map { if (it.id == song.id) resolvedSong else it }
-                        current.copy(queue = updatedQueue, currentSong = resolvedSong)
+                    try {
+                        com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
+                    } catch (t: Throwable) {
+                        null
                     }
-                    playSongInternal(resolvedSong)
-                } else {
-                    Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
-                    _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                }
+                if (isActive) {
+                    if (streamUrl != null) {
+                        val resolvedSong = song.copy(filePath = streamUrl)
+                        _uiState.update { current ->
+                            val updatedQueue = current.queue.map { if (it.id == song.id) resolvedSong else it }
+                            current.copy(queue = updatedQueue, currentSong = resolvedSong)
+                        }
+                        playSongInternal(resolvedSong)
+                    } else {
+                        Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
+                        _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                    }
                 }
             }
             return
@@ -287,10 +343,29 @@ class MusicPlayerController(
     private fun playSongInternal(song: Song) {
         try {
             crossfadeJob?.cancel()
+            crossfadeJob = null
+
+            val isOnline = song.filePath.startsWith("http://") || song.filePath.startsWith("https://")
             val oldPlayer = mediaPlayer
             val state = _uiState.value
-            val isCrossfade = state.isCrossfadeEnabled && oldPlayer != null && oldPlayer.isPlaying
+            val isCrossfade = state.isCrossfadeEnabled && oldPlayer != null && oldPlayer.isPlaying && !isOnline
             val crossfadeDurationMs = (state.crossfadeDurationSeconds * 1000).toLong().coerceIn(300L, 5000L)
+
+            // If not crossfading (or if loading online stream), immediately stop any previous player
+            if (!isCrossfade) {
+                stopAllPlayback()
+            } else {
+                preparingPlayer?.let { p ->
+                    try {
+                        p.setOnPreparedListener(null)
+                        p.setOnCompletionListener(null)
+                        p.setOnErrorListener(null)
+                        p.reset()
+                        p.release()
+                    } catch (t: Throwable) {}
+                }
+                preparingPlayer = null
+            }
 
             val newPlayer = MediaPlayer().apply {
                 setAudioAttributes(
@@ -300,9 +375,9 @@ class MusicPlayerController(
                         .build()
                 )
 
-                if (song.filePath.startsWith("http://") || song.filePath.startsWith("https://")) {
+                if (isOnline) {
                     val headers = mapOf(
-                        "User-Agent" to "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
+                        "User-Agent" to "Mozilla/5.0 (Linux; Android 10; Quest 2) AppleWebKit/537.36"
                     )
                     setDataSource(context, Uri.parse(song.filePath), headers)
                 } else {
@@ -322,7 +397,25 @@ class MusicPlayerController(
                 }
 
                 setOnPreparedListener { mp ->
-                    mp.start()
+                    // Guard against superseded / outdated players
+                    if (preparingPlayer != mp) {
+                        try {
+                            mp.reset()
+                            mp.release()
+                        } catch (t: Throwable) {}
+                        return@setOnPreparedListener
+                    }
+                    preparingPlayer = null
+                    mediaPlayer = mp
+
+                    try {
+                        mp.start()
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Error starting mediaPlayer: ${t.message}")
+                        _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                        return@setOnPreparedListener
+                    }
+
                     // Restore custom playback speed if set
                     val currentSpeed = _uiState.value.playbackSpeed
                     if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M && currentSpeed != 1.0f) {
@@ -373,13 +466,6 @@ class MusicPlayerController(
                                 // ignore
                             }
                         }
-                    } else {
-                        try {
-                            oldPlayer?.stop()
-                            oldPlayer?.release()
-                        } catch (e: Exception) {
-                            // ignore
-                        }
                     }
                 }
 
@@ -387,17 +473,30 @@ class MusicPlayerController(
                     onSongCompleted()
                 }
 
-                setOnErrorListener { _, what, extra ->
+                setOnErrorListener { mp, what, extra ->
                     Log.w(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    if (preparingPlayer == mp) {
+                        preparingPlayer = null
+                    }
+                    if (mediaPlayer == mp) {
+                        mediaPlayer = null
+                    }
+                    try {
+                        mp.reset()
+                        mp.release()
+                    } catch (t: Throwable) {}
+
                     _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
-                    false
+                    // CRUCIAL: Return true so Android does NOT invoke OnCompletionListener and cascade to songs below!
+                    true
                 }
 
+                preparingPlayer = this
                 prepareAsync()
             }
-            mediaPlayer = newPlayer
         } catch (e: Exception) {
             Log.e(TAG, "Error playing song: ${e.message}", e)
+            preparingPlayer = null
             _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
         }
     }
@@ -424,6 +523,11 @@ class MusicPlayerController(
     }
 
     fun pausePlayback() {
+        if (_uiState.value.isLoadingOnlineStream) {
+            stopAllPlayback()
+            _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+            return
+        }
         val player = mediaPlayer ?: return
         if (player.isPlaying) {
             try {
@@ -595,12 +699,9 @@ class MusicPlayerController(
         abandonAudioFocus()
         MusicPlaybackService.stop(context)
         if (activeInstance == this) activeInstance = null
-        crossfadeJob?.cancel()
+        stopAllPlayback()
         progressJob?.cancel()
         sleepTimerJob?.cancel()
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
-        mediaPlayer = null
         equalizerManager.release()
     }
 }

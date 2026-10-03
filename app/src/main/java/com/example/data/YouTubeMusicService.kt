@@ -167,9 +167,10 @@ object YouTubeMusicService {
         val streamingData = playerResponseJson.optJSONObject("streamingData") ?: return null
         val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats") ?: return null
 
-        var bestItag140Url: String? = null
+        var bestAacUrl: String? = null
+        var bestAacBitrate = 0
         var bestAlternativeAudioUrl: String? = null
-        var maxBitrate = 0
+        var maxAltBitrate = 0
 
         for (i in 0 until adaptiveFormats.length()) {
             val format = adaptiveFormats.optJSONObject(i) ?: continue
@@ -179,17 +180,19 @@ object YouTubeMusicService {
                 if (url.isNotBlank()) {
                     val itag = format.optInt("itag", 0)
                     val bitrate = format.optInt("bitrate", 0)
-                    if (itag == 140) {
-                        bestItag140Url = url
-                    } else if (bitrate > maxBitrate) {
-                        maxBitrate = bitrate
+                    val isAac = mimeType.contains("mp4") || itag == 140 || itag == 139
+                    if (isAac && bitrate >= bestAacBitrate) {
+                        bestAacBitrate = bitrate
+                        bestAacUrl = url
+                    } else if (bitrate > maxAltBitrate) {
+                        maxAltBitrate = bitrate
                         bestAlternativeAudioUrl = url
                     }
                 }
             }
         }
 
-        return bestItag140Url ?: bestAlternativeAudioUrl
+        return bestAacUrl ?: bestAlternativeAudioUrl
     }
 
     /**
