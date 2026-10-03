@@ -49,6 +49,13 @@ class MusicRepository(private val context: Context) {
         prefs.edit().putString("gemini_model", model.trim()).apply()
     }
 
+    fun shouldRecommendInitialLibraryScan(): Boolean =
+        !prefs.getBoolean("has_seen_initial_scan_recommendation", false)
+
+    fun markInitialLibraryScanRecommendationSeen() {
+        prefs.edit().putBoolean("has_seen_initial_scan_recommendation", true).apply()
+    }
+
     val allSongs: Flow<List<Song>> = db.songDao().getAllSongs()
     val favoriteSongs: Flow<List<Song>> = db.songDao().getFavoriteSongs()
     val allPlaylists: Flow<List<Playlist>> = db.playlistDao().getAllPlaylists()

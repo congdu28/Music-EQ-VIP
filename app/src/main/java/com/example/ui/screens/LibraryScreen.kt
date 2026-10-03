@@ -50,6 +50,7 @@ fun LibraryScreen(
     viewModel: MusicViewModel,
     uiState: MusicAppUiState,
     playerState: PlayerUiState,
+    onRequestScan: () -> Unit = { viewModel.scanDeviceAudio() },
     modifier: Modifier = Modifier
 ) {
     val filteredSongs = viewModel.getFilteredSongs()
@@ -64,9 +65,9 @@ fun LibraryScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 6.dp),
+                .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Streamlined Search Bar
             Surface(
@@ -131,7 +132,7 @@ fun LibraryScreen(
                     }
                 },
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(DarkSurfaceVariant)
             ) {
@@ -145,9 +146,9 @@ fun LibraryScreen(
 
             // Quick Scan Button
             IconButton(
-                onClick = { viewModel.scanDeviceAudio() },
+                onClick = onRequestScan,
                 modifier = Modifier
-                    .size(38.dp)
+                    .size(42.dp)
                     .clip(CircleShape)
                     .background(DarkSurfaceVariant)
             ) {
@@ -249,7 +250,8 @@ fun LibraryScreen(
                     viewModel = viewModel,
                     uiState = uiState,
                     playerState = playerState,
-                    folders = musicFolders
+                    folders = musicFolders,
+                    onRequestScan = onRequestScan
                 )
             }
             LibrarySubTab.PLAYLISTS -> {
@@ -293,7 +295,7 @@ fun LibraryScreen(
                                 }
                             } else {
                                 Button(
-                                    onClick = { viewModel.scanDeviceAudio() },
+                                    onClick = onRequestScan,
                                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
@@ -431,7 +433,8 @@ fun FolderBrowserView(
     viewModel: MusicViewModel,
     uiState: MusicAppUiState,
     playerState: PlayerUiState,
-    folders: List<MusicFolder>
+    folders: List<MusicFolder>,
+    onRequestScan: () -> Unit = { viewModel.scanDeviceAudio() }
 ) {
     val selectedFolder = uiState.selectedFolder
 
@@ -557,7 +560,7 @@ fun FolderBrowserView(
                     Text("Chưa tìm thấy thư mục âm nhạc nào", color = TextSecondary, fontSize = 14.sp)
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
-                        onClick = { viewModel.scanDeviceAudio() },
+                        onClick = onRequestScan,
                         colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground)
                     ) {
                         Text("Quét lại bộ nhớ", fontWeight = FontWeight.Bold)

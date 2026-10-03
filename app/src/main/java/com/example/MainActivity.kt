@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,23 +65,45 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         viewModel.setTab(MainTab.LIBRARY)
     }
 
-    // Permission request for audio storage
+    val context = LocalContext.current
+    val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        Manifest.permission.READ_MEDIA_AUDIO
+    } else {
+        Manifest.permission.READ_EXTERNAL_STORAGE
+    }
+
+    // Ask for audio access only when the user chooses to scan.
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val granted = permissions.values.any { it }
-        if (granted) {
-            viewModel.scanDeviceAudioIfEmpty()
+        if (permissions[audioPermission] == true) {
+            viewModel.scanDeviceAudio()
         }
     }
 
-    LaunchedEffect(Unit) {
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.POST_NOTIFICATIONS)
+    val requestMusicScan = {
+        if (ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED) {
+            viewModel.scanDeviceAudio()
         } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            permissionLauncher.launch(arrayOf(audioPermission))
         }
-        permissionLauncher.launch(permissions)
+    }
+
+    if (uiState.showInitialScanRecommendation) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissInitialScanRecommendation() },
+            title = { Text("Quét nhạc trên thiết bị") },
+            text = { Text("Để bắt đầu nhanh, bạn có thể quét các bài hát đang có trên điện thoại và thêm chúng vào thư viện.") },
+            confirmButton = {
+                Button(onClick = {
+                    viewModel.dismissInitialScanRecommendation()
+                    requestMusicScan()
+                }) { Text("Quét nhạc") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissInitialScanRecommendation() }) { Text("Để sau") }
+            }
+        )
     }
 
     Scaffold(
@@ -290,7 +313,8 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                     LibraryScreen(
                         viewModel = viewModel,
                         uiState = uiState,
-                        playerState = playerState
+                        playerState = playerState,
+                        onRequestScan = requestMusicScan
                     )
                 }
                 uiState.currentTab == MainTab.YOUTUBE -> {
@@ -318,7 +342,8 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         viewModel = viewModel,
                         uiState = uiState,
                         playerState = playerState,
-                        equalizerState = equalizerState
+                        equalizerState = equalizerState,
+                        onRequestScan = requestMusicScan
                     )
                 }
                 uiState.currentTab == MainTab.SETTINGS -> {

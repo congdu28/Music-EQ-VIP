@@ -18,9 +18,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.equalizer.EqualizerState
+import com.example.BuildConfig
 import com.example.player.PlayerUiState
 import com.example.ui.MainTab
 import com.example.ui.MusicAppUiState
@@ -33,6 +36,7 @@ fun SettingsScreen(
     uiState: MusicAppUiState,
     playerState: PlayerUiState,
     equalizerState: EqualizerState,
+    onRequestScan: () -> Unit = { viewModel.scanDeviceAudio() },
     modifier: Modifier = Modifier
 ) {
     // Back gesture returns to Library
@@ -157,7 +161,7 @@ fun SettingsScreen(
                     iconTint = NeonCyan,
                     title = "Quét lại toàn bộ bộ nhớ",
                     subtitle = "Tìm kiếm file FLAC, WAV, MP3 mới tải về máy",
-                    onClick = { viewModel.scanDeviceAudio() }
+                    onClick = onRequestScan
                 )
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = DarkBorder)
@@ -292,6 +296,7 @@ fun SettingsScreen(
         // Section: Cấu hình Gemini AI & Tìm kiếm Lời bài hát
         var apiKeyInput by remember(uiState.geminiApiKey) { mutableStateOf(uiState.geminiApiKey) }
         var isEditingKey by remember { mutableStateOf(false) }
+        var revealApiKey by remember { mutableStateOf(false) }
 
         Surface(
             shape = RoundedCornerShape(18.dp),
@@ -333,6 +338,16 @@ fun SettingsScreen(
                     },
                     label = { Text("Gemini API Key") },
                     singleLine = true,
+                    visualTransformation = if (revealApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { revealApiKey = !revealApiKey }) {
+                            Icon(
+                                imageVector = if (revealApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = if (revealApiKey) "Ẩn API Key" else "Hiện API Key",
+                                tint = TextSecondary
+                            )
+                        }
+                    },
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = NeonViolet,
                         unfocusedBorderColor = DarkBorder,
@@ -458,7 +473,8 @@ fun SettingsScreen(
                 Text("Thông tin & Giấy phép", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                InfoRow("Phiên bản", "1.0.6 (Hotfix Font & Crash, Gemini 3.6/3.7/3.8)")
+                InfoRow("Phiên bản", BuildConfig.VERSION_NAME)
+                InfoRow("Tác giả", "CD")
                 InfoRow("Ngôn ngữ", "Tiếng Việt (100% Native)")
                 InfoRow("Bộ xử lý âm thanh", "Android AudioFX + Native DSP")
                 InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0 + Gemini AI")

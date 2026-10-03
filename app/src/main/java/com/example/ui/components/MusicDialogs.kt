@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -18,6 +19,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.content.ClipboardManager
@@ -405,6 +408,8 @@ fun SleepTimerDialog(
     onCancelTimer: () -> Unit
 ) {
     val presetMinutes = listOf(15, 30, 45, 60, 90)
+    var customMinutes by remember { mutableStateOf("") }
+    val customMinutesValue = customMinutes.toIntOrNull()?.takeIf { it in 1..1440 }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -444,26 +449,63 @@ fun SleepTimerDialog(
                 Text("Chọn thời gian hẹn giờ:", color = TextSecondary, fontSize = 13.sp)
                 Spacer(modifier = Modifier.height(8.dp))
 
-                presetMinutes.forEach { mins ->
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = DarkSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp)
-                            .clickable {
-                                onSelectMinutes(mins)
-                                onDismiss()
-                            }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                Row(
+                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    presetMinutes.forEach { mins ->
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = DarkSurfaceVariant,
+                            modifier = Modifier
+                                .clickable {
+                                    onSelectMinutes(mins)
+                                    onDismiss()
+                                }
                         ) {
-                            Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text("$mins phút", color = TextPrimary, fontWeight = FontWeight.Medium)
+                            Text(
+                                "$mins phút",
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                            )
                         }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Hoặc nhập số phút tùy chỉnh (1–1440):", color = TextSecondary, fontSize = 12.sp)
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = customMinutes,
+                        onValueChange = { value ->
+                            if (value.length <= 4 && value.all(Char::isDigit)) customMinutes = value
+                        },
+                        label = { Text("Phút") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonPurple,
+                            unfocusedBorderColor = DarkBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        enabled = customMinutesValue != null,
+                        onClick = {
+                            customMinutesValue?.let(onSelectMinutes)
+                            onDismiss()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonPurple)
+                    ) {
+                        Text("Bắt đầu")
                     }
                 }
             }

@@ -61,6 +61,7 @@ data class MusicAppUiState(
     val activeLyricIndex: Int = -1,
     val isScanning: Boolean = false,
     val scanResultMessage: String? = null,
+    val showInitialScanRecommendation: Boolean = false,
     val showCreatePlaylistDialog: Boolean = false,
     val showAddToPlaylistDialog: Song? = null,
     val showEditMetadataDialog: Song? = null,
@@ -95,7 +96,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val savedKey = repository.getGeminiApiKey()
         val savedModel = repository.getGeminiModel()
-        _appUiState.update { it.copy(geminiApiKey = savedKey, geminiModel = savedModel) }
+        _appUiState.update {
+            it.copy(
+                geminiApiKey = savedKey,
+                geminiModel = savedModel,
+                showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan()
+            )
+        }
 
         viewModelScope.launch {
             repository.initializeDefaultDataIfEmpty()
@@ -296,6 +303,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun dismissScanMessage() {
         _appUiState.update { it.copy(scanResultMessage = null) }
+    }
+
+    fun dismissInitialScanRecommendation() {
+        repository.markInitialLibraryScanRecommendationSeen()
+        _appUiState.update { it.copy(showInitialScanRecommendation = false) }
     }
 
     fun toggleFavorite(song: Song) {
