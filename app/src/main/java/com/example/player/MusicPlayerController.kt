@@ -324,7 +324,11 @@ class MusicPlayerController(
                     if (streamUrl != null) {
                         val resolvedSong = song.copy(filePath = streamUrl)
                         _uiState.update { current ->
-                            val updatedQueue = current.queue.map { if (it.id == song.id) resolvedSong else it }
+                            // YouTube song IDs are derived from video IDs and can collide. Match the
+                            // unresolved source path so only this queue item receives its stream URL.
+                            val updatedQueue = current.queue.map {
+                                if (it.filePath == song.filePath) resolvedSong else it
+                            }
                             current.copy(queue = updatedQueue, currentSong = resolvedSong)
                         }
                         playSongInternal(resolvedSong, sessionId)

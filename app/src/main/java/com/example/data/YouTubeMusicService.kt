@@ -491,7 +491,8 @@ object YouTubeMusicService {
             }
 
             // Negative stable ID based on videoId to distinguish from device MediaStore IDs
-            val stableId = -Math.abs(videoId.hashCode().toLong()).coerceAtMost(-1L)
+            val idHash = videoId.hashCode().toLong()
+            val stableId = -kotlin.math.abs(idHash).coerceAtLeast(1L)
 
             return Song(
                 id = stableId,

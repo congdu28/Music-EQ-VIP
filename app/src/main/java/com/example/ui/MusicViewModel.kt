@@ -260,7 +260,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playYouTubeSong(song: Song) {
         val ytSongs = _appUiState.value.youtubeSongs
-        val index = ytSongs.indexOfFirst { it.id == song.id }
+        val index = ytSongs.indexOfFirst { it.filePath == song.filePath }
         if (index >= 0) {
             playerController.playQueue(ytSongs, index)
         } else {
