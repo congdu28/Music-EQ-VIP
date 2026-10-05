@@ -32,6 +32,18 @@ class MusicRepository(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("nhip_dieu_settings", Context.MODE_PRIVATE)
 
+    fun isDarkThemeEnabled(): Boolean = prefs.getBoolean("appearance_dark_theme", true)
+
+    fun setDarkThemeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean("appearance_dark_theme", enabled).apply()
+    }
+
+    fun getAccentColor(): Int = prefs.getInt("appearance_accent_color", 0xFF3399FF.toInt())
+
+    fun setAccentColor(color: Int) {
+        prefs.edit().putInt("appearance_accent_color", color).apply()
+    }
+
     fun getGeminiApiKey(): String {
         val def = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
         return prefs.getString("gemini_api_key", def) ?: def

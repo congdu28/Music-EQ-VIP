@@ -285,12 +285,12 @@ fun SyncedLyricsScreen(
                             if (song != null) {
                                 Button(
                                     onClick = { viewModel.searchLyricsOnline(song) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DarkBackground),
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = AccentContent),
                                     shape = RoundedCornerShape(12.dp),
                                     enabled = !uiState.isSearchingLyrics
                                 ) {
                                     if (uiState.isSearchingLyrics) {
-                                        CircularProgressIndicator(color = DarkBackground, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                                        CircularProgressIndicator(color = AccentContent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                                     } else {
                                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
                                     }
@@ -405,11 +405,11 @@ fun SyncedLyricsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
+                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = AccentContent, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = "Cuộn đến câu đang hát",
-                        color = DarkBackground,
+                        color = AccentContent,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp
                     )

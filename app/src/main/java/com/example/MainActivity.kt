@@ -46,7 +46,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            MyApplicationTheme(darkTheme = true) {
+            val appearance by viewModel.appUiState.collectAsState()
+            MyApplicationTheme(
+                darkTheme = appearance.isDarkTheme,
+                accentColor = Color(appearance.accentColor)
+            ) {
                 MainAppScreen(viewModel = viewModel)
             }
         }

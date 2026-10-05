@@ -3,8 +3,10 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -15,8 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -39,6 +43,11 @@ fun SettingsScreen(
     onRequestScan: () -> Unit = { viewModel.scanDeviceAudio() },
     modifier: Modifier = Modifier
 ) {
+    var showCustomAccentDialog by remember { mutableStateOf(false) }
+    var customRed by remember { mutableFloatStateOf(0.2f) }
+    var customGreen by remember { mutableFloatStateOf(0.6f) }
+    var customBlue by remember { mutableFloatStateOf(1f) }
+
     // Back gesture returns to Library
     BackHandler {
         viewModel.setTab(MainTab.LIBRARY)
@@ -76,8 +85,8 @@ fun SettingsScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Text("Nhịp Điệu Hi-Res Player", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text("Trình phát nhạc Hi-Res Lossless & Bộ chỉnh âm 5 dải", color = TextSecondary, fontSize = 12.sp)
+                Text("Nhịp Điệu Hi-Res Player", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text("Trình phát nhạc Hi-Res Lossless & Bộ chỉnh âm 10 dải", color = TextSecondary, fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -97,6 +106,86 @@ fun SettingsScreen(
             }
         }
 
+        // Section: Theme mode and customizable accent palette
+        Surface(
+            shape = RoundedCornerShape(18.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Giao diện", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Chế độ tối", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (uiState.isDarkTheme) "Đang dùng giao diện tối" else "Đang dùng giao diện sáng",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            maxLines = 1
+                        )
+                    }
+                    Switch(
+                        checked = uiState.isDarkTheme,
+                        onCheckedChange = viewModel::setDarkTheme,
+                        colors = SwitchDefaults.colors(checkedThumbColor = AccentContent, checkedTrackColor = NeonCyan)
+                    )
+                }
+
+                Text("Màu nhấn", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                val accentOptions = listOf(
+                    0xFF3399FF.toInt(), 0xFF8B5CF6.toInt(), 0xFFEC4899.toInt(),
+                    0xFF22C55E.toInt(), 0xFFF59E0B.toInt(), 0xFF14B8A6.toInt()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    accentOptions.forEach { colorInt ->
+                        val selected = uiState.accentColor == colorInt
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(42.dp)
+                                .selectable(selected = selected, role = Role.RadioButton) { viewModel.setAccentColor(colorInt) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(colorInt),
+                                border = androidx.compose.foundation.BorderStroke(
+                                    if (selected) 3.dp else 1.dp,
+                                    if (selected) TextPrimary else DarkBorder
+                                ),
+                                modifier = Modifier.size(if (selected) 32.dp else 28.dp)
+                            ) {}
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = {
+                        val currentColor = Color(uiState.accentColor)
+                        customRed = currentColor.red
+                        customGreen = currentColor.green
+                        customBlue = currentColor.blue
+                        showCustomAccentDialog = true
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Tùy chỉnh màu…", color = NeonCyan, fontSize = 12.sp)
+                }
+                Text("Màu nhấn áp dụng cho nút, biểu tượng và điểm nổi bật.", color = TextMuted, fontSize = 10.sp)
+            }
+        }
+
         // Section: Định dạng âm thanh chất lượng cao hỗ trợ
         Surface(
             shape = RoundedCornerShape(18.dp),
@@ -105,7 +194,7 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Định dạng âm thanh chất lượng cao hỗ trợ", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text("Định dạng âm thanh chất lượng cao hỗ trợ", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val formats = listOf(
@@ -136,7 +225,15 @@ fun SettingsScreen(
                                 ) {
                                     Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text(formatName, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                    Text(
+                                        formatName,
+                                        color = TextPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                         }
@@ -190,17 +287,19 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Chuyển nhạc mượt mà (Crossfade)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("Chuyển nhạc mượt mà (Crossfade)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                         Text(
                             text = if (playerState.isCrossfadeEnabled) "Hòa trộn âm thanh ${String.format("%.1f", playerState.crossfadeDurationSeconds)}s giữa các bài hát" else "Đã tắt (Chuyển bài lập tức)",
                             color = TextSecondary,
-                            fontSize = 11.sp
+                            fontSize = 11.sp,
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                     Switch(
                         checked = playerState.isCrossfadeEnabled,
                         onCheckedChange = { viewModel.setCrossfadeEnabled(it) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
+                        colors = SwitchDefaults.colors(checkedThumbColor = AccentContent, checkedTrackColor = NeonCyan)
                     )
                 }
 
@@ -242,7 +341,7 @@ fun SettingsScreen(
                                 Box(modifier = Modifier.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
                                     Text(
                                         text = "${sec.toInt().takeIf { it.toFloat() == sec } ?: sec}s",
-                                        color = if (isSel) DarkBackground else TextSecondary,
+                                        color = if (isSel) AccentContent else TextSecondary,
                                         fontSize = 10.sp,
                                         fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
                                     )
@@ -271,13 +370,13 @@ fun SettingsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Bật bộ lọc Equalizer", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(if (equalizerState.isEnabled) "Đang áp dụng: ${equalizerState.activePresetName}" else "Đã tắt bộ lọc", color = TextSecondary, fontSize = 11.sp)
+                        Text("Bật bộ lọc Equalizer", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(if (equalizerState.isEnabled) "Đang áp dụng: ${equalizerState.activePresetName}" else "Đã tắt bộ lọc", color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                     }
                     Switch(
                         checked = equalizerState.isEnabled,
                         onCheckedChange = { viewModel.toggleEqualizerEnabled(it) },
-                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = NeonCyan)
+                        colors = SwitchDefaults.colors(checkedThumbColor = AccentContent, checkedTrackColor = NeonCyan)
                     )
                 }
 
@@ -359,18 +458,23 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
                         text = if (apiKeyInput.isNotBlank()) "Đã cấu hình API Key" else "Chưa có API Key",
                         color = if (apiKeyInput.isNotBlank()) NeonCyan else TextMuted,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         val defaultKey = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
                         if (apiKeyInput != defaultKey) {
                             TextButton(
@@ -453,7 +557,9 @@ fun SettingsScreen(
                                 Text(
                                     text = modelDesc,
                                     color = TextMuted,
-                                    fontSize = 10.5.sp
+                                    fontSize = 10.5.sp,
+                                    maxLines = 2,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -480,6 +586,38 @@ fun SettingsScreen(
                 InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0 + Gemini AI")
             }
         }
+    }
+
+    if (showCustomAccentDialog) {
+        val previewColor = Color(customRed, customGreen, customBlue)
+        AlertDialog(
+            onDismissRequest = { showCustomAccentDialog = false },
+            title = { Text("Tùy chỉnh màu nhấn") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = previewColor,
+                        modifier = Modifier.fillMaxWidth().height(42.dp)
+                    ) {}
+                    Text("Đỏ · ${(customRed * 255).toInt()}", fontSize = 11.sp)
+                    Slider(value = customRed, onValueChange = { customRed = it }, valueRange = 0f..1f)
+                    Text("Lục · ${(customGreen * 255).toInt()}", fontSize = 11.sp)
+                    Slider(value = customGreen, onValueChange = { customGreen = it }, valueRange = 0f..1f)
+                    Text("Lam · ${(customBlue * 255).toInt()}", fontSize = 11.sp)
+                    Slider(value = customBlue, onValueChange = { customBlue = it }, valueRange = 0f..1f)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.setAccentColor(previewColor.toArgb())
+                    showCustomAccentDialog = false
+                }) { Text("Áp dụng") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCustomAccentDialog = false }) { Text("Hủy") }
+            }
+        )
     }
 }
 
@@ -512,8 +650,8 @@ private fun SettingItemRow(
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, color = TextSecondary, fontSize = 11.sp)
+            Text(title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text(subtitle, color = TextSecondary, fontSize = 11.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
         }
 
         Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(20.dp))
@@ -526,9 +664,10 @@ private fun InfoRow(label: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Text(label, color = TextSecondary, fontSize = 12.sp)
-        Text(value, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.weight(0.8f), maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(value, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1.2f), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.End)
     }
 }

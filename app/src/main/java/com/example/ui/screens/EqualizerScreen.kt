@@ -131,7 +131,7 @@ fun EqualizerScreen(
                         checked = equalizerState.isEnabled,
                         onCheckedChange = { viewModel.toggleEqualizerEnabled(it) },
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = DarkBackground,
+                            checkedThumbColor = AccentContent,
                             checkedTrackColor = NeonCyan,
                             uncheckedThumbColor = TextMuted,
                             uncheckedTrackColor = DarkSurfaceVariant
@@ -220,7 +220,7 @@ fun EqualizerScreen(
                     ) {
                         Text(
                             text = name,
-                            color = if (isSelected) DarkBackground else TextPrimary,
+                            color = if (isSelected) AccentContent else TextPrimary,
                             fontSize = 12.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
@@ -320,7 +320,7 @@ fun EqualizerScreen(
                         }
                     }
                     Text(
-                        "Kéo thanh ngang hoặc vuốt để xem đủ 10 dải",
+                        "Kéo núm tròn để tăng hoặc giảm mức của từng dải",
                         color = TextSecondary,
                         fontSize = 10.sp
                     )
@@ -333,7 +333,7 @@ fun EqualizerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(210.dp)
+                        .height(228.dp)
                         .horizontalScroll(bandScrollState)
                         .testTag("eq_bands_scroll"),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -350,6 +350,13 @@ fun EqualizerScreen(
                         )
                     }
                 }
+                Text(
+                    "Dùng mũi tên hoặc kéo thanh để xem thêm dải tần",
+                    color = TextSecondary,
+                    fontSize = 10.sp,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
+                )
                 EqHorizontalScrollbar(scrollState = bandScrollState)
             }
         }
@@ -521,7 +528,10 @@ fun EqualizerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = NeonGreen.copy(alpha = 0.2f),
@@ -537,17 +547,21 @@ fun EqualizerScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "Pre-Amp Limiter (Chống rè loa)",
                                     color = TextPrimary,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     "Hạ mức tín hiệu vào để tránh vỡ âm khi đẩy bass cao",
                                     color = TextSecondary,
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -557,7 +571,11 @@ fun EqualizerScreen(
                             text = String.format(java.util.Locale.US, "%.1fdB", preAmpDb),
                             color = NeonGreen,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.widthIn(min = 52.dp),
+                            textAlign = TextAlign.End
                         )
                     }
 
@@ -697,7 +715,7 @@ fun EqualizerScreen(
                             ) {
                                 Text(
                                     text = label,
-                                    color = if (isSelected) DarkBackground else TextPrimary,
+                                    color = if (isSelected) AccentContent else TextPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
@@ -861,12 +879,25 @@ fun SingleBandFader(
 @Composable
 private fun EqHorizontalScrollbar(scrollState: androidx.compose.foundation.ScrollState) {
     val scope = rememberCoroutineScope()
+    val density = LocalDensity.current
     var dragAnchor by remember { mutableFloatStateOf(0f) }
 
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(18.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(
+            onClick = { scope.launch { scrollState.scrollTo((scrollState.value - with(density) { 72.dp.roundToPx() }).coerceAtLeast(0)) } },
+            enabled = scrollState.value > 0,
+            modifier = Modifier.size(30.dp).testTag("eq_scroll_left")
+        ) {
+            Icon(Icons.Default.ChevronLeft, contentDescription = "Cuộn sang trái", tint = if (scrollState.value > 0) NeonCyan else TextMuted)
+        }
+
+        Canvas(
+            modifier = Modifier
+                .weight(1f)
+                .height(24.dp)
             .pointerInput(scrollState.maxValue) {
                 if (scrollState.maxValue <= 0) return@pointerInput
                 detectDragGestures(
@@ -899,26 +930,35 @@ private fun EqHorizontalScrollbar(scrollState: androidx.compose.foundation.Scrol
                 }
             }
             .testTag("eq_bands_scrollbar")
-    ) {
-        val trackHeight = 4.dp.toPx()
-        val thumbHeight = 6.dp.toPx()
-        val centerY = size.height / 2f
-        drawRoundRect(
-            color = DarkSurfaceVariant,
-            topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
-            size = androidx.compose.ui.geometry.Size(size.width, trackHeight),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight)
-        )
+        ) {
+            val trackHeight = 7.dp.toPx()
+            val thumbHeight = 11.dp.toPx()
+            val centerY = size.height / 2f
+            drawRoundRect(
+                color = DarkSurfaceVariant,
+                topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
+                size = androidx.compose.ui.geometry.Size(size.width, trackHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight)
+            )
 
-        val thumbWidth = if (scrollState.maxValue == 0) size.width else
-            (size.width * size.width / (size.width + scrollState.maxValue)).coerceIn(32.dp.toPx(), size.width)
-        val thumbOffset = if (scrollState.maxValue == 0) 0f else
-            scrollState.value.toFloat() / scrollState.maxValue * (size.width - thumbWidth)
-        drawRoundRect(
-            color = NeonCyan.copy(alpha = if (scrollState.maxValue == 0) 0.45f else 0.95f),
-            topLeft = androidx.compose.ui.geometry.Offset(thumbOffset, centerY - thumbHeight / 2),
-            size = androidx.compose.ui.geometry.Size(thumbWidth, thumbHeight),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(thumbHeight)
-        )
+            val thumbWidth = if (scrollState.maxValue == 0) size.width else
+                (size.width * size.width / (size.width + scrollState.maxValue)).coerceIn(32.dp.toPx(), size.width)
+            val thumbOffset = if (scrollState.maxValue == 0) 0f else
+                scrollState.value.toFloat() / scrollState.maxValue * (size.width - thumbWidth)
+            drawRoundRect(
+                color = NeonCyan.copy(alpha = if (scrollState.maxValue == 0) 0.55f else 1f),
+                topLeft = androidx.compose.ui.geometry.Offset(thumbOffset, centerY - thumbHeight / 2),
+                size = androidx.compose.ui.geometry.Size(thumbWidth, thumbHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(thumbHeight)
+            )
+        }
+
+        IconButton(
+            onClick = { scope.launch { scrollState.scrollTo((scrollState.value + with(density) { 72.dp.roundToPx() }).coerceAtMost(scrollState.maxValue)) } },
+            enabled = scrollState.value < scrollState.maxValue,
+            modifier = Modifier.size(30.dp).testTag("eq_scroll_right")
+        ) {
+            Icon(Icons.Default.ChevronRight, contentDescription = "Cuộn sang phải", tint = if (scrollState.value < scrollState.maxValue) NeonCyan else TextMuted)
+        }
     }
 }

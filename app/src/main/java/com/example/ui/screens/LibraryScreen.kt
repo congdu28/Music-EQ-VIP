@@ -231,7 +231,7 @@ fun LibraryScreen(
                     ) {
                         Text(
                             text = "${tab.title}$countLabel",
-                            color = if (isSelected) DarkBackground else TextPrimary,
+                            color = if (isSelected) AccentContent else TextPrimary,
                             fontSize = 11.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
@@ -296,7 +296,7 @@ fun LibraryScreen(
                             } else {
                                 Button(
                                     onClick = onRequestScan,
-                                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
                                     Text("Quét nhạc trong máy", fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -498,7 +498,7 @@ fun FolderBrowserView(
             ) {
                 Button(
                     onClick = { viewModel.playAllSequential(selectedFolder.songs, 0) },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.weight(1f).height(36.dp),
                     contentPadding = PaddingValues(horizontal = 8.dp)
@@ -561,7 +561,7 @@ fun FolderBrowserView(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onRequestScan,
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground)
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent)
                     ) {
                         Text("Quét lại bộ nhớ", fontWeight = FontWeight.Bold)
                     }
@@ -757,7 +757,7 @@ fun CompactSongItem(
                 } else if (song.albumArtUri.isNullOrBlank()) {
                     Text(
                         text = song.title.take(1).uppercase(),
-                        color = if (isCurrentSong) DarkBackground else TextPrimary,
+                        color = if (isCurrentSong) AccentContent else TextPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -959,7 +959,7 @@ fun PlaylistsView(
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = onCreatePlaylist,
-                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                         shape = RoundedCornerShape(10.dp)
                     ) {
                         Text("Tạo danh sách phát đầu tiên", fontWeight = FontWeight.Bold)

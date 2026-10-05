@@ -105,7 +105,7 @@ fun NowPlayingScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
                     onClick = { viewModel.setTab(MainTab.LIBRARY) },
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricAzure, contentColor = DarkBackground),
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricAzure, contentColor = AccentContent),
                     shape = RoundedCornerShape(24.dp)
                 ) {
                     Icon(imageVector = Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -604,7 +604,7 @@ fun NowPlayingScreen(
                                     Button(
                                         onClick = { viewModel.searchLyricsOnline(song) },
                                         enabled = !uiState.isSearchingLyrics,
-                                        colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = DarkBackground),
+                                        colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = AccentContent),
                                         shape = RoundedCornerShape(10.dp)
                                     ) {
                                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -1194,7 +1194,7 @@ fun CustomPlaybackSpeedDialog(
         confirmButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = ElectricAzure, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricAzure, contentColor = AccentContent),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Xong", fontWeight = FontWeight.Bold)
@@ -1338,7 +1338,7 @@ fun CustomPlaybackSpeedDialog(
                             ) {
                                 Text(
                                     text = String.format("%.2fx", presetSpeed),
-                                    color = if (isSelected) DarkBackground else TextPrimary,
+                                    color = if (isSelected) AccentContent else TextPrimary,
                                     fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )

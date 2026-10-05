@@ -175,7 +175,7 @@ fun MiniPlayerBar(
                     Box(contentAlignment = Alignment.Center) {
                         if (playerState.isLoadingOnlineStream) {
                             CircularProgressIndicator(
-                                color = DarkBackground,
+                                color = AccentContent,
                                 strokeWidth = 2.dp,
                                 modifier = Modifier.size(20.dp)
                             )
@@ -183,7 +183,7 @@ fun MiniPlayerBar(
                             Icon(
                                 imageVector = if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (playerState.isPlaying) "Tạm dừng" else "Phát",
-                                tint = DarkBackground,
+                                tint = AccentContent,
                                 modifier = Modifier.size(24.dp)
                             )
                         }

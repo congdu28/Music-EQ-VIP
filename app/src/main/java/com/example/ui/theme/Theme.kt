@@ -1,38 +1,19 @@
 package com.example.ui.theme
 
 import android.app.Activity
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = NeonCyan,
-    onPrimary = DarkBackground,
-    primaryContainer = NeonViolet,
-    onPrimaryContainer = TextPrimary,
-    secondary = NeonPurple,
-    onSecondary = DarkBackground,
-    secondaryContainer = DarkSurfaceElevated,
-    onSecondaryContainer = TextPrimary,
-    tertiary = NeonPink,
-    onTertiary = DarkBackground,
-    background = DarkBackground,
-    onBackground = TextPrimary,
-    surface = DarkSurface,
-    onSurface = TextPrimary,
-    surfaceVariant = DarkSurfaceVariant,
-    onSurfaceVariant = TextSecondary,
-    outline = DarkBorder
-)
-
 @Composable
 fun MyApplicationTheme(
-    darkTheme: Boolean = true,
+    darkTheme: Boolean = AppThemeColors.isDark,
+    accentColor: androidx.compose.ui.graphics.Color = AppThemeColors.accent,
     dynamicColor: Boolean = false, // Use our handcrafted rich neon audiophile scheme
     content: @Composable () -> Unit
 ) {
@@ -43,14 +24,50 @@ fun MyApplicationTheme(
             window?.let {
                 it.statusBarColor = DarkBackground.toArgb()
                 it.navigationBarColor = DarkBackground.toArgb()
-                WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = false
-                WindowCompat.getInsetsController(it, view).isAppearanceLightNavigationBars = false
+                WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = !darkTheme
+                WindowCompat.getInsetsController(it, view).isAppearanceLightNavigationBars = !darkTheme
             }
         }
     }
 
     MaterialTheme(
-        colorScheme = DarkColorScheme,
+        colorScheme = if (darkTheme) darkColorScheme(
+            primary = accentColor,
+            onPrimary = AccentContent,
+            primaryContainer = NeonViolet,
+            onPrimaryContainer = TextPrimary,
+            secondary = NeonPurple,
+            onSecondary = AccentContent,
+            secondaryContainer = DarkSurfaceElevated,
+            onSecondaryContainer = TextPrimary,
+            tertiary = NeonPink,
+            onTertiary = AccentContent,
+            background = DarkBackground,
+            onBackground = TextPrimary,
+            surface = DarkSurface,
+            onSurface = TextPrimary,
+            surfaceVariant = DarkSurfaceVariant,
+            onSurfaceVariant = TextSecondary,
+            outline = DarkBorder
+        ) else lightColorScheme(
+            primary = accentColor,
+            onPrimary = AccentContent,
+            primaryContainer = accentColor.copy(alpha = 0.14f),
+            onPrimaryContainer = TextPrimary,
+            secondary = NeonPurple,
+            onSecondary = AccentContent,
+            secondaryContainer = DarkSurfaceVariant,
+            onSecondaryContainer = TextPrimary,
+            tertiary = NeonPink,
+            onTertiary = AccentContent,
+            background = DarkBackground,
+            onBackground = TextPrimary,
+            surface = DarkSurface,
+            onSurface = TextPrimary,
+            surfaceVariant = DarkSurfaceVariant,
+            onSurfaceVariant = TextSecondary,
+            outline = DarkBorder
+        ),
         typography = Typography,
         content = content
     )

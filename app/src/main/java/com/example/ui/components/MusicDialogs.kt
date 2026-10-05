@@ -90,7 +90,7 @@ fun CreatePlaylistDialog(
                     }
                 },
                 enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                 modifier = Modifier.testTag("create_playlist_confirm_button")
             ) {
                 Text("Tạo mới", fontWeight = FontWeight.Bold)
@@ -384,7 +384,7 @@ fun EditLyricsDialog(
                     val offset = offsetText.toLongOrNull() ?: 0L
                     onSave(lyricsText, offset)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                 modifier = Modifier.testTag("save_lyrics_confirm_button")
             ) {
                 Text("Lưu lời bài hát", fontWeight = FontWeight.Bold)
@@ -567,7 +567,7 @@ fun SavePresetDialog(
             Button(
                 onClick = { if (name.isNotBlank()) onSave(name.trim()) },
                 enabled = name.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                 modifier = Modifier.testTag("save_preset_confirm_button")
             ) {
                 Text("Lưu Preset", fontWeight = FontWeight.Bold)
@@ -613,7 +613,7 @@ fun AudioSpecsDialog(
         confirmButton = {
             Button(
                 onClick = onDismiss,
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground)
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent)
             ) {
                 Text("Đóng", fontWeight = FontWeight.Bold)
             }
@@ -741,7 +741,7 @@ fun EditSongMetadataDialog(
                             ) {
                                 Text(
                                     text = opt,
-                                    color = if (isSelected) DarkBackground else TextPrimary,
+                                    color = if (isSelected) AccentContent else TextPrimary,
                                     fontSize = 11.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
@@ -767,7 +767,7 @@ fun EditSongMetadataDialog(
                     }
                 },
                 enabled = title.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.testTag("edit_song_save_button")
             ) {

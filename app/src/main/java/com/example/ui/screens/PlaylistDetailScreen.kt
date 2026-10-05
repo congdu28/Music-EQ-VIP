@@ -116,7 +116,7 @@ fun PlaylistDetailScreen(
                         viewModel.playQueue(songs, 0)
                     }
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = DarkBackground),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.weight(1f).testTag("playlist_play_all_button")
             ) {

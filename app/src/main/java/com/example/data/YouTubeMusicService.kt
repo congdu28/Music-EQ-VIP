@@ -24,6 +24,12 @@ object YouTubeMusicService {
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
+    private val suggestionClient = client.newBuilder()
+        .connectTimeout(2, TimeUnit.SECONDS)
+        .readTimeout(2, TimeUnit.SECONDS)
+        .callTimeout(3, TimeUnit.SECONDS)
+        .build()
+
     // Playback metadata responses are small; bound each network attempt so one slow
     // response cannot hold the player in its loading state for tens of seconds.
     private val playbackClient = client.newBuilder()
@@ -45,11 +51,13 @@ object YouTubeMusicService {
     private val visitorDataMutex = Mutex()
     private data class CachedStream(val url: String, val expiresAtMs: Long)
     private val streamCache = ConcurrentHashMap<String, CachedStream>()
+    private val suggestionCache = ConcurrentHashMap<String, List<String>>()
 
     /** Returns YouTube-scoped autocomplete terms for the search field. */
     suspend fun searchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
-        if (trimmed.length < 2) return@withContext emptyList()
+        if (trimmed.isEmpty()) return@withContext emptyList()
+        suggestionCache[trimmed.lowercase()]?.let { return@withContext it }
 
         try {
             val encodedQuery = java.net.URLEncoder.encode(trimmed, Charsets.UTF_8.name())
@@ -58,17 +66,19 @@ object YouTubeMusicService {
                 .header("User-Agent", AUDIO_USER_AGENT)
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            suggestionClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@withContext emptyList()
                 val payload = JSONArray(response.body?.string().orEmpty())
                 val suggestions = payload.optJSONArray(1) ?: return@withContext emptyList()
-                buildList {
+                val results = buildList {
                     for (index in 0 until suggestions.length()) {
                         val suggestion = suggestions.optString(index).trim()
                         if (suggestion.isNotEmpty() && suggestion !in this) add(suggestion)
                         if (size == 6) break
                     }
                 }
+                suggestionCache[trimmed.lowercase()] = results
+                results
             }
         } catch (cancelled: CancellationException) {
             throw cancelled

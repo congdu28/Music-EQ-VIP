@@ -3,6 +3,7 @@ package com.example.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.compose.ui.graphics.Color
 import com.example.data.MusicRepository
 import com.example.equalizer.EqualizerBand
 import com.example.equalizer.EqualizerManager
@@ -15,6 +16,7 @@ import com.example.model.Song
 import com.example.player.MusicPlayerController
 import com.example.player.PlayerUiState
 import com.example.ui.components.VisualizerStyle
+import com.example.ui.theme.AppThemeColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -77,6 +79,8 @@ data class MusicAppUiState(
     val isAligningLyrics: Boolean = false,
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.7-flash",
+    val isDarkTheme: Boolean = true,
+    val accentColor: Int = 0xFF3399FF.toInt(),
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
     val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
@@ -101,10 +105,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val savedKey = repository.getGeminiApiKey()
         val savedModel = repository.getGeminiModel()
+        val savedDarkTheme = repository.isDarkThemeEnabled()
+        val savedAccentColor = repository.getAccentColor()
+        AppThemeColors.update(savedDarkTheme, Color(savedAccentColor))
         _appUiState.update {
             it.copy(
                 geminiApiKey = savedKey,
                 geminiModel = savedModel,
+                isDarkTheme = savedDarkTheme,
+                accentColor = savedAccentColor,
                 showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan()
             )
         }
@@ -222,10 +231,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setYouTubeQuery(query: String) {
         _appUiState.update { it.copy(youtubeQuery = query, youtubeSuggestions = emptyList()) }
         youtubeSuggestionJob?.cancel()
-        if (query.trim().length < 2) return
+        if (query.isBlank()) return
 
         youtubeSuggestionJob = viewModelScope.launch {
-            delay(250)
+            delay(80)
             val suggestions = com.example.data.YouTubeMusicService.searchSuggestions(query)
             if (_appUiState.value.youtubeQuery == query) {
                 _appUiState.update { it.copy(youtubeSuggestions = suggestions) }
@@ -684,6 +693,18 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
         }
+    }
+
+    fun setDarkTheme(enabled: Boolean) {
+        repository.setDarkThemeEnabled(enabled)
+        AppThemeColors.update(dark = enabled)
+        _appUiState.update { it.copy(isDarkTheme = enabled) }
+    }
+
+    fun setAccentColor(color: Int) {
+        repository.setAccentColor(color)
+        AppThemeColors.update(accentColor = Color(color))
+        _appUiState.update { it.copy(accentColor = color) }
     }
 
     private fun lyricsTrackKey(song: Song): String = "${song.id}|${song.title}|${song.artist}"
