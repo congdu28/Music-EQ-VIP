@@ -30,8 +30,8 @@ interface SongDao {
     @Update
     suspend fun updateSong(song: Song)
 
-    @Query("UPDATE songs SET isFavorite = :isFavorite WHERE id = :id")
-    suspend fun updateFavorite(id: Long, isFavorite: Boolean)
+    @Query("UPDATE songs SET isFavorite = CASE WHEN isFavorite = 1 THEN 0 ELSE 1 END WHERE id = :id")
+    suspend fun toggleFavorite(id: Long): Int
 
     @Query("UPDATE songs SET lyrics = :lyrics, lrcOffsetMs = :offsetMs WHERE id = :id")
     suspend fun updateLyrics(id: Long, lyrics: String, offsetMs: Long)

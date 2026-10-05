@@ -213,6 +213,18 @@ class MusicPlayerController(
         }
     }
 
+    fun updateFavoriteState(songId: Long, isFavorite: Boolean) {
+        _uiState.update { current ->
+            val updatedCurrentSong = current.currentSong?.let { song ->
+                if (song.id == songId) song.copy(isFavorite = isFavorite) else song
+            }
+            val updatedQueue = current.queue.map { song ->
+                if (song.id == songId) song.copy(isFavorite = isFavorite) else song
+            }
+            current.copy(currentSong = updatedCurrentSong, queue = updatedQueue)
+        }
+    }
+
     fun playAllSequential(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
         val validIndex = startIndex.coerceIn(0, songs.size - 1)

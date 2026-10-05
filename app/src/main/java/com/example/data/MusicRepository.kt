@@ -400,8 +400,17 @@ class MusicRepository(private val context: Context) {
         }
     }
 
-    suspend fun toggleFavorite(song: Song) = withContext(Dispatchers.IO) {
-        db.songDao().updateFavorite(song.id, !song.isFavorite)
+    suspend fun toggleFavorite(song: Song): Boolean = withContext(Dispatchers.IO) {
+        val dao = db.songDao()
+        val updatedRows = dao.toggleFavorite(song.id)
+        if (updatedRows == 0) {
+            // Online YouTube songs are not part of the local scan. Store them on first favorite
+            // action so the same favorites flow and screen can manage them reliably.
+            dao.insertSong(song.copy(isFavorite = true))
+            true
+        } else {
+            dao.getSongById(song.id)?.isFavorite ?: false
+        }
     }
 
     suspend fun updateSongLyrics(songId: Long, lyrics: String, offsetMs: Long) = withContext(Dispatchers.IO) {

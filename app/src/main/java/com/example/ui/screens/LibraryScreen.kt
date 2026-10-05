@@ -69,7 +69,7 @@ fun LibraryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Streamlined Search Bar
             Surface(
@@ -126,32 +126,37 @@ fun LibraryScreen(
                 }
             }
 
-            IconButton(
-                onClick = onPickAudioFolder,
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(DarkSurfaceVariant)
-                    .testTag("choose_music_folder_button")
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.FolderOpen,
-                    contentDescription = "Chọn thư mục quét nhạc",
-                    tint = NeonCyan,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
+                IconButton(
+                    onClick = onPickAudioFolder,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(DarkSurfaceVariant)
+                        .testTag("choose_music_folder_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FolderOpen,
+                        contentDescription = "Chọn thư mục quét nhạc",
+                        tint = NeonCyan,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
 
-            Button(
-                onClick = onRequestScan,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
-                contentPadding = PaddingValues(horizontal = 8.dp),
-                modifier = Modifier.height(36.dp).testTag("scan_library_button")
-            ) {
-                Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Quét", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Button(
+                    onClick = onRequestScan,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
+                    contentPadding = PaddingValues(horizontal = 8.dp),
+                    modifier = Modifier.height(36.dp).testTag("scan_library_button")
+                ) {
+                    Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Quét", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                }
             }
 
         }
@@ -755,13 +760,14 @@ fun CompactSongItem(
             Spacer(modifier = Modifier.width(4.dp))
 
             // Action Buttons
-            IconButton(
-                onClick = onFavoriteClick,
-                modifier = Modifier.size(30.dp)
+            IconToggleButton(
+                checked = song.isFavorite,
+                onCheckedChange = { onFavoriteClick() },
+                modifier = Modifier.size(42.dp).testTag("favorite_button_${song.id}")
             ) {
                 Icon(
                     imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = "Yêu thích",
+                    contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
                     tint = if (song.isFavorite) NeonPink else TextMuted,
                     modifier = Modifier.size(17.dp)
                 )

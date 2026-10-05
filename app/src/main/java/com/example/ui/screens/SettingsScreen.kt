@@ -393,8 +393,11 @@ fun SettingsScreen(
         }
 
         // Section: Cấu hình Gemini AI & Tìm kiếm Lời bài hát
-        var apiKeyInput by remember(uiState.geminiApiKey) {
+        var apiKeyInput by remember {
             mutableStateOf(viewModel.repository.getCustomGeminiApiKey().orEmpty())
+        }
+        var useCustomApiKey by remember {
+            mutableStateOf(viewModel.repository.getCustomGeminiApiKey() != null)
         }
         var revealApiKey by remember { mutableStateOf(false) }
 
@@ -430,78 +433,99 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                OutlinedTextField(
-                    value = apiKeyInput,
-                    onValueChange = { apiKeyInput = it },
-                    label = { Text("API Key Gemini riêng") },
-                    placeholder = { Text("Nhập API Key của bạn") },
-                    singleLine = true,
-                    visualTransformation = if (revealApiKey) VisualTransformation.None else PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { revealApiKey = !revealApiKey }) {
-                            Icon(
-                                imageVector = if (revealApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = if (revealApiKey) "Ẩn API Key" else "Hiện API Key",
-                                tint = TextSecondary
-                            )
-                        }
-                    },
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = NeonViolet,
-                        unfocusedBorderColor = DarkBorder,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Key tích hợp của ứng dụng được giữ ẩn. Để trống để tiếp tục dùng key tích hợp.",
-                    color = TextSecondary,
-                    fontSize = 11.sp
-                )
-
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = if (apiKeyInput.isNotBlank()) "Đang dùng API Key riêng" else "Đang dùng API Key tích hợp (được ẩn)",
-                        color = if (apiKeyInput.isNotBlank()) NeonCyan else TextMuted,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .selectable(selected = !useCustomApiKey, role = Role.RadioButton) {
+                                useCustomApiKey = false
+                                apiKeyInput = ""
+                                revealApiKey = false
+                                viewModel.setGeminiApiKey("")
+                            }
+                            .padding(vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (apiKeyInput.isNotBlank()) {
-                            TextButton(
-                                onClick = {
-                                    apiKeyInput = ""
-                                    revealApiKey = false
-                                    viewModel.setGeminiApiKey("")
-                                }
-                            ) {
-                                Text("Dùng key tích hợp", fontSize = 11.sp, color = TextSecondary)
-                            }
+                        RadioButton(
+                            selected = !useCustomApiKey,
+                            onClick = null,
+                            colors = RadioButtonDefaults.colors(selectedColor = NeonViolet)
+                        )
+                        Column {
+                            Text("Dùng API Key tích hợp", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text("Mặc định của ứng dụng; key được giữ ẩn", color = TextSecondary, fontSize = 10.sp)
                         }
+                    }
 
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .selectable(selected = useCustomApiKey, role = Role.RadioButton) {
+                                useCustomApiKey = true
+                            }
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = useCustomApiKey,
+                            onClick = null,
+                            colors = RadioButtonDefaults.colors(selectedColor = NeonViolet)
+                        )
+                        Column {
+                            Text("Dùng API Key riêng", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text("Nhập key Gemini của bạn", color = TextSecondary, fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                if (useCustomApiKey) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = apiKeyInput,
+                        onValueChange = { apiKeyInput = it },
+                        label = { Text("API Key Gemini riêng") },
+                        placeholder = { Text("Nhập API Key của bạn") },
+                        singleLine = true,
+                        visualTransformation = if (revealApiKey) VisualTransformation.None else PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = { revealApiKey = !revealApiKey }) {
+                                Icon(
+                                    imageVector = if (revealApiKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                    contentDescription = if (revealApiKey) "Ẩn API Key riêng" else "Hiện API Key riêng",
+                                    tint = TextSecondary
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonViolet,
+                            unfocusedBorderColor = DarkBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Key riêng chỉ được dùng sau khi lưu. Key tích hợp luôn được giữ ẩn.",
+                        color = TextSecondary,
+                        fontSize = 10.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
                         Button(
-                            onClick = {
-                                viewModel.setGeminiApiKey(apiKeyInput)
-                            },
+                            onClick = { viewModel.setGeminiApiKey(apiKeyInput) },
+                            enabled = apiKeyInput.isNotBlank(),
                             colors = ButtonDefaults.buttonColors(containerColor = NeonViolet, contentColor = Color.White),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
                             shape = RoundedCornerShape(10.dp)
                         ) {
                             Icon(imageVector = Icons.Default.Check, contentDescription = null, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Lưu Key", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text("Lưu Key riêng", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
