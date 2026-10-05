@@ -430,7 +430,9 @@ class MusicPlayerController(
                     }
                 } else {
                     val file = File(song.filePath)
-                    if (file.exists()) {
+                    if (song.filePath.startsWith("content://")) {
+                        setDataSource(context, Uri.parse(song.filePath))
+                    } else if (file.exists()) {
                         setDataSource(context, Uri.fromFile(file))
                     } else {
                         setDataSource(song.filePath)

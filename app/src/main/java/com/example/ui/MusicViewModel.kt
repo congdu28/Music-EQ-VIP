@@ -1,6 +1,7 @@
 package com.example.ui
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.compose.ui.graphics.Color
@@ -150,6 +151,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             repository.allPresets.collect { presetList ->
                 _appUiState.update { it.copy(presets = presetList) }
             }
+        }
+
+        // Keep completion notices visible long enough to read, then clear them automatically.
+        viewModelScope.launch {
+            _appUiState
+                .map { it.scanResultMessage }
+                .distinctUntilChanged()
+                .collectLatest { message ->
+                    if (message != null) {
+                        delay(6_000)
+                        _appUiState.update { state ->
+                            if (state.scanResultMessage == message) state.copy(scanResultMessage = null) else state
+                        }
+                    }
+                }
         }
 
         // Observe player position & song to parse and sync lyrics in real-time
@@ -330,6 +346,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 it.copy(
                     isScanning = false,
                     scanResultMessage = if (count > 0) "Đã quét và thêm $count bài hát mới vào thư viện" else "Thư viện đã được cập nhật đầy đủ"
+                )
+            }
+        }
+    }
+
+    fun scanAudioFolder(folderUri: Uri) {
+        viewModelScope.launch {
+            _appUiState.update { it.copy(isScanning = true, scanResultMessage = null) }
+            val count = repository.scanAudioFolder(folderUri)
+            _appUiState.update {
+                it.copy(
+                    isScanning = false,
+                    scanResultMessage = if (count > 0) "Đã quét thư mục và thêm $count bài hát mới vào thư viện" else "Không tìm thấy bài hát mới trong thư mục đã chọn"
                 )
             }
         }

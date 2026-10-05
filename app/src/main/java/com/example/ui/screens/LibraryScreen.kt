@@ -51,6 +51,8 @@ fun LibraryScreen(
     uiState: MusicAppUiState,
     playerState: PlayerUiState,
     onRequestScan: () -> Unit = { viewModel.scanDeviceAudio() },
+    onPickAudioFolder: () -> Unit = {},
+    onPickSuggestedFolder: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val filteredSongs = viewModel.getFilteredSongs()
@@ -144,33 +146,82 @@ fun LibraryScreen(
                 )
             }
 
-            // Quick Scan Button
-            IconButton(
+        }
+
+        // Primary scan actions: distinguish the whole-library scan from folder selection.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp)
+                .height(44.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
                 onClick = onRequestScan,
-                modifier = Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(DarkSurfaceVariant)
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
+                contentPadding = PaddingValues(horizontal = 10.dp),
+                modifier = Modifier.weight(1f).fillMaxHeight().testTag("scan_library_button")
             ) {
-                Icon(
-                    imageVector = Icons.Default.Refresh,
-                    contentDescription = "Quét máy",
-                    tint = NeonCyan,
-                    modifier = Modifier.size(18.dp)
-                )
+                Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Quét toàn bộ nhạc", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            }
+            OutlinedButton(
+                onClick = onPickAudioFolder,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                contentPadding = PaddingValues(horizontal = 10.dp),
+                modifier = Modifier.fillMaxHeight().testTag("choose_music_folder_button")
+            ) {
+                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Chọn thư mục", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
+
+        LazyRow(
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            contentPadding = PaddingValues(horizontal = 14.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            item {
+                Text("Gợi ý:", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+            }
+            items(listOf("Music", "Download", "Recordings")) { folderName ->
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = DarkSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onPickSuggestedFolder(folderName) }
+                        .testTag("suggest_scan_${folderName.lowercase()}")
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(folderName, color = TextPrimary, fontSize = 10.5.sp, fontWeight = FontWeight.Medium)
+                    }
+                }
             }
         }
 
         // Scanning Status Toast/Banner
         AnimatedVisibility(
-            visible = uiState.isScanning || uiState.scanResultMessage != null,
+            visible = uiState.isScanning,
             enter = fadeIn(),
             exit = fadeOut()
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = if (uiState.isScanning) NeonCyan.copy(alpha = 0.15f) else NeonGreen.copy(alpha = 0.15f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.isScanning) NeonCyan else NeonGreen),
+                color = NeonCyan.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp, vertical = 2.dp)
@@ -179,22 +230,13 @@ fun LibraryScreen(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (uiState.isScanning) {
-                        CircularProgressIndicator(
-                            color = NeonCyan,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Đang quét bài hát trong bộ nhớ máy...", color = TextPrimary, fontSize = 12.sp)
-                    } else {
-                        Icon(imageVector = Icons.Default.CheckCircle, contentDescription = null, tint = NeonGreen, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(uiState.scanResultMessage ?: "", color = TextPrimary, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                        IconButton(onClick = { viewModel.dismissScanMessage() }, modifier = Modifier.size(20.dp)) {
-                            Icon(imageVector = Icons.Default.Close, contentDescription = "Đóng", tint = TextSecondary, modifier = Modifier.size(14.dp))
-                        }
-                    }
+                    CircularProgressIndicator(
+                        color = NeonCyan,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Đang quét bài hát trong thư mục...", color = TextPrimary, fontSize = 12.sp)
                 }
             }
         }

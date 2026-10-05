@@ -5,6 +5,8 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
+import android.media.MediaMetadataRetriever
+import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
 import androidx.room.Room
@@ -250,6 +252,109 @@ class MusicRepository(private val context: Context) {
             Log.w(TAG, "Error scanning MediaStore: ${e.message}")
         }
         count
+    }
+
+    /** Imports audio documents below a user-selected SAF folder. The persisted tree grant
+     * lets MediaPlayer reopen these content URIs after the app or device restarts. */
+    suspend fun scanAudioFolder(treeUri: Uri): Int = withContext(Dispatchers.IO) {
+        val scannedSongs = mutableListOf<Song>()
+        val visitedDirectories = mutableSetOf<String>()
+        val projection = arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE
+        )
+        val audioExtensions = setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "wma", "alac")
+
+        fun scanDirectory(documentId: String, depth: Int) {
+            if (depth > 12 || !visitedDirectories.add(documentId)) return
+
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, documentId)
+            val cursor = context.contentResolver.query(childrenUri, projection, null, null, null) ?: return
+            cursor.use { children ->
+                val idIndex = children.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = children.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                val mimeIndex = children.getColumnIndexOrThrow(DocumentsContract.Document.COLUMN_MIME_TYPE)
+
+                while (children.moveToNext()) {
+                    val childId = children.getString(idIndex) ?: continue
+                    val displayName = children.getString(nameIndex).orEmpty()
+                    val mimeType = children.getString(mimeIndex).orEmpty()
+
+                    if (mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
+                        scanDirectory(childId, depth + 1)
+                        continue
+                    }
+
+                    val extension = displayName.substringAfterLast('.', "").lowercase()
+                    if (!mimeType.startsWith("audio/") && extension !in audioExtensions) continue
+
+                    val audioUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, childId)
+                    val retriever = MediaMetadataRetriever()
+                    val duration: Long
+                    val title: String
+                    val artist: String
+                    val album: String
+                    val sampleRate: Int
+                    val bitrate: Int
+                    try {
+                        retriever.setDataSource(context, audioUri)
+                        duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                        title = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                            ?.takeIf { it.isNotBlank() } ?: displayName.substringBeforeLast('.', displayName)
+                        artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                            ?.takeIf { it.isNotBlank() } ?: "Nghệ sĩ chưa rõ"
+                        album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                            ?.takeIf { it.isNotBlank() } ?: "Album không tên"
+                        sampleRate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_SAMPLERATE)?.toIntOrNull() ?: 44_100
+                        bitrate = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull()?.div(1000) ?: 320
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Skipping unreadable audio document $displayName: ${e.message}")
+                        continue
+                    } finally {
+                        try { retriever.release() } catch (_: Exception) { }
+                    }
+
+                    if (duration <= 10_000L) continue
+                    val format = when (extension) {
+                        "flac" -> "FLAC"
+                        "wav" -> "WAV"
+                        "aac" -> "AAC"
+                        "m4a" -> "M4A"
+                        "alac" -> "ALAC"
+                        "ogg", "opus" -> "OGG"
+                        "wma" -> "WMA"
+                        else -> "MP3"
+                    }
+                    val hiRes = format in setOf("FLAC", "WAV", "ALAC") && (sampleRate > 48_000 || bitrate > 1000)
+                    scannedSongs.add(
+                        Song(
+                            title = title,
+                            artist = if (artist == "<unknown>") "Nghệ sĩ Việt" else artist,
+                            album = album,
+                            durationMs = duration,
+                            filePath = audioUri.toString(),
+                            format = format,
+                            bitrateKbps = bitrate,
+                            sampleRateHz = sampleRate,
+                            bitDepth = if (hiRes) 24 else 16,
+                            isHiRes = hiRes
+                        )
+                    )
+                }
+            }
+        }
+
+        try {
+            scanDirectory(DocumentsContract.getTreeDocumentId(treeUri), 0)
+            val existingPaths = db.songDao().getAllSongPaths().toSet()
+            val newSongs = scannedSongs.distinctBy { it.filePath }.filterNot { it.filePath in existingPaths }
+            if (newSongs.isNotEmpty()) db.songDao().insertSongs(newSongs)
+            newSongs.size
+        } catch (e: Exception) {
+            Log.w(TAG, "Error scanning selected audio folder: ${e.message}")
+            0
+        }
     }
 
     suspend fun removeDuplicateSongs() = withContext(Dispatchers.IO) {

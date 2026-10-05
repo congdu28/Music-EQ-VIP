@@ -1,6 +1,7 @@
 package com.example
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -63,6 +64,13 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     val uiState by viewModel.appUiState.collectAsState()
     val playerState by viewModel.playerState.collectAsState()
     val equalizerState by viewModel.equalizerState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(uiState.scanResultMessage) {
+        uiState.scanResultMessage?.let { message ->
+            snackbarHostState.showSnackbar(message, duration = SnackbarDuration.Indefinite)
+        }
+    }
 
     // Back button handling: return to Library tab if on another tab and no playlist is open
     BackHandler(enabled = uiState.currentTab != MainTab.LIBRARY && uiState.selectedPlaylist == null) {
@@ -93,6 +101,29 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         }
     }
 
+    val folderPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { folderUri ->
+        if (folderUri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    folderUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            viewModel.scanAudioFolder(folderUri)
+        }
+    }
+    val pickAudioFolder: (String?) -> Unit = { suggestedFolder ->
+        val initialUri = suggestedFolder?.let { name ->
+            android.provider.DocumentsContract.buildDocumentUri(
+                "com.android.externalstorage.documents",
+                "primary:$name"
+            )
+        }
+        folderPicker.launch(initialUri)
+    }
+
     if (uiState.showInitialScanRecommendation) {
         AlertDialog(
             onDismissRequest = { viewModel.dismissInitialScanRecommendation() },
@@ -114,6 +145,16 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(DarkBackground),
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = DarkSurfaceElevated,
+                    contentColor = TextPrimary,
+                    actionColor = NeonCyan
+                )
+            }
+        },
         topBar = {
             if (uiState.currentTab != MainTab.NOW_PLAYING && uiState.selectedPlaylist == null) {
                 TopAppBar(
@@ -318,7 +359,9 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         viewModel = viewModel,
                         uiState = uiState,
                         playerState = playerState,
-                        onRequestScan = requestMusicScan
+                        onRequestScan = requestMusicScan,
+                        onPickAudioFolder = { pickAudioFolder(null) },
+                        onPickSuggestedFolder = pickAudioFolder
                     )
                 }
                 uiState.currentTab == MainTab.YOUTUBE -> {

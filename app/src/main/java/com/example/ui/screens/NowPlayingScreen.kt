@@ -72,7 +72,7 @@ fun NowPlayingScreen(
     var showSpeedDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(song?.filePath) {
-        if (song != null) displayMode = NowPlayingDisplayMode.FULL_LYRICS
+        if (song != null) displayMode = NowPlayingDisplayMode.ALBUM_ART
     }
 
     if (song == null) {
@@ -147,10 +147,6 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
-
-    LaunchedEffect(song.filePath, hasLyrics) {
-        if (hasLyrics) displayMode = NowPlayingDisplayMode.FULL_LYRICS
-    }
 
     // Dynamic Color Palette extracted from current album art / song
     val dynamicPalette = remember(song.id, song.title) {
