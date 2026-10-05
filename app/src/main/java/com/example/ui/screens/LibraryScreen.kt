@@ -331,34 +331,57 @@ fun LibraryScreen(
                         }
                     }
                 } else {
-                    // Single, predictable action: play the visible list in its displayed order.
-                    Surface(
+                    // Keep both frequent library actions together with a comfortable touch target.
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 14.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        color = NeonCyan.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.65f))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Row(
+                        Surface(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .height(36.dp)
+                                .weight(1.15f)
+                                .height(44.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { viewModel.playAllSequential(filteredSongs, 0) }
-                                .testTag("play_sequential_button")
-                                .padding(horizontal = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                                .testTag("play_sequential_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            color = NeonCyan.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.65f))
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                                contentDescription = null,
-                                tint = NeonCyan,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Phát tất cả", color = NeonCyan, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text("Phát tất cả", color = NeonCyan, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
+                        }
+
+                        Surface(
+                            modifier = Modifier
+                                .weight(0.9f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.setLibrarySubTab(LibrarySubTab.FAVORITES) }
+                                .testTag("open_favorites_button"),
+                            shape = RoundedCornerShape(12.dp),
+                            color = NeonPink.copy(alpha = 0.1f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.55f))
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(Icons.Default.Favorite, contentDescription = null, tint = NeonPink, modifier = Modifier.size(17.dp))
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text("Yêu thích", color = NeonPink, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("${uiState.favoriteSongs.size}", color = NeonPink, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                            }
                         }
                     }
 

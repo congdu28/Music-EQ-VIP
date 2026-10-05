@@ -456,6 +456,36 @@ fun NowPlayingScreen(
                                             modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                                         )
                                     }
+
+                                    if (playerState.isLoadingOnlineStream && song.format.contains("YouTube", ignoreCase = true)) {
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.BottomCenter)
+                                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                                            shape = RoundedCornerShape(20.dp),
+                                            color = Color.Black.copy(alpha = 0.72f),
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.2f))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    color = Color.White,
+                                                    strokeWidth = 2.dp,
+                                                    modifier = Modifier.size(13.dp)
+                                                )
+                                                Text(
+                                                    text = "Đang tải thông tin nhạc",
+                                                    color = Color.White,
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
