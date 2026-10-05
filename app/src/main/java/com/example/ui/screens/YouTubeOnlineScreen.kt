@@ -94,7 +94,7 @@ fun YouTubeOnlineScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "YOUTUBE MUSIC",
-                        color = Color.White,
+                        color = TextPrimary,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
                         letterSpacing = 0.5.sp
@@ -326,7 +326,7 @@ fun YouTubeOnlineScreen(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Phát tất cả (${uiState.youtubeSongs.size})",
-                            color = Color.White,
+                            color = TextPrimary,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -359,7 +359,7 @@ fun YouTubeOnlineScreen(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Trộn bài ngẫu nhiên",
-                            color = Color.White,
+                            color = TextPrimary,
                             fontSize = 11.5.sp,
                             fontWeight = FontWeight.Bold
                         )

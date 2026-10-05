@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
@@ -30,6 +31,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -205,7 +207,7 @@ fun NowPlayingScreen(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // HEADER BAR: Minimize, Title, Online Lyrics Search, Edit Metadata, Mode Toggle
+            // HEADER BAR: Minimize, Title, Online Lyrics Search, Edit Metadata
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -257,7 +259,7 @@ fun NowPlayingScreen(
                     )
                 }
 
-                // Header Action Buttons: Search Lyrics, Edit Tags, Lyrics Toggle
+                // Header Action Buttons: Search Lyrics and Edit Tags
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -310,41 +312,31 @@ fun NowPlayingScreen(
                         }
                     }
 
-                    // Mode switch: Disc vs Full Lyrics
-                    Surface(
-                        shape = CircleShape,
-                        color = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) animatedPrimary.copy(alpha = 0.2f) else DarkSurfaceVariant,
-                        border = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary) else null,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .clip(CircleShape)
-                            .clickable {
-                                displayMode = if (displayMode == NowPlayingDisplayMode.ALBUM_ART) {
-                                    NowPlayingDisplayMode.FULL_LYRICS
-                                } else {
-                                    NowPlayingDisplayMode.ALBUM_ART
-                                }
-                            }
-                            .testTag("toggle_lyrics_mode_button")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) Icons.Default.Album else Icons.Default.Lyrics,
-                                contentDescription = "Chuyển chế độ lời bài hát",
-                                tint = if (displayMode == NowPlayingDisplayMode.FULL_LYRICS) animatedPrimary else TextPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(10.dp))
+
+            NowPlayingModeSelector(
+                mode = displayMode,
+                accent = animatedPrimary,
+                onModeChange = { displayMode = it }
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
 
             // MAIN ARTWORK / LYRICS VIEW: Perfectly proportioned to avoid vertical squishing
             AnimatedContent(
                 targetState = displayMode,
-                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+                transitionSpec = {
+                    val direction = if (targetState == NowPlayingDisplayMode.FULL_LYRICS) 1 else -1
+                    (fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                        slideInHorizontally(tween(280, easing = FastOutSlowInEasing)) { direction * it / 14 } +
+                        scaleIn(initialScale = 0.985f, animationSpec = tween(280, easing = FastOutSlowInEasing))) togetherWith
+                        (fadeOut(tween(160, easing = FastOutSlowInEasing)) +
+                            slideOutHorizontally(tween(220, easing = FastOutSlowInEasing)) { -direction * it / 14 } +
+                            scaleOut(targetScale = 0.985f, animationSpec = tween(220, easing = FastOutSlowInEasing)))
+                },
                 label = "view_mode_transition"
             ) { mode ->
                 if (mode == NowPlayingDisplayMode.ALBUM_ART) {
@@ -640,7 +632,7 @@ fun NowPlayingScreen(
                                     ) {
                                         Text(
                                             text = line.text,
-                                            color = if (isActive) Color.White else TextSecondary.copy(alpha = 0.5f),
+                                            color = if (isActive) TextPrimary else TextSecondary.copy(alpha = 0.72f),
                                             fontSize = if (isActive) 15.sp else 13.sp,
                                             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                                             textAlign = TextAlign.Center
@@ -755,7 +747,7 @@ fun NowPlayingScreen(
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
                                     text = lineText,
-                                    color = Color.White,
+                                    color = TextPrimary,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     maxLines = 1,
@@ -1350,4 +1342,98 @@ fun CustomPlaybackSpeedDialog(
         },
         containerColor = DarkSurfaceElevated
     )
+}
+
+@Composable
+private fun NowPlayingModeSelector(
+    mode: NowPlayingDisplayMode,
+    accent: Color,
+    onModeChange: (NowPlayingDisplayMode) -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = DarkSurfaceVariant.copy(alpha = 0.82f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(50.dp)
+            .animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing))
+            .testTag("now_playing_mode_selector")
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            NowPlayingModeOption(
+                label = "Ảnh bìa",
+                icon = Icons.Default.Album,
+                selected = mode == NowPlayingDisplayMode.ALBUM_ART,
+                accent = accent,
+                testTag = "now_playing_mode_album",
+                modifier = Modifier.weight(1f),
+                onClick = { onModeChange(NowPlayingDisplayMode.ALBUM_ART) }
+            )
+            NowPlayingModeOption(
+                label = "Lời bài hát",
+                icon = Icons.Default.Lyrics,
+                selected = mode == NowPlayingDisplayMode.FULL_LYRICS,
+                accent = accent,
+                testTag = "now_playing_mode_lyrics",
+                modifier = Modifier.weight(1f),
+                onClick = { onModeChange(NowPlayingDisplayMode.FULL_LYRICS) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun NowPlayingModeOption(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    selected: Boolean,
+    accent: Color,
+    testTag: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val containerColor by animateColorAsState(
+        targetValue = if (selected) accent.copy(alpha = 0.18f) else Color.Transparent,
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "mode_option_container"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (selected) accent else TextSecondary,
+        animationSpec = tween(220, easing = FastOutSlowInEasing),
+        label = "mode_option_content"
+    )
+
+    Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = containerColor,
+        border = if (selected) androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.65f)) else null,
+        modifier = modifier
+            .fillMaxHeight()
+            .clip(RoundedCornerShape(10.dp))
+            .selectable(selected = selected, role = Role.Tab, onClick = onClick)
+            .testTag(testTag)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(17.dp))
+            Spacer(modifier = Modifier.width(7.dp))
+            Text(
+                text = label,
+                color = contentColor,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
 }

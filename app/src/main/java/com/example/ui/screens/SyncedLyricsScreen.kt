@@ -326,7 +326,7 @@ fun SyncedLyricsScreen(
 
                         val textColor by animateColorAsState(
                             targetValue = when {
-                                isActive -> Color.White
+                                isActive -> TextPrimary
                                 isPast -> TextPrimary.copy(alpha = 0.55f)
                                 else -> TextSecondary.copy(alpha = 0.35f)
                             },
