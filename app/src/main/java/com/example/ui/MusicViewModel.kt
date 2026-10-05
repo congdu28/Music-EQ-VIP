@@ -54,6 +54,7 @@ data class MusicFolder(
 
 data class MusicAppUiState(
     val currentTab: MainTab = MainTab.LIBRARY,
+    val pendingOnlineSong: Song? = null,
     val librarySubTab: LibrarySubTab = LibrarySubTab.ALL_SONGS,
     val searchQuery: String = "",
     val songs: List<Song> = emptyList(),
@@ -98,6 +99,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val playerController = MusicPlayerController(application, equalizerManager)
 
     private val _appUiState = MutableStateFlow(MusicAppUiState())
+    private var pendingOnlinePlaybackJob: Job? = null
     val appUiState: StateFlow<MusicAppUiState> = _appUiState.asStateFlow()
 
     val playerState: StateFlow<PlayerUiState> = playerController.uiState
@@ -396,24 +398,64 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     // Playback Order controls
     fun playAllSequential(songs: List<Song>, startIndex: Int = 0) {
+        clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
         playerController.playAllSequential(songs, startIndex)
     }
 
     fun playAllShuffled(songs: List<Song>) {
+        clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
         playerController.playAllShuffled(songs)
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
-        setTab(MainTab.NOW_PLAYING)
-        playerController.playQueue(songs, startIndex)
+        val selectedIndex = startIndex.coerceIn(0, songs.lastIndex)
+        val selectedSong = songs[selectedIndex]
+        val isUnresolvedYouTube = selectedSong.filePath.startsWith("yt://") ||
+            (selectedSong.format.contains("YouTube", ignoreCase = true) && !selectedSong.filePath.startsWith("http"))
+
+        clearPendingOnlineSelection()
+        if (!isUnresolvedYouTube) {
+            setTab(MainTab.NOW_PLAYING)
+            playerController.playQueue(songs, selectedIndex)
+            return
+        }
+
+        // Publish a screen-level loading selection before entering player cleanup/resolution.
+        // That work can block on some devices, so the player screen must not depend on the
+        // controller's currentSong changing first.
+        _appUiState.update {
+            it.copy(currentTab = MainTab.NOW_PLAYING, pendingOnlineSong = selectedSong)
+        }
+        pendingOnlinePlaybackJob = viewModelScope.launch {
+            try {
+                // Give Compose a frame to show the pending song before MediaPlayer teardown.
+                delay(64)
+                playerController.playQueue(songs, selectedIndex)
+            } finally {
+                _appUiState.update { state ->
+                    if (state.pendingOnlineSong?.filePath == selectedSong.filePath) {
+                        state.copy(pendingOnlineSong = null)
+                    } else state
+                }
+            }
+        }
     }
 
     fun playSong(song: Song) {
+        clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
         playerController.playSong(song)
+    }
+
+    private fun clearPendingOnlineSelection() {
+        pendingOnlinePlaybackJob?.cancel()
+        pendingOnlinePlaybackJob = null
+        if (_appUiState.value.pendingOnlineSong != null) {
+            _appUiState.update { it.copy(pendingOnlineSong = null) }
+        }
     }
 
     fun togglePlayPause() = playerController.togglePlayPause()

@@ -65,9 +65,89 @@ fun NowPlayingScreen(
         viewModel.setTab(MainTab.LIBRARY)
     }
 
-    val song = playerState.currentSong
     val uiState by viewModel.appUiState.collectAsState()
+    val pendingOnlineSong = uiState.pendingOnlineSong
+    val song = pendingOnlineSong ?: playerState.currentSong
     val equalizerState by viewModel.equalizerState.collectAsState()
+
+    val isLoadingSelectedOnlineSong = pendingOnlineSong != null ||
+        (playerState.isLoadingOnlineStream && song?.format?.contains("YouTube", ignoreCase = true) == true)
+
+    if (isLoadingSelectedOnlineSong && song != null) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(DarkBackground)
+                .padding(horizontal = 28.dp, vertical = 24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = DarkSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth(0.82f)
+                        .aspectRatio(1f)
+                ) {
+                    if (!song.albumArtUri.isNullOrBlank()) {
+                        AsyncImage(
+                            model = song.albumArtUri,
+                            contentDescription = "Ảnh bìa ${song.title}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(72.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(28.dp))
+                CircularProgressIndicator(color = ElectricAzure, strokeWidth = 3.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "Đang tải bài hát",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = song.title,
+                    color = TextSecondary,
+                    fontSize = 15.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = song.artist,
+                    color = TextMuted,
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "Đang chuẩn bị dữ liệu phát từ YouTube…",
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+        return
+    }
 
     var displayMode by remember { mutableStateOf(NowPlayingDisplayMode.ALBUM_ART) }
     var showSpeedDialog by remember { mutableStateOf(false) }
