@@ -792,14 +792,14 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // DYNAMIC MELODY WAVE VISUALIZER (Fixed 38dp height, wave/spectrum toggle)
+            // Live or simulated audio wave visualization
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = DarkSurface.copy(alpha = 0.5f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(38.dp)
+                    .height(52.dp)
             ) {
                 AudioSpectrumVisualizer(
                     isPlaying = playerState.isPlaying,
@@ -835,6 +835,7 @@ fun NowPlayingScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(32.dp)
                     .testTag("now_playing_seek_slider")
             )
 

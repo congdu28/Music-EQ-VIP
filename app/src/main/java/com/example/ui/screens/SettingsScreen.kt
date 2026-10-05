@@ -393,8 +393,9 @@ fun SettingsScreen(
         }
 
         // Section: Cấu hình Gemini AI & Tìm kiếm Lời bài hát
-        var apiKeyInput by remember(uiState.geminiApiKey) { mutableStateOf(uiState.geminiApiKey) }
-        var isEditingKey by remember { mutableStateOf(false) }
+        var apiKeyInput by remember(uiState.geminiApiKey) {
+            mutableStateOf(viewModel.repository.getCustomGeminiApiKey().orEmpty())
+        }
         var revealApiKey by remember { mutableStateOf(false) }
 
         Surface(
@@ -431,11 +432,9 @@ fun SettingsScreen(
 
                 OutlinedTextField(
                     value = apiKeyInput,
-                    onValueChange = { 
-                        apiKeyInput = it 
-                        isEditingKey = true
-                    },
-                    label = { Text("Gemini API Key") },
+                    onValueChange = { apiKeyInput = it },
+                    label = { Text("API Key Gemini riêng") },
+                    placeholder = { Text("Nhập API Key của bạn") },
                     singleLine = true,
                     visualTransformation = if (revealApiKey) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
@@ -457,13 +456,18 @@ fun SettingsScreen(
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Key tích hợp của ứng dụng được giữ ẩn. Để trống để tiếp tục dùng key tích hợp.",
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Text(
-                        text = if (apiKeyInput.isNotBlank()) "Đã cấu hình API Key" else "Chưa có API Key",
+                        text = if (apiKeyInput.isNotBlank()) "Đang dùng API Key riêng" else "Đang dùng API Key tích hợp (được ẩn)",
                         color = if (apiKeyInput.isNotBlank()) NeonCyan else TextMuted,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -475,23 +479,21 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        val defaultKey = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
-                        if (apiKeyInput != defaultKey) {
+                        if (apiKeyInput.isNotBlank()) {
                             TextButton(
                                 onClick = {
-                                    apiKeyInput = defaultKey
-                                    viewModel.setGeminiApiKey(defaultKey)
-                                    isEditingKey = false
+                                    apiKeyInput = ""
+                                    revealApiKey = false
+                                    viewModel.setGeminiApiKey("")
                                 }
                             ) {
-                                Text("Khôi phục mặc định", fontSize = 11.sp, color = TextSecondary)
+                                Text("Dùng key tích hợp", fontSize = 11.sp, color = TextSecondary)
                             }
                         }
 
                         Button(
                             onClick = {
                                 viewModel.setGeminiApiKey(apiKeyInput)
-                                isEditingKey = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = NeonViolet, contentColor = Color.White),
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),

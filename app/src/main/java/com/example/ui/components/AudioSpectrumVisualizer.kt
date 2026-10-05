@@ -1,6 +1,12 @@
 package com.example.ui.components
 
 import android.media.audiofx.Visualizer
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -25,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextSecondary
+import kotlin.math.abs
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class VisualizerStyle(val displayName: String) {
@@ -45,9 +53,25 @@ fun AudioSpectrumVisualizer(
 ) {
     var waveform by remember(audioSessionId) { mutableStateOf(FloatArray(0)) }
     var fft by remember(audioSessionId) { mutableStateOf(FloatArray(0)) }
-    var captureAvailable by remember(audioSessionId) { mutableStateOf(false) }
+    val hasCurrentSignal = if (style == VisualizerStyle.WAVE) {
+        waveform.maxOfOrNull { abs(it) }?.let { it > 0.015f } == true
+    } else {
+        fft.maxOrNull()?.let { it > 0.015f } == true
+    }
+    val useFallback = isPlaying && !hasCurrentSignal
+    val fallbackTransition = rememberInfiniteTransition(label = "fallback_visualizer")
+    val fallbackPhase by fallbackTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = (2 * Math.PI).toFloat(),
+        animationSpec = if (useFallback) {
+            infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart)
+        } else {
+            tween(0)
+        },
+        label = "fallback_phase"
+    )
 
-    DisposableEffect(audioSessionId, isPlaying) {
+    DisposableEffect(audioSessionId, isPlaying, hasAudioCapturePermission) {
         var visualizer: Visualizer? = null
         if (audioSessionId > 0 && hasAudioCapturePermission) {
             try {
@@ -66,7 +90,6 @@ fun AudioSpectrumVisualizer(
                             waveform = FloatArray(samples.size) { index ->
                                 ((samples[index].toInt() and 0xFF) - 128) / 128f
                             }
-                            captureAvailable = true
                         }
                     }
 
@@ -83,7 +106,6 @@ fun AudioSpectrumVisualizer(
                                 (sqrt((real * real + imaginary * imaginary).toFloat()) / 180f)
                                     .coerceIn(0f, 1f)
                             }
-                            captureAvailable = true
                         }
                     }
                 }, (Visualizer.getMaxCaptureRate() / 2).coerceAtLeast(4_000), true, true)
@@ -130,11 +152,12 @@ fun AudioSpectrumVisualizer(
                     Text(style.displayName, color = TextSecondary, fontSize = 10.sp)
                 }
                 Text(
-        text = when {
+                    text = when {
                         !isPlaying -> "Tạm dừng"
                         !hasAudioCapturePermission -> "Cần quyền để đồng bộ sóng"
-                        captureAvailable -> "Tín hiệu âm thanh trực tiếp"
-                        else -> "Đang chờ tín hiệu âm thanh"
+                        (style == VisualizerStyle.WAVE && waveform.isNotEmpty()) ||
+                            (style == VisualizerStyle.SPECTRUM && fft.isNotEmpty()) -> "Tín hiệu âm thanh trực tiếp"
+                        else -> "Sóng nhạc mô phỏng"
                     },
                     color = TextMuted,
                     fontSize = 9.sp
@@ -150,7 +173,7 @@ fun AudioSpectrumVisualizer(
             if (style == VisualizerStyle.WAVE) {
                 val path = Path()
                 val samples = waveform
-                if (samples.size > 1) {
+                if (samples.size > 1 && hasCurrentSignal) {
                     val stride = (samples.size / size.width.toInt().coerceAtLeast(1)).coerceAtLeast(1)
                     var point = 0
                     while (point < size.width.toInt()) {
@@ -161,6 +184,17 @@ fun AudioSpectrumVisualizer(
                         point += stride
                     }
                     drawPath(path, brush = gradientBrush, style = Stroke(width = 2.dp.toPx()))
+                } else if (isPlaying) {
+                    val fallbackPath = Path()
+                    val points = size.width.toInt().coerceAtLeast(2)
+                    for (x in 0 until points) {
+                        val progress = x.toFloat() / (points - 1)
+                        val wave = sin(progress * Math.PI * 4 + fallbackPhase) * 0.55 +
+                            sin(progress * Math.PI * 9 - fallbackPhase * 0.7f) * 0.25
+                        val y = centerY + wave.toFloat() * size.height * 0.4f
+                        if (x == 0) fallbackPath.moveTo(x.toFloat(), y) else fallbackPath.lineTo(x.toFloat(), y)
+                    }
+                    drawPath(fallbackPath, brush = gradientBrush, style = Stroke(width = 2.dp.toPx()))
                 } else {
                     drawLine(waveColors.first().copy(alpha = 0.35f), Offset(0f, centerY), Offset(size.width, centerY), 1.dp.toPx())
                 }
@@ -170,13 +204,16 @@ fun AudioSpectrumVisualizer(
                 val spacing = 2.dp.toPx()
                 val barWidth = (size.width - spacing * (totalBars - 1)) / totalBars
                 for (i in 0 until totalBars) {
-                    val heightFraction = if (spectrum.isNotEmpty()) {
+                    val heightFraction = if (spectrum.isNotEmpty() && hasCurrentSignal) {
                         // Log-like bin spacing gives visible bass and treble detail in a small widget.
                         val start = (spectrum.size * (i.toFloat() / totalBars) * (i + 2) / totalBars).toInt().coerceIn(0, spectrum.lastIndex)
                         val end = (start + (spectrum.size / totalBars).coerceAtLeast(1)).coerceAtMost(spectrum.size)
                         var energy = 0f
                         for (bin in start until end) energy = maxOf(energy, spectrum[bin])
                         (energy * 2.4f).coerceIn(0.025f, 1f)
+                    } else if (isPlaying) {
+                        (0.12f + (sin(fallbackPhase + i * 0.53f).toFloat() + 1f) * 0.28f)
+                            .coerceIn(0.06f, 0.72f)
                     } else 0.025f
                     val barHeight = size.height * heightFraction
                     val x = i * (barWidth + spacing)

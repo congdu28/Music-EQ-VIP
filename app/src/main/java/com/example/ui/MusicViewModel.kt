@@ -619,7 +619,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setGeminiApiKey(key: String) {
         val trimmed = key.trim()
         repository.setGeminiApiKey(trimmed)
-        _appUiState.update { it.copy(geminiApiKey = trimmed, scanResultMessage = "Đã lưu Gemini API Key thành công") }
+        _appUiState.update {
+            it.copy(
+                geminiApiKey = repository.getGeminiApiKey(),
+                scanResultMessage = if (trimmed.isBlank()) "Đã chuyển sang API Key tích hợp" else "Đã lưu Gemini API Key riêng"
+            )
+        }
     }
 
     fun setGeminiModel(model: String) {

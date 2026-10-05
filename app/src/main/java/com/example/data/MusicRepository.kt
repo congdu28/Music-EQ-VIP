@@ -48,11 +48,24 @@ class MusicRepository(private val context: Context) {
 
     fun getGeminiApiKey(): String {
         val def = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
-        return prefs.getString("gemini_api_key", def) ?: def
+        return getCustomGeminiApiKey() ?: def
+    }
+
+    /** Returns only a user-provided key; the embedded app key is never exposed to the settings UI. */
+    fun getCustomGeminiApiKey(): String? {
+        val saved = prefs.getString("gemini_api_key", null)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val defaultKey = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
+        return saved.takeUnless { it == defaultKey }
     }
 
     fun setGeminiApiKey(key: String) {
-        prefs.edit().putString("gemini_api_key", key.trim()).apply()
+        val cleaned = key.trim()
+        val defaultKey = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
+        if (cleaned.isBlank() || cleaned == defaultKey) {
+            prefs.edit().remove("gemini_api_key").apply()
+        } else {
+            prefs.edit().putString("gemini_api_key", cleaned).apply()
+        }
     }
 
     fun getGeminiModel(): String {

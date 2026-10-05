@@ -126,26 +126,6 @@ fun LibraryScreen(
                 }
             }
 
-            // Quick Shuffle Button
-            IconButton(
-                onClick = {
-                    if (filteredSongs.isNotEmpty()) {
-                        viewModel.playAllShuffled(filteredSongs)
-                    }
-                },
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(DarkSurfaceVariant)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Shuffle,
-                    contentDescription = "Trộn bài",
-                    tint = NeonPurple,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-
             IconButton(
                 onClick = onPickAudioFolder,
                 modifier = Modifier
@@ -344,87 +324,66 @@ fun LibraryScreen(
                         }
                     }
                 } else {
-                    // Quick Playback Mode Bar: Sequential (Phát theo thứ tự) & Shuffle (Phát ngẫu nhiên)
-                    Row(
+                    // Single, predictable action: play the visible list in its displayed order.
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 14.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        shape = RoundedCornerShape(12.dp),
+                        color = NeonCyan.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.65f))
                     ) {
-                        // Play Sequential Button
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (!playerState.isShuffle) NeonCyan.copy(alpha = 0.2f) else DarkSurface,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (!playerState.isShuffle) NeonCyan else DarkBorder
-                            ),
+                        Row(
                             modifier = Modifier
-                                .weight(1f)
+                                .fillMaxWidth()
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    viewModel.playAllSequential(filteredSongs, 0)
-                                }
+                                .clickable { viewModel.playAllSequential(filteredSongs, 0) }
                                 .testTag("play_sequential_button")
+                                .padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                                    contentDescription = null,
-                                    tint = if (!playerState.isShuffle) NeonCyan else TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Phát tất cả (Thứ tự)",
-                                    color = if (!playerState.isShuffle) NeonCyan else TextPrimary,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                contentDescription = null,
+                                tint = NeonCyan,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Phát tất cả", color = NeonCyan, fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
 
-                        // Play Shuffled Button
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (playerState.isShuffle) NeonPurple.copy(alpha = 0.2f) else DarkSurface,
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                if (playerState.isShuffle) NeonPurple else DarkBorder
-                            ),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(36.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    viewModel.playAllShuffled(filteredSongs)
-                                }
-                                .testTag("play_shuffled_button")
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Shuffle,
-                                    contentDescription = null,
-                                    tint = if (playerState.isShuffle) NeonPurple else TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Phát ngẫu nhiên",
-                                    color = if (playerState.isShuffle) NeonPurple else TextPrimary,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
+                    // Song List
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        items(filteredSongs, key = { it.id }) { song ->
+                            val isCurrent = playerState.currentSong?.id == song.id
+                            CompactSongItem(
+                                song = song,
+                                isPlaying = isCurrent && playerState.isPlaying,
+                                isCurrentSong = isCurrent,
+                                onClick = {
+                                    val idx = filteredSongs.indexOf(song)
+                                    viewModel.playQueue(filteredSongs, idx)
+                                },
+                                onFavoriteClick = { viewModel.toggleFavorite(song) },
+                                onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
+                                onEditLyrics = { viewModel.setShowEditLyrics(true) },
+                                onEditMetadata = { viewModel.setShowEditMetadata(song) },
+                                onViewSpecs = { viewModel.setShowAudioSpecs(true) }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
                             }
                         }
                     }
@@ -528,37 +487,20 @@ fun FolderBrowserView(
                 }
             }
 
-            // Quick Play Buttons for this Folder
-            Row(
+            // Keep only the sequential play action in Library.
+            Button(
+                onClick = { viewModel.playAllSequential(selectedFolder.songs, 0) },
+                colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
+                shape = RoundedCornerShape(10.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(bottom = 6.dp)
+                    .height(36.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp)
             ) {
-                Button(
-                    onClick = { viewModel.playAllSequential(selectedFolder.songs, 0) },
-                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f).height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Phát thư mục", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-
-                OutlinedButton(
-                    onClick = { viewModel.playAllShuffled(selectedFolder.songs) },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonPurple),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonPurple),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.weight(1f).height(36.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Shuffle, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Trộn thư mục", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
+                Icon(imageVector = Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Phát thư mục", fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
 
             // Song list inside this folder
