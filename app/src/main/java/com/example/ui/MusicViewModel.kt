@@ -170,11 +170,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             )
                         }
 
-                        // Tự động tìm kiếm lời bài hát trên internet nếu bài hát chưa có lời
-                        val isDemoPreview = song.album == "Bài nghe thử" && song.artist == "Music EQ"
-                        if (song.lyrics.isNullOrBlank() && !isDemoPreview && autoSearchedSongKeys.add(lyricsTrackKey(song))) {
-                            searchLyricsOnline(song, isAuto = true)
-                        }
                     } else {
                         // Song unchanged, only position progressed
                         val parsed = _appUiState.value.parsedLyrics
@@ -184,6 +179,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                                 it.copy(activeLyricIndex = activeIdx)
                             }
                         }
+                    }
+
+                    // Start automatic lookup after an online track has finished
+                    // resolving and preparing. If lookup starts while the
+                    // YouTube URL is still being replaced, player preparation
+                    // can publish an older Song value over the lyrics result.
+                    val isDemoPreview = song.album == "Bài nghe thử" && song.artist == "Music EQ"
+                    if (song.lyrics.isNullOrBlank() && !pState.isLoadingOnlineStream && !isDemoPreview &&
+                        autoSearchedSongKeys.add(lyricsTrackKey(song))) {
+                        searchLyricsOnline(song, isAuto = true)
                     }
                 }
             }

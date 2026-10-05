@@ -481,17 +481,24 @@ class MusicPlayerController(
                     }
                     val audioSession = mp.audioSessionId
                     equalizerManager.attachToSession(audioSession)
+                    val latestSong = _uiState.value.currentSong?.takeIf {
+                        it.id == song.id && it.title == song.title && it.artist == song.artist
+                    } ?: _uiState.value.queue.firstOrNull {
+                        it.filePath == song.filePath ||
+                            (it.id == song.id && it.title == song.title && it.artist == song.artist)
+                    } ?: song
+                    val preparedSong = latestSong.copy(filePath = song.filePath)
                     _uiState.update {
                         it.copy(
-                            currentSong = song,
+                            currentSong = preparedSong,
                             isPlaying = true,
                             isLoadingOnlineStream = false,
-                            totalDurationMs = mp.duration.toLong().coerceAtLeast(song.durationMs),
+                            totalDurationMs = mp.duration.toLong().coerceAtLeast(preparedSong.durationMs),
                             currentPositionMs = 0,
-                            isHiResAudioActive = song.isHiRes
+                            isHiResAudioActive = preparedSong.isHiRes
                         )
                     }
-                    MusicPlaybackService.startOrUpdate(context, song, true, 0L)
+                    MusicPlaybackService.startOrUpdate(context, preparedSong, true, 0L)
 
                     if (isCrossfade && oldPlayer != null) {
                         // Smoothly crossfade: oldPlayer down, mp up
