@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import android.media.audiofx.Visualizer
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -60,14 +61,15 @@ fun AudioSpectrumVisualizer(
     }
     val useFallback = isPlaying && !hasCurrentSignal
     val fallbackTransition = rememberInfiniteTransition(label = "fallback_visualizer")
+    val fallbackSpec: AnimationSpec<Float> = if (useFallback) {
+        infiniteRepeatable<Float>(tween(900, easing = LinearEasing), RepeatMode.Restart)
+    } else {
+        tween<Float>(0)
+    }
     val fallbackPhase by fallbackTransition.animateFloat(
         initialValue = 0f,
         targetValue = (2 * Math.PI).toFloat(),
-        animationSpec = if (useFallback) {
-            infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart)
-        } else {
-            tween(0)
-        },
+        animationSpec = fallbackSpec,
         label = "fallback_phase"
     )
 

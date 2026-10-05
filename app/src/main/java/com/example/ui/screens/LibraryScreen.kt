@@ -384,44 +384,6 @@ fun LibraryScreen(
         }
     }
 }
-                            }
-                        }
-                    }
-
-                    // Song List
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(filteredSongs, key = { it.id }) { song ->
-                            val isCurrent = playerState.currentSong?.id == song.id
-                            CompactSongItem(
-                                song = song,
-                                isPlaying = isCurrent && playerState.isPlaying,
-                                isCurrentSong = isCurrent,
-                                onClick = {
-                                    val idx = filteredSongs.indexOf(song)
-                                    viewModel.playQueue(filteredSongs, idx)
-                                },
-                                onFavoriteClick = { viewModel.toggleFavorite(song) },
-                                onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
-                                onEditLyrics = {
-                                    viewModel.setShowEditLyrics(true)
-                                },
-                                onEditMetadata = {
-                                    viewModel.setShowEditMetadata(song)
-                                },
-                                onViewSpecs = { viewModel.setShowAudioSpecs(true) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
 /**
  * Folder Browser View:
  * Allows browsing audio files by their directory / folder hierarchy.
