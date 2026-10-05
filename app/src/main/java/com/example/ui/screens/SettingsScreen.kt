@@ -433,10 +433,14 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().selectableGroup(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 56.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .selectable(selected = !useCustomApiKey, role = Role.RadioButton) {
                                 useCustomApiKey = false
@@ -450,17 +454,19 @@ fun SettingsScreen(
                         RadioButton(
                             selected = !useCustomApiKey,
                             onClick = null,
+                            modifier = Modifier.size(48.dp),
                             colors = RadioButtonDefaults.colors(selectedColor = NeonViolet)
                         )
-                        Column {
+                        Column(modifier = Modifier.weight(1f).padding(start = 8.dp, end = 8.dp)) {
                             Text("Dùng API Key tích hợp", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                            Text("Mặc định của ứng dụng; key được giữ ẩn", color = TextSecondary, fontSize = 10.sp)
+                            Text("API mặc định hệ thống", color = TextSecondary, fontSize = 10.sp)
                         }
                     }
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(min = 56.dp)
                             .clip(RoundedCornerShape(10.dp))
                             .selectable(selected = useCustomApiKey, role = Role.RadioButton) {
                                 useCustomApiKey = true
@@ -471,9 +477,10 @@ fun SettingsScreen(
                         RadioButton(
                             selected = useCustomApiKey,
                             onClick = null,
+                            modifier = Modifier.size(48.dp),
                             colors = RadioButtonDefaults.colors(selectedColor = NeonViolet)
                         )
-                        Column {
+                        Column(modifier = Modifier.weight(1f).padding(start = 8.dp, end = 8.dp)) {
                             Text("Dùng API Key riêng", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                             Text("Nhập key Gemini của bạn", color = TextSecondary, fontSize = 10.sp)
                         }

@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -18,7 +17,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import android.content.Intent
@@ -54,20 +52,10 @@ fun SyncedLyricsScreen(
     val activeIndex = uiState.activeLyricIndex
     val listState = rememberLazyListState()
 
-    var isUserScrolledAway by remember { mutableStateOf(false) }
-
-    // Auto-scroll to active lyric smoothly without sudden snapping
-    LaunchedEffect(activeIndex) {
-        if (!isUserScrolledAway && activeIndex >= 0 && activeIndex < parsedLyrics.lines.size) {
-            val targetScrollIndex = maxOf(0, activeIndex - 2)
-            listState.animateScrollToItem(targetScrollIndex)
-        }
-    }
-
-    // Detect when user starts scrolling manually
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            isUserScrolledAway = true
+    // Follow the active line continuously, matching the embedded lyrics view in Now Playing.
+    LaunchedEffect(activeIndex, song?.id, parsedLyrics.lines.size) {
+        if (activeIndex >= 0 && activeIndex < parsedLyrics.lines.size) {
+            listState.animateScrollToItem(maxOf(0, activeIndex - 1))
         }
     }
 
@@ -81,15 +69,14 @@ fun SyncedLyricsScreen(
                 .fillMaxSize()
                 .padding(top = 8.dp)
         ) {
-            // Header Bar
-            Row(
+            // Responsive title and actions: controls move to their own row on every width.
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
@@ -110,6 +97,7 @@ fun SyncedLyricsScreen(
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 16.sp,
+                            modifier = Modifier.weight(1f),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -129,18 +117,20 @@ fun SyncedLyricsScreen(
 
                 // Actions: Search Online & Edit / Paste Lyrics
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (song != null) {
-                        Box {
+                        Box(modifier = Modifier.weight(1f)) {
                             Button(
                                 onClick = { showSearchOptions = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceElevated, contentColor = NeonPink),
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.5f)),
                                 shape = RoundedCornerShape(12.dp),
-                                enabled = !uiState.isSearchingLyrics
+                                enabled = !uiState.isSearchingLyrics,
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 if (uiState.isSearchingLyrics) {
                                     CircularProgressIndicator(color = NeonPink, strokeWidth = 2.dp, modifier = Modifier.size(14.dp))
@@ -212,7 +202,7 @@ fun SyncedLyricsScreen(
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.testTag("edit_lyrics_button")
+                        modifier = Modifier.weight(1f).testTag("edit_lyrics_button")
                     ) {
                         Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(4.dp))
@@ -229,29 +219,36 @@ fun SyncedLyricsScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Icon(imageVector = Icons.Default.Timer, contentDescription = null, tint = TextHighlight, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Độ lệch: ${song?.lrcOffsetMs ?: 0}ms",
                             color = TextHighlight,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.weight(1f)
                         )
+                        Text("Chỉnh thời gian lời", color = TextSecondary, fontSize = 10.sp)
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OffsetButton(label = "-500ms") { viewModel.adjustLyricsOffset(-500) }
-                        OffsetButton(label = "-100ms") { viewModel.adjustLyricsOffset(-100) }
-                        OffsetButton(label = "+100ms") { viewModel.adjustLyricsOffset(100) }
-                        OffsetButton(label = "+500ms") { viewModel.adjustLyricsOffset(500) }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        OffsetButton(label = "-500ms", modifier = Modifier.weight(1f)) { viewModel.adjustLyricsOffset(-500) }
+                        OffsetButton(label = "-100ms", modifier = Modifier.weight(1f)) { viewModel.adjustLyricsOffset(-100) }
+                        OffsetButton(label = "+100ms", modifier = Modifier.weight(1f)) { viewModel.adjustLyricsOffset(100) }
+                        OffsetButton(label = "+500ms", modifier = Modifier.weight(1f)) { viewModel.adjustLyricsOffset(500) }
                     }
                 }
             }
@@ -281,13 +278,17 @@ fun SyncedLyricsScreen(
                         Spacer(modifier = Modifier.height(6.dp))
                         Text("Dán file định dạng [00:12.34] để hát karaoke đồng bộ", color = TextMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
                         Spacer(modifier = Modifier.height(16.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
                             if (song != null) {
                                 Button(
                                     onClick = { viewModel.searchLyricsOnline(song) },
                                     colors = ButtonDefaults.buttonColors(containerColor = NeonPink, contentColor = AccentContent),
                                     shape = RoundedCornerShape(12.dp),
-                                    enabled = !uiState.isSearchingLyrics
+                                    enabled = !uiState.isSearchingLyrics,
+                                    modifier = Modifier.fillMaxWidth()
                                 ) {
                                     if (uiState.isSearchingLyrics) {
                                         CircularProgressIndicator(color = AccentContent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
@@ -302,7 +303,8 @@ fun SyncedLyricsScreen(
                                 onClick = { viewModel.setShowEditLyrics(true) },
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
-                                shape = RoundedCornerShape(12.dp)
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
@@ -345,7 +347,6 @@ fun SyncedLyricsScreen(
                                 .clickable {
                                     if (line.timeMs >= 0) {
                                         viewModel.seekTo(line.timeMs)
-                                        isUserScrolledAway = false
                                     }
                                 }
                                 .padding(horizontal = 8.dp, vertical = 6.dp)
@@ -387,45 +388,17 @@ fun SyncedLyricsScreen(
             }
         }
 
-        // Floating Re-Center Button when user scrolled away
-        if (isUserScrolledAway && activeIndex >= 0) {
-            Surface(
-                shape = CircleShape,
-                color = ElectricAzure,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 16.dp)
-                    .shadow(elevation = 8.dp, shape = CircleShape)
-                    .clip(CircleShape)
-                    .clickable {
-                        isUserScrolledAway = false
-                    }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(imageVector = Icons.Default.KeyboardArrowDown, contentDescription = null, tint = AccentContent, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Cuộn đến câu đang hát",
-                        color = AccentContent,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
-                }
-            }
-        }
     }
 }
 
 @Composable
-private fun OffsetButton(label: String, onClick: () -> Unit) {
+private fun OffsetButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(6.dp),
         color = DarkSurfaceElevated,
         border = androidx.compose.foundation.BorderStroke(0.8.dp, DarkBorder),
-        modifier = Modifier
+        modifier = modifier
+            .fillMaxWidth()
             .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
     ) {
@@ -434,7 +407,8 @@ private fun OffsetButton(label: String, onClick: () -> Unit) {
             color = TextPrimary,
             fontSize = 10.sp,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 4.dp)
         )
     }
 }

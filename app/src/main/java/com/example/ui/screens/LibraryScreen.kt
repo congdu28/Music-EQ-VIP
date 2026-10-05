@@ -281,8 +281,10 @@ fun LibraryScreen(
             LibrarySubTab.PLAYLISTS -> {
                 PlaylistsView(
                     playlists = uiState.playlists,
+                    favoriteSongCount = uiState.favoriteSongs.size,
                     onCreatePlaylist = { viewModel.setShowCreatePlaylist(true) },
-                    onOpenPlaylist = { playlist -> viewModel.openPlaylist(playlist) }
+                    onOpenPlaylist = { playlist -> viewModel.openPlaylist(playlist) },
+                    onOpenFavorites = { viewModel.setLibrarySubTab(LibrarySubTab.FAVORITES) }
                 )
             }
             else -> {
@@ -859,8 +861,10 @@ fun SongCardItem(
 @Composable
 fun PlaylistsView(
     playlists: List<Playlist>,
+    favoriteSongCount: Int,
     onCreatePlaylist: () -> Unit,
-    onOpenPlaylist: (Playlist) -> Unit
+    onOpenPlaylist: (Playlist) -> Unit,
+    onOpenFavorites: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -889,6 +893,40 @@ fun PlaylistsView(
                 Icon(imageVector = Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("Tạo mới", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Surface(
+            shape = RoundedCornerShape(14.dp),
+            color = NeonPink.copy(alpha = 0.1f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.45f)),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .clickable(onClick = onOpenFavorites)
+                .testTag("favorite_songs_folder")
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = NeonPink.copy(alpha = 0.2f),
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Favorite, contentDescription = null, tint = NeonPink, modifier = Modifier.size(23.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Bài hát yêu thích", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("$favoriteSongCount bài hát • chạm để mở", color = TextSecondary, fontSize = 11.sp)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = "Mở bài hát yêu thích", tint = NeonPink)
             }
         }
 
