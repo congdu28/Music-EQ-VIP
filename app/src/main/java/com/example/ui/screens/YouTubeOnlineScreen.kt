@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -50,6 +52,9 @@ fun YouTubeOnlineScreen(
     playerState: PlayerUiState,
     modifier: Modifier = Modifier
 ) {
+    var isSearchFocused by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+
     // Pressing system back returns to Library
     BackHandler {
         viewModel.setTab(MainTab.LIBRARY)
@@ -167,8 +172,13 @@ fun YouTubeOnlineScreen(
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = {
                             viewModel.searchYouTube(uiState.youtubeQuery)
+                            isSearchFocused = false
+                            focusManager.clearFocus()
                         }),
-                        modifier = Modifier.fillMaxWidth().testTag("youtube_search_input")
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { isSearchFocused = it.isFocused }
+                            .testTag("youtube_search_input")
                     )
                 }
 
@@ -187,13 +197,58 @@ fun YouTubeOnlineScreen(
                 }
 
                 Button(
-                    onClick = { viewModel.searchYouTube(uiState.youtubeQuery) },
+                    onClick = {
+                        viewModel.searchYouTube(uiState.youtubeQuery)
+                        isSearchFocused = false
+                        focusManager.clearFocus()
+                    },
                     colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed, contentColor = Color.White),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                     shape = RoundedCornerShape(10.dp),
                     modifier = Modifier.height(30.dp)
                 ) {
                     Text("Tìm", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        if (isSearchFocused && uiState.youtubeSuggestions.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = DarkSurfaceElevated,
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                LazyColumn(modifier = Modifier.heightIn(max = 216.dp)) {
+                    items(uiState.youtubeSuggestions) { suggestion ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    isSearchFocused = false
+                                    focusManager.clearFocus()
+                                    viewModel.searchYouTube(suggestion)
+                                }
+                                .padding(horizontal = 14.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = TextSecondary,
+                                modifier = Modifier.size(17.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = suggestion,
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
                 }
             }
         }

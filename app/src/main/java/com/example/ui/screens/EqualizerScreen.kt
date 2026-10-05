@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
@@ -34,8 +35,11 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import com.example.equalizer.EqualizerBand
 import com.example.equalizer.EqualizerState
 import com.example.model.EqualizerPreset
@@ -316,7 +320,7 @@ fun EqualizerScreen(
                         }
                     }
                     Text(
-                        "Vuốt ngang để xem đủ 10 dải · Kéo núm để chỉnh",
+                        "Kéo thanh ngang hoặc vuốt để xem đủ 10 dải",
                         color = TextSecondary,
                         fontSize = 10.sp
                     )
@@ -325,13 +329,14 @@ fun EqualizerScreen(
                 Spacer(modifier = Modifier.height(14.dp))
 
                 // Keep each fader wide enough to drag comfortably on a phone.
+                val bandScrollState = rememberScrollState()
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(232.dp)
-                        .horizontalScroll(rememberScrollState())
+                        .height(210.dp)
+                        .horizontalScroll(bandScrollState)
                         .testTag("eq_bands_scroll"),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     equalizerState.bands.forEach { band ->
@@ -341,10 +346,11 @@ fun EqualizerScreen(
                             onLevelChange = { newLevel ->
                                 viewModel.updateBandLevel(band.index, newLevel)
                             },
-                            modifier = Modifier.width(44.dp).testTag("eq_band_${band.index}")
+                            modifier = Modifier.width(36.dp).testTag("eq_band_${band.index}")
                         )
                     }
                 }
+                EqHorizontalScrollbar(scrollState = bandScrollState)
             }
         }
 
@@ -363,7 +369,9 @@ fun EqualizerScreen(
                     "Hiệu Ứng Bổ Trợ (Sound Effects)",
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 // Bass Boost Slider
@@ -373,7 +381,10 @@ fun EqualizerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = NeonPurple.copy(alpha = 0.2f),
@@ -389,17 +400,21 @@ fun EqualizerScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "Tăng cường âm trầm (Bass Boost)",
                                     color = TextPrimary,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     "Tạo độ nảy và uy lực cho màng loa",
                                     color = TextSecondary,
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -436,7 +451,10 @@ fun EqualizerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
                                 color = NeonCyan.copy(alpha = 0.2f),
@@ -452,17 +470,21 @@ fun EqualizerScreen(
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     "Âm thanh vòm 3D (Virtualizer)",
                                     color = TextPrimary,
                                     fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     "Mở rộng không gian âm trường đa chiều",
                                     color = TextSecondary,
-                                    fontSize = 10.sp
+                                    fontSize = 10.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -706,7 +728,7 @@ fun SingleBandFader(
     val totalRange = (maxRange - minRange).coerceAtLeast(1f)
     val fraction = ((band.levelMilliBels.toFloat() - minRange) / totalRange).coerceIn(0f, 1f)
     val componentHeightDp = with(density) { componentHeightPx.toDp() }
-    val thumbSize = 22.dp
+    val thumbSize = 18.dp
     val thumbTravel = (componentHeightDp - thumbSize).coerceAtLeast(0.dp)
     val activeFillHeight = thumbTravel * kotlin.math.abs(fraction - 0.5f)
 
@@ -730,7 +752,7 @@ fun SingleBandFader(
         // Vertical Track with Drag Handle
         Box(
             modifier = Modifier
-                .width(36.dp)
+                .width(32.dp)
                 .weight(1f)
                 .onSizeChanged { size -> componentHeightPx = size.height.toFloat().coerceAtLeast(1f) }
                 .pointerInput(minRange, maxRange) {
@@ -805,7 +827,7 @@ fun SingleBandFader(
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(36.dp),
+                    .width(32.dp),
                 contentAlignment = Alignment.BottomCenter
             ) {
                 Surface(
@@ -816,7 +838,7 @@ fun SingleBandFader(
                         if (isEnabled) DarkBackground else TextMuted
                     ),
                     modifier = Modifier
-                        .size(22.dp)
+                        .size(18.dp)
                         .offset(y = -(thumbTravel * fraction))
                 ) {}
             }
@@ -832,6 +854,71 @@ fun SingleBandFader(
             fontWeight = FontWeight.SemiBold,
             maxLines = 1,
             textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun EqHorizontalScrollbar(scrollState: androidx.compose.foundation.ScrollState) {
+    val scope = rememberCoroutineScope()
+    var dragAnchor by remember { mutableFloatStateOf(0f) }
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(18.dp)
+            .pointerInput(scrollState.maxValue) {
+                if (scrollState.maxValue <= 0) return@pointerInput
+                detectDragGestures(
+                    onDragStart = { position ->
+                        val viewport = size.width.toFloat().coerceAtLeast(1f)
+                        val thumbWidth = (viewport * viewport / (viewport + scrollState.maxValue))
+                            .coerceIn(32.dp.toPx(), viewport)
+                        val maxThumbOffset = (viewport - thumbWidth).coerceAtLeast(1f)
+                        val currentThumbOffset = scrollState.value.toFloat() / scrollState.maxValue * maxThumbOffset
+                        dragAnchor = if (position.x in currentThumbOffset..(currentThumbOffset + thumbWidth)) {
+                            position.x - currentThumbOffset
+                        } else {
+                            thumbWidth / 2f
+                        }
+                        val newThumbOffset = (position.x - dragAnchor).coerceIn(0f, maxThumbOffset)
+                        scope.launch {
+                            scrollState.scrollTo((newThumbOffset / maxThumbOffset * scrollState.maxValue).roundToInt())
+                        }
+                    }
+                ) { change, _ ->
+                    change.consume()
+                    val viewport = size.width.toFloat().coerceAtLeast(1f)
+                    val thumbWidth = (viewport * viewport / (viewport + scrollState.maxValue))
+                        .coerceIn(32.dp.toPx(), viewport)
+                    val maxThumbOffset = (viewport - thumbWidth).coerceAtLeast(1f)
+                    val newThumbOffset = (change.position.x - dragAnchor).coerceIn(0f, maxThumbOffset)
+                    scope.launch {
+                        scrollState.scrollTo((newThumbOffset / maxThumbOffset * scrollState.maxValue).roundToInt())
+                    }
+                }
+            }
+            .testTag("eq_bands_scrollbar")
+    ) {
+        val trackHeight = 4.dp.toPx()
+        val thumbHeight = 6.dp.toPx()
+        val centerY = size.height / 2f
+        drawRoundRect(
+            color = DarkSurfaceVariant,
+            topLeft = androidx.compose.ui.geometry.Offset(0f, centerY - trackHeight / 2),
+            size = androidx.compose.ui.geometry.Size(size.width, trackHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(trackHeight)
+        )
+
+        val thumbWidth = if (scrollState.maxValue == 0) size.width else
+            (size.width * size.width / (size.width + scrollState.maxValue)).coerceIn(32.dp.toPx(), size.width)
+        val thumbOffset = if (scrollState.maxValue == 0) 0f else
+            scrollState.value.toFloat() / scrollState.maxValue * (size.width - thumbWidth)
+        drawRoundRect(
+            color = NeonCyan.copy(alpha = if (scrollState.maxValue == 0) 0.45f else 0.95f),
+            topLeft = androidx.compose.ui.geometry.Offset(thumbOffset, centerY - thumbHeight / 2),
+            size = androidx.compose.ui.geometry.Size(thumbWidth, thumbHeight),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(thumbHeight)
         )
     }
 }

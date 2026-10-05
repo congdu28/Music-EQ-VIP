@@ -3,6 +3,7 @@ package com.example.data
 import android.util.Log
 import com.example.model.Song
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -44,6 +45,38 @@ object YouTubeMusicService {
     private val visitorDataMutex = Mutex()
     private data class CachedStream(val url: String, val expiresAtMs: Long)
     private val streamCache = ConcurrentHashMap<String, CachedStream>()
+
+    /** Returns YouTube-scoped autocomplete terms for the search field. */
+    suspend fun searchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
+        val trimmed = query.trim()
+        if (trimmed.length < 2) return@withContext emptyList()
+
+        try {
+            val encodedQuery = java.net.URLEncoder.encode(trimmed, Charsets.UTF_8.name())
+            val request = Request.Builder()
+                .url("https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&hl=vi&gl=VN&q=$encodedQuery")
+                .header("User-Agent", AUDIO_USER_AGENT)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext emptyList()
+                val payload = JSONArray(response.body?.string().orEmpty())
+                val suggestions = payload.optJSONArray(1) ?: return@withContext emptyList()
+                buildList {
+                    for (index in 0 until suggestions.length()) {
+                        val suggestion = suggestions.optString(index).trim()
+                        if (suggestion.isNotEmpty() && suggestion !in this) add(suggestion)
+                        if (size == 6) break
+                    }
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Log.d(TAG, "YouTube autocomplete unavailable: ${error.message}")
+            emptyList()
+        }
+    }
 
     /**
      * Obtains or refreshes the visitorData token from YouTube's visitor_id endpoint.

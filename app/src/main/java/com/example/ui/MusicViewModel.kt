@@ -16,6 +16,8 @@ import com.example.player.MusicPlayerController
 import com.example.player.PlayerUiState
 import com.example.ui.components.VisualizerStyle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -76,6 +78,7 @@ data class MusicAppUiState(
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.7-flash",
     val youtubeQuery: String = "",
+    val youtubeSuggestions: List<String> = emptyList(),
     val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
     val youtubeSongs: List<Song> = emptyList(),
     val isSearchingYouTube: Boolean = false,
@@ -93,6 +96,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     val playerState: StateFlow<PlayerUiState> = playerController.uiState
     val equalizerState: StateFlow<EqualizerState> = equalizerManager.state
+    private var youtubeSuggestionJob: Job? = null
 
     init {
         val savedKey = repository.getGeminiApiKey()
@@ -216,12 +220,24 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setYouTubeQuery(query: String) {
-        _appUiState.update { it.copy(youtubeQuery = query) }
+        _appUiState.update { it.copy(youtubeQuery = query, youtubeSuggestions = emptyList()) }
+        youtubeSuggestionJob?.cancel()
+        if (query.trim().length < 2) return
+
+        youtubeSuggestionJob = viewModelScope.launch {
+            delay(250)
+            val suggestions = com.example.data.YouTubeMusicService.searchSuggestions(query)
+            if (_appUiState.value.youtubeQuery == query) {
+                _appUiState.update { it.copy(youtubeSuggestions = suggestions) }
+            }
+        }
     }
 
     fun searchYouTube(query: String) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return
+        youtubeSuggestionJob?.cancel()
+        _appUiState.update { it.copy(youtubeSuggestions = emptyList()) }
         viewModelScope.launch {
             try {
                 _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null, youtubeQuery = trimmed) }
@@ -251,7 +267,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectYouTubeCategory(category: String) {
-        _appUiState.update { it.copy(selectedYouTubeCategory = category, youtubeQuery = "") }
+        youtubeSuggestionJob?.cancel()
+        _appUiState.update { it.copy(selectedYouTubeCategory = category, youtubeQuery = "", youtubeSuggestions = emptyList()) }
         viewModelScope.launch {
             try {
                 _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }
