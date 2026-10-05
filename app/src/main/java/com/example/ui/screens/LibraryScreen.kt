@@ -343,7 +343,13 @@ fun LibraryScreen(
                                 .weight(1.15f)
                                 .height(44.dp)
                                 .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.playAllSequential(filteredSongs, 0) }
+                                .clickable {
+                                    if (uiState.librarySubTab == LibrarySubTab.FAVORITES) {
+                                        viewModel.playFavoriteQueue(filteredSongs, 0)
+                                    } else {
+                                        viewModel.playAllSequential(filteredSongs, 0)
+                                    }
+                                }
                                 .testTag("play_sequential_button"),
                             shape = RoundedCornerShape(12.dp),
                             color = NeonCyan.copy(alpha = 0.12f),
@@ -399,7 +405,11 @@ fun LibraryScreen(
                                 isCurrentSong = isCurrent,
                                 onClick = {
                                     val idx = filteredSongs.indexOf(song)
-                                    viewModel.playQueue(filteredSongs, idx)
+                                    if (uiState.librarySubTab == LibrarySubTab.FAVORITES) {
+                                        viewModel.playFavoriteQueue(filteredSongs, idx)
+                                    } else {
+                                        viewModel.playQueue(filteredSongs, idx)
+                                    }
                                 },
                                 onFavoriteClick = { viewModel.toggleFavorite(song) },
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },

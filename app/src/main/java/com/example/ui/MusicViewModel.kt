@@ -411,6 +411,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
+        clearPendingOnlineSelection()
+        setTab(MainTab.NOW_PLAYING)
+        playerController.playQueue(songs, startIndex)
+    }
+
+    fun playFavoriteQueue(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
         val selectedIndex = startIndex.coerceIn(0, songs.lastIndex)
         val selectedSong = songs[selectedIndex]
         val isUnresolvedYouTube = selectedSong.filePath.startsWith("yt://") ||
@@ -418,8 +425,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         clearPendingOnlineSelection()
         if (!isUnresolvedYouTube) {
-            setTab(MainTab.NOW_PLAYING)
-            playerController.playQueue(songs, selectedIndex)
+            playQueue(songs, selectedIndex)
             return
         }
 
