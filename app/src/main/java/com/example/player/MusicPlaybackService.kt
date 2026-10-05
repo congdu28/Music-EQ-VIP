@@ -13,6 +13,7 @@ import android.media.session.PlaybackState
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import com.example.MainActivity
 import com.example.R
 import com.example.model.Song
@@ -85,8 +86,9 @@ class MusicPlaybackService : Service() {
                 val album = intent.getStringExtra(EXTRA_ALBUM) ?: ""
                 val isPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, true)
                 val durationMs = intent.getLongExtra(EXTRA_DURATION, 0L)
+                val positionMs = intent.getLongExtra(EXTRA_POSITION, 0L)
 
-                updateMediaSession(title, artist, album, durationMs, isPlaying)
+                updateMediaSession(title, artist, album, durationMs, positionMs, isPlaying)
                 val notification = buildMediaNotification(title, artist, isPlaying)
                 startForeground(NOTIFICATION_ID, notification)
             }
@@ -99,6 +101,7 @@ class MusicPlaybackService : Service() {
         artist: String,
         album: String,
         durationMs: Long,
+        positionMs: Long,
         isPlaying: Boolean
     ) {
         val session = mediaSession ?: return
@@ -112,7 +115,7 @@ class MusicPlaybackService : Service() {
 
         val state = if (isPlaying) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
         val playbackState = PlaybackState.Builder()
-            .setState(state, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1.0f)
+            .setState(state, positionMs.coerceAtLeast(0L), if (isPlaying) 1.0f else 0.0f, SystemClock.elapsedRealtime())
             .setActions(
                 PlaybackState.ACTION_PLAY or
                 PlaybackState.ACTION_PAUSE or
@@ -237,8 +240,9 @@ class MusicPlaybackService : Service() {
         const val EXTRA_ALBUM = "extra_album"
         const val EXTRA_IS_PLAYING = "extra_is_playing"
         const val EXTRA_DURATION = "extra_duration"
+        const val EXTRA_POSITION = "extra_position"
 
-        fun startOrUpdate(context: Context, song: Song, isPlaying: Boolean) {
+        fun startOrUpdate(context: Context, song: Song, isPlaying: Boolean, positionMs: Long = 0L) {
             try {
                 val intent = Intent(context, MusicPlaybackService::class.java).apply {
                     action = ACTION_UPDATE
@@ -247,6 +251,7 @@ class MusicPlaybackService : Service() {
                     putExtra(EXTRA_ALBUM, song.album)
                     putExtra(EXTRA_IS_PLAYING, isPlaying)
                     putExtra(EXTRA_DURATION, song.durationMs)
+                    putExtra(EXTRA_POSITION, positionMs.coerceAtLeast(0L))
                 }
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(intent)

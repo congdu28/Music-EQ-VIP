@@ -143,7 +143,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         var lastObservedSongPath: String? = null
         var lastObservedLyrics: String? = null
         var lastObservedOffset: Long = 0
-        val autoSearchedSongPaths = mutableSetOf<String>()
+        // YouTube entries replace yt://videoId with a resolved stream URL once
+        // playback starts. Use the stable song ID so that transition cannot
+        // trigger a second automatic lookup or clear a just-fetched lyric.
+        val autoSearchedSongKeys = mutableSetOf<String>()
 
         viewModelScope.launch {
             playerState.collect { pState ->
@@ -169,7 +172,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
                         // Tự động tìm kiếm lời bài hát trên internet nếu bài hát chưa có lời
                         val isDemoPreview = song.album == "Bài nghe thử" && song.artist == "Music EQ"
-                        if (song.lyrics.isNullOrBlank() && !isDemoPreview && autoSearchedSongPaths.add(song.filePath)) {
+                        if (song.lyrics.isNullOrBlank() && !isDemoPreview && autoSearchedSongKeys.add(lyricsTrackKey(song))) {
                             searchLyricsOnline(song, isAuto = true)
                         }
                     } else {
@@ -583,10 +586,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 repository.updateSongLyrics(song.id, lyricsText, 0)
                 // If this is the currently playing song, update currentSong in player
                 val current = playerState.value.currentSong
-                if (current != null && current.filePath == song.filePath) {
-                    val updated = current.copy(lyrics = lyricsText, lrcOffsetMs = 0)
+                if (current != null && isSameLyricsTrack(current, song)) {
                     playerController.updateQueue(playerState.value.queue.map {
-                        if (it.filePath == song.filePath) updated else it
+                        if (isSameLyricsTrack(it, song)) it.copy(lyrics = lyricsText, lrcOffsetMs = 0) else it
                     })
                     // Also parse into uiState immediately
                     val parsed = LrcParser.parse(lyricsText, 0)
@@ -633,10 +635,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 val lyricsText = result.syncedLyrics
                 repository.updateSongLyrics(song.id, lyricsText, 0)
                 val current = playerState.value.currentSong
-                if (current != null && current.filePath == song.filePath) {
-                    val updated = current.copy(lyrics = lyricsText, lrcOffsetMs = 0)
+                if (current != null && isSameLyricsTrack(current, song)) {
                     playerController.updateQueue(playerState.value.queue.map {
-                        if (it.filePath == song.filePath) updated else it
+                        if (isSameLyricsTrack(it, song)) it.copy(lyrics = lyricsText, lrcOffsetMs = 0) else it
                     })
                     val parsed = LrcParser.parse(lyricsText, 0)
                     val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
@@ -657,6 +658,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    private fun lyricsTrackKey(song: Song): String = "${song.id}|${song.title}|${song.artist}"
+
+    private fun isSameLyricsTrack(first: Song, second: Song): Boolean =
+        first.filePath == second.filePath ||
+            (first.id == second.id && first.title == second.title && first.artist == second.artist)
 
     fun alignLyricsWithGemini(rawLyrics: String, onComplete: ((String?) -> Unit)? = null) {
         val currentSong = playerState.value.currentSong ?: return

@@ -323,7 +323,15 @@ class MusicPlayerController(
                 }
                 if (isActive && currentPlaybackSessionId == sessionId) {
                     if (streamUrl != null) {
-                        val resolvedSong = song.copy(filePath = streamUrl)
+                        // Lyrics or metadata can finish loading while the stream
+                        // URL is resolving. Base the resolved queue item on the
+                        // latest version so replacing yt:// does not discard it.
+                        val latestSong = _uiState.value.queue.firstOrNull { it.filePath == song.filePath }
+                            ?: _uiState.value.currentSong?.takeIf {
+                                it.id == song.id && it.title == song.title && it.artist == song.artist
+                            }
+                            ?: song
+                        val resolvedSong = latestSong.copy(filePath = streamUrl)
                         _uiState.update { current ->
                             // YouTube song IDs are derived from video IDs and can collide. Match the
                             // unresolved source path so only this queue item receives its stream URL.
@@ -483,7 +491,7 @@ class MusicPlayerController(
                             isHiResAudioActive = song.isHiRes
                         )
                     }
-                    MusicPlaybackService.startOrUpdate(context, song, true)
+                    MusicPlaybackService.startOrUpdate(context, song, true, 0L)
 
                     if (isCrossfade && oldPlayer != null) {
                         // Smoothly crossfade: oldPlayer down, mp up
@@ -564,7 +572,7 @@ class MusicPlayerController(
                 player.start()
                 _uiState.update { it.copy(isPlaying = true) }
                 _uiState.value.currentSong?.let {
-                    MusicPlaybackService.startOrUpdate(context, it, true)
+                    MusicPlaybackService.startOrUpdate(context, it, true, currentPlaybackPosition())
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Resume playback error: ${e.message}")
@@ -584,7 +592,7 @@ class MusicPlayerController(
                 player.pause()
                 _uiState.update { it.copy(isPlaying = false) }
                 _uiState.value.currentSong?.let {
-                    MusicPlaybackService.startOrUpdate(context, it, false)
+                    MusicPlaybackService.startOrUpdate(context, it, false, currentPlaybackPosition())
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Pause playback error: ${e.message}")
@@ -602,11 +610,22 @@ class MusicPlayerController(
 
     fun seekTo(positionMs: Long) {
         try {
-            mediaPlayer?.seekTo(positionMs.toInt())
-            _uiState.update { it.copy(currentPositionMs = positionMs) }
+            val safePosition = positionMs.coerceAtLeast(0L)
+            mediaPlayer?.seekTo(safePosition.toInt())
+            _uiState.update { it.copy(currentPositionMs = safePosition) }
+            _uiState.value.currentSong?.let { song ->
+                MusicPlaybackService.startOrUpdate(context, song, _uiState.value.isPlaying, safePosition)
+            }
         } catch (e: Exception) {
             Log.w(TAG, "Seek error: ${e.message}")
         }
+    }
+
+    private fun currentPlaybackPosition(): Long = try {
+        mediaPlayer?.currentPosition?.toLong()?.coerceAtLeast(0L)
+            ?: _uiState.value.currentPositionMs.coerceAtLeast(0L)
+    } catch (_: Exception) {
+        _uiState.value.currentPositionMs.coerceAtLeast(0L)
     }
 
     fun playNext() {
