@@ -78,6 +78,48 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     }
 
     val context = LocalContext.current
+    val visualizerPermission = Manifest.permission.RECORD_AUDIO
+    var visualizerPermissionGranted by remember {
+        mutableStateOf(ContextCompat.checkSelfPermission(context, visualizerPermission) == PackageManager.PERMISSION_GRANTED)
+    }
+    var showVisualizerPermissionDialog by remember { mutableStateOf(false) }
+    var visualizerPermissionPromptShown by remember { mutableStateOf(false) }
+    val visualizerPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted -> visualizerPermissionGranted = granted }
+
+    LaunchedEffect(uiState.currentTab, playerState.isPlaying) {
+        if (
+            uiState.currentTab == MainTab.NOW_PLAYING && playerState.isPlaying &&
+            !visualizerPermissionPromptShown &&
+            ContextCompat.checkSelfPermission(context, visualizerPermission) != PackageManager.PERMISSION_GRANTED
+        ) {
+            showVisualizerPermissionDialog = true
+            visualizerPermissionPromptShown = true
+        }
+    }
+
+    if (showVisualizerPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showVisualizerPermissionDialog = false
+            },
+            title = { Text("Đồng bộ sóng nhạc") },
+            text = { Text("Android cần quyền âm thanh để phân tích tín hiệu bài đang phát và đồng bộ sóng nhạc. Ứng dụng chỉ dùng tín hiệu này để hiển thị trực tiếp trên thiết bị.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showVisualizerPermissionDialog = false
+                    visualizerPermissionLauncher.launch(visualizerPermission)
+                }) { Text("Tiếp tục") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showVisualizerPermissionDialog = false
+                }) { Text("Để sau") }
+            }
+        )
+    }
+
     val audioPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         Manifest.permission.READ_MEDIA_AUDIO
     } else {
@@ -374,7 +416,8 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 uiState.currentTab == MainTab.NOW_PLAYING -> {
                     NowPlayingScreen(
                         viewModel = viewModel,
-                        playerState = playerState
+                        playerState = playerState,
+                        hasAudioCapturePermission = visualizerPermissionGranted
                     )
                 }
                 uiState.currentTab == MainTab.LYRICS -> {

@@ -36,7 +36,8 @@ data class PlayerUiState(
     val isHiResAudioActive: Boolean = true,
     val isCrossfadeEnabled: Boolean = true,
     val crossfadeDurationSeconds: Float = 2.0f,
-    val isLoadingOnlineStream: Boolean = false
+    val isLoadingOnlineStream: Boolean = false,
+    val audioSessionId: Int = 0
 )
 
 
@@ -497,7 +498,8 @@ class MusicPlayerController(
                             isLoadingOnlineStream = false,
                             totalDurationMs = mp.duration.toLong().coerceAtLeast(preparedSong.durationMs),
                             currentPositionMs = 0,
-                            isHiResAudioActive = preparedSong.isHiRes
+                            isHiResAudioActive = preparedSong.isHiRes,
+                            audioSessionId = audioSession
                         )
                     }
                     MusicPlaybackService.startOrUpdate(context, preparedSong, true, 0L)

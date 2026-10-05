@@ -57,6 +57,7 @@ enum class NowPlayingDisplayMode {
 fun NowPlayingScreen(
     viewModel: MusicViewModel,
     playerState: PlayerUiState,
+    hasAudioCapturePermission: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // Back navigation returns to library
@@ -802,7 +803,8 @@ fun NowPlayingScreen(
             ) {
                 AudioSpectrumVisualizer(
                     isPlaying = playerState.isPlaying,
-                    bands = equalizerState.bands,
+                    audioSessionId = playerState.audioSessionId,
+                    hasAudioCapturePermission = hasAudioCapturePermission,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 8.dp, vertical = 2.dp),

@@ -34,7 +34,7 @@ class MusicRepository(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("nhip_dieu_settings", Context.MODE_PRIVATE)
 
-    fun isDarkThemeEnabled(): Boolean = prefs.getBoolean("appearance_dark_theme", true)
+    fun isDarkThemeEnabled(): Boolean = prefs.getBoolean("appearance_dark_theme", false)
 
     fun setDarkThemeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("appearance_dark_theme", enabled).apply()
@@ -68,6 +68,12 @@ class MusicRepository(private val context: Context) {
 
     fun markInitialLibraryScanRecommendationSeen() {
         prefs.edit().putBoolean("has_seen_initial_scan_recommendation", true).apply()
+    }
+
+    fun hasCompletedLibraryScan(): Boolean = prefs.getBoolean("has_completed_library_scan", false)
+
+    fun markLibraryScanCompleted() {
+        prefs.edit().putBoolean("has_completed_library_scan", true).apply()
     }
 
     val allSongs: Flow<List<Song>> = db.songDao().getAllSongs()

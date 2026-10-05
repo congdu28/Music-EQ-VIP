@@ -69,7 +69,7 @@ fun LibraryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Streamlined Search Bar
             Surface(
@@ -134,7 +134,7 @@ fun LibraryScreen(
                     }
                 },
                 modifier = Modifier
-                    .size(42.dp)
+                    .size(36.dp)
                     .clip(CircleShape)
                     .background(DarkSurfaceVariant)
             ) {
@@ -142,71 +142,68 @@ fun LibraryScreen(
                     imageVector = Icons.Default.Shuffle,
                     contentDescription = "Trộn bài",
                     tint = NeonPurple,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
 
-        }
+            IconButton(
+                onClick = onPickAudioFolder,
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(DarkSurfaceVariant)
+                    .testTag("choose_music_folder_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.FolderOpen,
+                    contentDescription = "Chọn thư mục quét nhạc",
+                    tint = NeonCyan,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
 
-        // Primary scan actions: distinguish the whole-library scan from folder selection.
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp)
-                .height(44.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
             Button(
                 onClick = onRequestScan,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
-                contentPadding = PaddingValues(horizontal = 10.dp),
-                modifier = Modifier.weight(1f).fillMaxHeight().testTag("scan_library_button")
+                contentPadding = PaddingValues(horizontal = 8.dp),
+                modifier = Modifier.height(36.dp).testTag("scan_library_button")
             ) {
-                Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Quét toàn bộ nhạc", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Quét", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
             }
-            OutlinedButton(
-                onClick = onPickAudioFolder,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                contentPadding = PaddingValues(horizontal = 10.dp),
-                modifier = Modifier.fillMaxHeight().testTag("choose_music_folder_button")
-            ) {
-                Icon(Icons.Default.FolderOpen, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Chọn thư mục", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            }
+
         }
 
-        LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-            contentPadding = PaddingValues(horizontal = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            item {
-                Text("Gợi ý:", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-            }
-            items(listOf("Music", "Download", "Recordings")) { folderName ->
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = DarkSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable { onPickSuggestedFolder(folderName) }
-                        .testTag("suggest_scan_${folderName.lowercase()}")
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically
+        if (!uiState.hasCompletedLibraryScan) {
+            LazyRow(
+                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                item {
+                    Text("Gợi ý thư mục:", color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                }
+                items(listOf("Music", "Download", "Recordings")) { folderName ->
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = DarkSurfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { onPickSuggestedFolder(folderName) }
+                            .testTag("suggest_scan_${folderName.lowercase()}")
                     ) {
-                        Icon(Icons.Default.Folder, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(folderName, color = TextPrimary, fontSize = 10.5.sp, fontWeight = FontWeight.Medium)
+                        Row(
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Folder, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(13.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(folderName, color = TextPrimary, fontSize = 10.5.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }

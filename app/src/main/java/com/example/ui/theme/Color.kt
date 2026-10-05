@@ -7,7 +7,7 @@ import androidx.compose.runtime.setValue
 
 /** Shared palette state keeps the existing color tokens responsive to appearance settings. */
 object AppThemeColors {
-    var isDark by mutableStateOf(true)
+    var isDark by mutableStateOf(false)
         private set
     var accent by mutableStateOf(Color(0xFF3399FF))
         private set

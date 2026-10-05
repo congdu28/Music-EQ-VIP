@@ -67,6 +67,7 @@ data class MusicAppUiState(
     val activeLyricIndex: Int = -1,
     val isScanning: Boolean = false,
     val scanResultMessage: String? = null,
+    val hasCompletedLibraryScan: Boolean = false,
     val showInitialScanRecommendation: Boolean = false,
     val showCreatePlaylistDialog: Boolean = false,
     val showAddToPlaylistDialog: Song? = null,
@@ -80,7 +81,7 @@ data class MusicAppUiState(
     val isAligningLyrics: Boolean = false,
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.7-flash",
-    val isDarkTheme: Boolean = true,
+    val isDarkTheme: Boolean = false,
     val accentColor: Int = 0xFF3399FF.toInt(),
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
@@ -115,7 +116,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 geminiModel = savedModel,
                 isDarkTheme = savedDarkTheme,
                 accentColor = savedAccentColor,
-                showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan()
+                showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan(),
+                hasCompletedLibraryScan = repository.hasCompletedLibraryScan()
             )
         }
 
@@ -342,9 +344,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _appUiState.update { it.copy(isScanning = true, scanResultMessage = null) }
             val count = repository.scanDeviceAudioFiles()
+            repository.markLibraryScanCompleted()
             _appUiState.update {
                 it.copy(
                     isScanning = false,
+                    hasCompletedLibraryScan = true,
                     scanResultMessage = if (count > 0) "Đã quét và thêm $count bài hát mới vào thư viện" else "Thư viện đã được cập nhật đầy đủ"
                 )
             }
@@ -355,9 +359,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _appUiState.update { it.copy(isScanning = true, scanResultMessage = null) }
             val count = repository.scanAudioFolder(folderUri)
+            repository.markLibraryScanCompleted()
             _appUiState.update {
                 it.copy(
                     isScanning = false,
+                    hasCompletedLibraryScan = true,
                     scanResultMessage = if (count > 0) "Đã quét thư mục và thêm $count bài hát mới vào thư viện" else "Không tìm thấy bài hát mới trong thư mục đã chọn"
                 )
             }
