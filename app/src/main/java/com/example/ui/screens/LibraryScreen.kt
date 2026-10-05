@@ -231,10 +231,10 @@ fun LibraryScreen(
             items(LibrarySubTab.values()) { tab ->
                 val isSelected = uiState.librarySubTab == tab
                 val countLabel = when (tab) {
-                    LibrarySubTab.ALL_SONGS -> " (${uiState.songs.size})"
+                    LibrarySubTab.ALL_SONGS -> " (${uiState.songs.count { !it.isFavorite }})"
                     LibrarySubTab.FOLDERS -> " (${musicFolders.size})"
                     LibrarySubTab.HI_RES -> " (${uiState.songs.count { it.isHiRes }})"
-                    LibrarySubTab.FAVORITES -> " (${uiState.songs.count { it.isFavorite }})"
+                    LibrarySubTab.FAVORITES -> " (${uiState.favoriteSongs.size})"
                     LibrarySubTab.PLAYLISTS -> " (${uiState.playlists.size})"
                     LibrarySubTab.ARTISTS -> " (${uiState.songs.map { it.artist }.distinct().size})"
                 }

@@ -891,7 +891,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun getFilteredSongs(): List<Song> {
         val query = _appUiState.value.searchQuery.trim().lowercase()
         val all = when (_appUiState.value.librarySubTab) {
-            LibrarySubTab.ALL_SONGS -> _appUiState.value.songs
+            LibrarySubTab.ALL_SONGS -> _appUiState.value.songs.filterNot { it.isFavorite }
             LibrarySubTab.FOLDERS -> _appUiState.value.songs
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }
