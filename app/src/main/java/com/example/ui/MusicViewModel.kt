@@ -461,6 +461,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun applyPreset(preset: EqualizerPreset) {
         val levels = preset.bandLevelsCsv.split(",").mapNotNull { it.trim().toIntOrNull() }
         equalizerManager.applyPreset(preset.name, levels, preset.bassBoost, preset.virtualizer)
+        equalizerManager.setReverbPreset(preset.reverbPreset.toShort())
     }
 
     fun applyPreset(presetName: String) {
@@ -485,16 +486,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun saveCurrentPreset(name: String) {
-        val currentBands = equalizerState.value.bands.joinToString(",") { it.levelMilliBels.toString() }
-        val preset = EqualizerPreset(
-            name = name,
-            isCustom = true,
-            bandLevelsCsv = currentBands,
-            bassBoost = equalizerState.value.bassBoostStrength,
-            virtualizer = equalizerState.value.virtualizerStrength,
-            reverbPreset = 0
-        )
         viewModelScope.launch {
+            val state = equalizerState.value
+            val existing = _appUiState.value.presets.firstOrNull {
+                it.isCustom && it.name.equals(name, ignoreCase = true)
+            }
+            val preset = EqualizerPreset(
+                id = existing?.id ?: 0,
+                name = name,
+                isCustom = true,
+                bandLevelsCsv = state.bands.joinToString(",") { it.levelMilliBels.toString() },
+                bassBoost = state.bassBoostStrength,
+                virtualizer = state.virtualizerStrength,
+                reverbPreset = state.reverbPreset.toInt()
+            )
             repository.saveEqualizerPreset(preset)
             _appUiState.update { it.copy(showSavePresetDialog = false) }
         }

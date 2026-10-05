@@ -5,10 +5,11 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +25,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,7 +114,7 @@ fun EqualizerScreen(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    if (equalizerState.isEnabled) "Đang bật: ${equalizerState.activePresetName}" else "Đã tắt bộ lọc",
+                                    if (equalizerState.isEnabled) "Đang bật: ${equalizerState.activePresetName}" else "Đã tắt · vẫn có thể chỉnh và lưu preset",
                                     color = if (equalizerState.isEnabled) NeonCyan else TextMuted,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Medium
@@ -138,7 +145,6 @@ fun EqualizerScreen(
                 ) {
                     OutlinedButton(
                         onClick = { viewModel.resetEqualizerToFlat() },
-                        enabled = equalizerState.isEnabled,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
@@ -151,7 +157,6 @@ fun EqualizerScreen(
 
                     Button(
                         onClick = { viewModel.setShowSavePreset(true) },
-                        enabled = equalizerState.isEnabled,
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = NeonPurple,
@@ -203,7 +208,7 @@ fun EqualizerScreen(
                         ),
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable(enabled = equalizerState.isEnabled) {
+                            .clickable {
                                 val bass = if (name.contains("Bass")) 600 else if (name.contains("EDM")) 500 else 150
                                 val virt = if (name.contains("Acoustic") || name.contains("Jazz")) 350 else 150
                                 viewModel.equalizerManager.applyPreset(name, gains, bass, virt)
@@ -231,7 +236,7 @@ fun EqualizerScreen(
                         ),
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .clickable(enabled = equalizerState.isEnabled) {
+                            .clickable {
                                 viewModel.applyPreset(preset)
                             }
                     ) {
@@ -266,13 +271,16 @@ fun EqualizerScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
                                 "10 Dải Tần Âm Thanh",
                                 color = TextPrimary,
@@ -294,35 +302,36 @@ fun EqualizerScreen(
                                 )
                             }
                         }
-                        Text(
-                            "Kéo từng thanh gạt để tăng / giảm ±12dB",
-                            color = TextSecondary,
-                            fontSize = 11.sp
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = DarkSurfaceVariant
+                        ) {
+                            Text(
+                                text = "±12 dB",
+                                color = TextHighlight,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                            )
+                        }
                     }
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = DarkSurfaceVariant
-                    ) {
-                        Text(
-                            text = "-12dB / +12dB",
-                            color = TextHighlight,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
-                        )
-                    }
+                    Text(
+                        "Vuốt ngang để xem đủ 10 dải · Kéo núm để chỉnh",
+                        color = TextSecondary,
+                        fontSize = 10.sp
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
 
-                // Vertical Band Faders Row (10 Bands)
+                // Keep each fader wide enough to drag comfortably on a phone.
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(230.dp),
-                    horizontalArrangement = Arrangement.spacedBy(1.dp),
+                        .height(232.dp)
+                        .horizontalScroll(rememberScrollState())
+                        .testTag("eq_bands_scroll"),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     equalizerState.bands.forEach { band ->
@@ -332,7 +341,7 @@ fun EqualizerScreen(
                             onLevelChange = { newLevel ->
                                 viewModel.updateBandLevel(band.index, newLevel)
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.width(44.dp).testTag("eq_band_${band.index}")
                         )
                     }
                 }
@@ -689,12 +698,17 @@ fun SingleBandFader(
     onLevelChange: (Short) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var componentHeight by remember { mutableStateOf(1f) }
+    var componentHeightPx by remember { mutableStateOf(1f) }
+    val density = LocalDensity.current
 
     val minRange = band.minLevelMilliBels.toFloat()
     val maxRange = band.maxLevelMilliBels.toFloat()
     val totalRange = (maxRange - minRange).coerceAtLeast(1f)
     val fraction = ((band.levelMilliBels.toFloat() - minRange) / totalRange).coerceIn(0f, 1f)
+    val componentHeightDp = with(density) { componentHeightPx.toDp() }
+    val thumbSize = 22.dp
+    val thumbTravel = (componentHeightDp - thumbSize).coerceAtLeast(0.dp)
+    val activeFillHeight = thumbTravel * kotlin.math.abs(fraction - 0.5f)
 
     Column(
         modifier = modifier.fillMaxHeight(),
@@ -718,19 +732,34 @@ fun SingleBandFader(
             modifier = Modifier
                 .width(36.dp)
                 .weight(1f)
-                .onSizeChanged { size -> componentHeight = size.height.toFloat().coerceAtLeast(1f) }
-                .pointerInput(isEnabled, minRange, maxRange) {
-                    if (isEnabled) {
-                        detectVerticalDragGestures { change, dragAmount ->
-                            change.consume()
-                            val deltaFraction = -dragAmount / componentHeight
-                            val deltaMilliBels = deltaFraction * totalRange
-                            val newLevel = (band.levelMilliBels + deltaMilliBels).roundToInt().coerceIn(
-                                band.minLevelMilliBels.toInt(),
-                                band.maxLevelMilliBels.toInt()
-                            ).toShort()
-                            onLevelChange(newLevel)
-                        }
+                .onSizeChanged { size -> componentHeightPx = size.height.toFloat().coerceAtLeast(1f) }
+                .pointerInput(minRange, maxRange) {
+                    fun updateFromY(y: Float) {
+                        val height = size.height.toFloat().coerceAtLeast(1f)
+                        val newFraction = (1f - y / height).coerceIn(0f, 1f)
+                        val newLevel = (minRange + totalRange * newFraction)
+                            .roundToInt()
+                            .coerceIn(band.minLevelMilliBels.toInt(), band.maxLevelMilliBels.toInt())
+                            .toShort()
+                        onLevelChange(newLevel)
+                    }
+                    detectDragGestures(
+                        onDragStart = { offset -> updateFromY(offset.y) }
+                    ) { change, _ ->
+                        change.consume()
+                        updateFromY(change.position.y)
+                    }
+                }
+                .semantics {
+                    contentDescription = "EQ ${band.centerFreqLabel}"
+                    progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
+                    setProgress { value ->
+                        val newLevel = (minRange + totalRange * value.coerceIn(0f, 1f))
+                            .roundToInt()
+                            .coerceIn(band.minLevelMilliBels.toInt(), band.maxLevelMilliBels.toInt())
+                            .toShort()
+                        onLevelChange(newLevel)
+                        true
                     }
                 },
             contentAlignment = Alignment.BottomCenter
@@ -755,30 +784,19 @@ fun SingleBandFader(
 
             // Active Track Fill
             val fillHeightFraction = (fraction - 0.5f)
-            if (fillHeightFraction > 0) {
-                // Boosted (above 0 dB)
+            if (activeFillHeight > 0.dp) {
                 Box(
                     modifier = Modifier
                         .width(6.dp)
-                        .fillMaxHeight(fillHeightFraction)
+                        .height(activeFillHeight)
                         .align(Alignment.Center)
-                        .offset(y = -((componentHeight * fillHeightFraction / 2).dp))
+                        .offset(y = if (fillHeightFraction > 0) -(activeFillHeight / 2) else activeFillHeight / 2)
                         .clip(RoundedCornerShape(3.dp))
                         .background(
-                            Brush.verticalGradient(listOf(NeonCyan, ElectricAzure))
-                        )
-                )
-            } else if (fillHeightFraction < 0) {
-                // Cut (below 0 dB)
-                Box(
-                    modifier = Modifier
-                        .width(6.dp)
-                        .fillMaxHeight(-fillHeightFraction)
-                        .align(Alignment.Center)
-                        .offset(y = ((componentHeight * -fillHeightFraction / 2).dp))
-                        .clip(RoundedCornerShape(3.dp))
-                        .background(
-                            Brush.verticalGradient(listOf(NeonPink, DarkSurfaceVariant))
+                            Brush.verticalGradient(
+                                if (fillHeightFraction > 0) listOf(NeonCyan, ElectricAzure)
+                                else listOf(NeonPink, DarkSurfaceVariant)
+                            )
                         )
                 )
             }
@@ -799,7 +817,7 @@ fun SingleBandFader(
                     ),
                     modifier = Modifier
                         .size(22.dp)
-                        .offset(y = -((componentHeight - 22f) * fraction).dp)
+                        .offset(y = -(thumbTravel * fraction))
                 ) {}
             }
         }
