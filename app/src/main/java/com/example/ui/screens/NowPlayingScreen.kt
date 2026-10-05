@@ -70,8 +70,9 @@ fun NowPlayingScreen(
     val song = pendingOnlineSong ?: playerState.currentSong
     val equalizerState by viewModel.equalizerState.collectAsState()
 
-    val isLoadingSelectedOnlineSong = pendingOnlineSong != null ||
-        (playerState.isLoadingOnlineStream && song?.format?.contains("YouTube", ignoreCase = true) == true)
+    // Only a favorite selection opts into the dedicated blocking loading screen.
+    // YouTube playback from search and other screens keeps the regular player UI.
+    val isLoadingSelectedOnlineSong = pendingOnlineSong != null
 
     if (isLoadingSelectedOnlineSong && song != null) {
         Box(

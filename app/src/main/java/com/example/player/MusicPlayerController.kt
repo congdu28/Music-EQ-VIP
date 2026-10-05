@@ -405,6 +405,22 @@ class MusicPlayerController(
             crossfadeJob = null
 
             val isOnline = song.filePath.startsWith("http://") || song.filePath.startsWith("https://")
+            val isYouTubeOnline = isOnline && song.format.contains("YouTube", ignoreCase = true)
+            if (isYouTubeOnline) {
+                // Favorites may persist an already-resolved YouTube URL. Publish that selection
+                // and loading state before prepareAsync so the UI never retains the prior track.
+                _uiState.update {
+                    it.copy(
+                        currentSong = song,
+                        isPlaying = false,
+                        isLoadingOnlineStream = true,
+                        currentPositionMs = 0,
+                        totalDurationMs = song.durationMs,
+                        isHiResAudioActive = song.isHiRes
+                    )
+                }
+                MusicPlaybackService.startOrUpdate(context, song, false)
+            }
             val oldPlayer = mediaPlayer
             val state = _uiState.value
             val isCrossfade = state.isCrossfadeEnabled && oldPlayer != null && oldPlayer.isPlaying && !isOnline
@@ -491,7 +507,7 @@ class MusicPlayerController(
                     preparingPlayer = null
                     mediaPlayer = mp
 
-                    if (isOnline && song.format.contains("YouTube", ignoreCase = true)) {
+                    if (isYouTubeOnline) {
                         Log.d(TAG, "YouTube stream prepared in ${(System.nanoTime() - playbackRequestedAtNanos) / 1_000_000} ms")
                     }
 

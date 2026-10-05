@@ -23,6 +23,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 enum class MainTab(val title: String) {
@@ -420,11 +421,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (songs.isEmpty()) return
         val selectedIndex = startIndex.coerceIn(0, songs.lastIndex)
         val selectedSong = songs[selectedIndex]
-        val isUnresolvedYouTube = selectedSong.filePath.startsWith("yt://") ||
-            (selectedSong.format.contains("YouTube", ignoreCase = true) && !selectedSong.filePath.startsWith("http"))
+        val isYouTubeFavorite = selectedSong.filePath.startsWith("yt://") ||
+            selectedSong.format.contains("YouTube", ignoreCase = true)
 
         clearPendingOnlineSelection()
-        if (!isUnresolvedYouTube) {
+        if (!isYouTubeFavorite) {
             playQueue(songs, selectedIndex)
             return
         }
@@ -440,6 +441,22 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 // Give Compose a frame to show the pending song before MediaPlayer teardown.
                 delay(64)
                 playerController.playQueue(songs, selectedIndex)
+                // Some saved YouTube favorites already contain a resolved HTTP stream URL.
+                // That path prepares asynchronously without setting isLoadingOnlineStream or
+                // publishing currentSong immediately, so keep the pending screen until either
+                // the selected favorite is ready or playback fails.
+                withTimeoutOrNull(45_000L) {
+                    playerState.first { state ->
+                        val current = state.currentSong
+                        val selectedIsReady = current?.id == selectedSong.id &&
+                            current.title == selectedSong.title &&
+                            current.artist == selectedSong.artist &&
+                            !state.isLoadingOnlineStream
+                        val playbackFailed = current?.id != selectedSong.id &&
+                            !state.isPlaying && !state.isLoadingOnlineStream
+                        selectedIsReady || playbackFailed
+                    }
+                }
             } finally {
                 _appUiState.update { state ->
                     if (state.pendingOnlineSong?.filePath == selectedSong.filePath) {
