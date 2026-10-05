@@ -3,6 +3,8 @@ package com.example.data
 import android.util.Log
 import com.example.model.Song
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -11,6 +13,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentHashMap
 
 object YouTubeMusicService {
     private const val TAG = "YouTubeMusicService"
@@ -18,6 +21,14 @@ object YouTubeMusicService {
     private val client = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS)
+        .build()
+
+    // Playback metadata responses are small; bound each network attempt so one slow
+    // response cannot hold the player in its loading state for tens of seconds.
+    private val playbackClient = client.newBuilder()
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .callTimeout(12, TimeUnit.SECONDS)
         .build()
 
     private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
@@ -30,6 +41,10 @@ object YouTubeMusicService {
     @Volatile
     private var visitorDataExpiryTimestamp: Long = 0L
 
+    private val visitorDataMutex = Mutex()
+    private data class CachedStream(val url: String, val expiresAtMs: Long)
+    private val streamCache = ConcurrentHashMap<String, CachedStream>()
+
     /**
      * Obtains or refreshes the visitorData token from YouTube's visitor_id endpoint.
      */
@@ -40,42 +55,50 @@ object YouTubeMusicService {
             return@withContext current
         }
 
-        try {
-            val payload = JSONObject().apply {
-                put("context", JSONObject().apply {
-                    put("client", JSONObject().apply {
-                        put("clientName", "VISIONOS")
-                        put("clientVersion", "1.02")
-                        put("hl", "vi")
-                        put("gl", "VN")
-                    })
-                })
+        visitorDataMutex.withLock {
+            val lockedNow = System.currentTimeMillis()
+            val lockedCurrent = cachedVisitorData
+            if (!forceRefresh && !lockedCurrent.isNullOrBlank() && lockedNow < visitorDataExpiryTimestamp) {
+                return@withLock lockedCurrent
             }
 
-            val request = Request.Builder()
-                .url("https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false")
-                .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", AUDIO_USER_AGENT)
-                .header("X-Goog-Api-Format-Version", "2")
-                .build()
+            try {
+                val payload = JSONObject().apply {
+                    put("context", JSONObject().apply {
+                        put("client", JSONObject().apply {
+                            put("clientName", "VISIONOS")
+                            put("clientVersion", "1.02")
+                            put("hl", "vi")
+                            put("gl", "VN")
+                        })
+                    })
+                }
 
-            client.newCall(request).execute().use { response ->
-                if (response.isSuccessful) {
-                    val responseStr = response.body?.string() ?: ""
-                    val json = JSONObject(responseStr)
-                    val visitorData = json.optJSONObject("responseContext")?.optString("visitorData")
-                    if (!visitorData.isNullOrBlank()) {
-                        cachedVisitorData = visitorData
-                        visitorDataExpiryTimestamp = now + (2 * 3600 * 1000) // valid for 2 hours
-                        Log.d(TAG, "Successfully acquired fresh visitorData token")
-                        return@withContext visitorData
+                val request = Request.Builder()
+                    .url("https://www.youtube.com/youtubei/v1/visitor_id?prettyPrint=false")
+                    .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+                    .header("User-Agent", AUDIO_USER_AGENT)
+                    .header("X-Goog-Api-Format-Version", "2")
+                    .build()
+
+                playbackClient.newCall(request).execute().use { response ->
+                    if (response.isSuccessful) {
+                        val responseStr = response.body?.string() ?: ""
+                        val json = JSONObject(responseStr)
+                        val visitorData = json.optJSONObject("responseContext")?.optString("visitorData")
+                        if (!visitorData.isNullOrBlank()) {
+                            cachedVisitorData = visitorData
+                            visitorDataExpiryTimestamp = lockedNow + (2 * 3600 * 1000) // valid for 2 hours
+                            Log.d(TAG, "Successfully acquired fresh visitorData token")
+                            return@withLock visitorData
+                        }
                     }
                 }
+            } catch (e: Throwable) {
+                Log.w(TAG, "Error fetching visitorData: ${e.message}")
             }
-        } catch (e: Throwable) {
-            Log.w(TAG, "Error fetching visitorData: ${e.message}")
+            cachedVisitorData ?: ""
         }
-        return@withContext cachedVisitorData ?: ""
     }
 
     /**
@@ -84,20 +107,27 @@ object YouTubeMusicService {
     suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
         if (videoId.isBlank()) return@withContext null
 
-        // Pass 1: Try with cached/fresh visitorData
+        val startedAt = System.nanoTime()
+        val cached = streamCache[videoId]
+        if (cached != null && cached.expiresAtMs > System.currentTimeMillis()) {
+            Log.d(TAG, "Using cached stream URL for $videoId")
+            return@withContext cached.url
+        }
+        if (cached != null) streamCache.remove(videoId, cached)
+
+        fun logResolved(source: String, url: String): String {
+            Log.d(TAG, "Resolved $videoId via $source in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
+            return url
+        }
+
+        // Fast path: use visitorData warmed while the YouTube tab/search was loading.
         var streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = false)
         if (streamUrl != null) {
-            return@withContext streamUrl
+            return@withContext logResolved("VISIONOS", streamUrl)
         }
 
-        // Pass 2: Retry with explicitly refreshed visitorData (fixes session expiry / bot guard)
-        Log.d(TAG, "Pass 1 failed for $videoId, retrying with fresh visitorData...")
-        streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true)
-        if (streamUrl != null) {
-            return@withContext streamUrl
-        }
-
-        // Pass 3: Fallback to ANDROID_VR with fresh visitorData
+        // Try the second supported client with the same token before making another
+        // visitor-token request. This avoids an unnecessary round trip on fallback.
         try {
             val visitorData = getVisitorData(forceRefresh = false)
             val vrPayload = JSONObject().apply {
@@ -124,14 +154,15 @@ object YouTubeMusicService {
                 .header("X-Goog-Api-Format-Version", "2")
                 .build()
 
-            client.newCall(vrRequest).execute().use { response ->
+            playbackClient.newCall(vrRequest).execute().use { response ->
                 if (response.isSuccessful) {
                     val bodyStr = response.body?.string() ?: ""
                     val json = JSONObject(bodyStr)
                     val url = extractDirectAudioUrl(json)
                     if (url != null) {
+                        cacheStreamUrl(videoId, url, json)
                         Log.d(TAG, "Resolved stream via ANDROID_VR fallback for $videoId")
-                        return@withContext url
+                        return@withContext logResolved("ANDROID_VR", url)
                     }
                 }
             }
@@ -139,8 +170,28 @@ object YouTubeMusicService {
             Log.w(TAG, "ANDROID_VR fallback stream resolution failed for $videoId: ${e.message}")
         }
 
-        Log.e(TAG, "All stream resolution passes failed for videoId: $videoId")
+        // Refresh the token only after both clients have failed with the cached token.
+        Log.d(TAG, "Both playback clients failed for $videoId; refreshing visitorData once")
+        streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true)
+        if (streamUrl != null) {
+            return@withContext logResolved("VISIONOS refreshed session", streamUrl)
+        }
+
+        Log.e(TAG, "All stream resolution passes failed for $videoId in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
         return@withContext null
+    }
+
+    fun invalidateStreamUrl(url: String) {
+        streamCache.entries.removeAll { it.value.url == url }
+    }
+
+    private fun cacheStreamUrl(videoId: String, url: String, playerResponse: JSONObject) {
+        val expiresInSeconds = playerResponse.optJSONObject("streamingData")
+            ?.optLong("expiresInSeconds", 240L)
+            ?: 240L
+        val safeLifetimeMs = (expiresInSeconds - 60L).coerceAtLeast(0L) * 1000L
+        if (safeLifetimeMs == 0L) return
+        streamCache[videoId] = CachedStream(url, System.currentTimeMillis() + safeLifetimeMs)
     }
 
     private suspend fun queryVisionOsStream(videoId: String, forceFreshVisitorData: Boolean): String? = withContext(Dispatchers.IO) {
@@ -170,7 +221,7 @@ object YouTubeMusicService {
                 .header("X-Goog-Api-Format-Version", "2")
                 .build()
 
-            client.newCall(request).execute().use { response ->
+            playbackClient.newCall(request).execute().use { response ->
                 if (response.isSuccessful) {
                     val bodyStr = response.body?.string() ?: ""
                     val json = JSONObject(bodyStr)
@@ -181,6 +232,7 @@ object YouTubeMusicService {
                     }
                     val url = extractDirectAudioUrl(json)
                     if (url != null) {
+                        cacheStreamUrl(videoId, url, json)
                         Log.d(TAG, "Successfully resolved VISIONOS audio stream for $videoId")
                         return@withContext url
                     }

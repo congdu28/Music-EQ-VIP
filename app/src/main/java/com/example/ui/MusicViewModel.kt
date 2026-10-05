@@ -15,6 +15,7 @@ import com.example.model.Song
 import com.example.player.MusicPlayerController
 import com.example.player.PlayerUiState
 import com.example.ui.components.VisualizerStyle
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
@@ -190,8 +191,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _appUiState.update { it.copy(currentTab = tab) }
         val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.LYRICS)
         playerController.setHighPrecisionTracking(needsHighPrecision)
-        if (tab == MainTab.YOUTUBE && _appUiState.value.youtubeSongs.isEmpty() && !_appUiState.value.isSearchingYouTube) {
-            selectYouTubeCategory(_appUiState.value.selectedYouTubeCategory)
+        if (tab == MainTab.YOUTUBE) {
+            // Warm the playback session while results load, so tapping a result
+            // usually skips the separate visitor-token request.
+            viewModelScope.launch(Dispatchers.IO) {
+                com.example.data.YouTubeMusicService.getVisitorData()
+            }
+            if (_appUiState.value.youtubeSongs.isEmpty() && !_appUiState.value.isSearchingYouTube) {
+                selectYouTubeCategory(_appUiState.value.selectedYouTubeCategory)
+            }
         }
     }
 

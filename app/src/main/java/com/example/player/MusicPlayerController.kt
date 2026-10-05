@@ -289,6 +289,7 @@ class MusicPlayerController(
     }
 
     fun playSong(song: Song) {
+        val playbackRequestedAtNanos = System.nanoTime()
         val sessionId = System.currentTimeMillis()
         currentPlaybackSessionId = sessionId
 
@@ -331,7 +332,7 @@ class MusicPlayerController(
                             }
                             current.copy(queue = updatedQueue, currentSong = resolvedSong)
                         }
-                        playSongInternal(resolvedSong, sessionId)
+                        playSongInternal(resolvedSong, sessionId, playbackRequestedAtNanos)
                     } else {
                         Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
                         _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
@@ -350,10 +351,14 @@ class MusicPlayerController(
             return
         }
 
-        playSongInternal(song, sessionId)
+        playSongInternal(song, sessionId, playbackRequestedAtNanos)
     }
 
-    private fun playSongInternal(song: Song, sessionId: Long = currentPlaybackSessionId) {
+    private fun playSongInternal(
+        song: Song,
+        sessionId: Long = currentPlaybackSessionId,
+        playbackRequestedAtNanos: Long = System.nanoTime()
+    ) {
         try {
             crossfadeJob?.cancel()
             crossfadeJob = null
@@ -443,6 +448,10 @@ class MusicPlayerController(
                     preparingPlayer = null
                     mediaPlayer = mp
 
+                    if (isOnline && song.format.contains("YouTube", ignoreCase = true)) {
+                        Log.d(TAG, "YouTube stream prepared in ${(System.nanoTime() - playbackRequestedAtNanos) / 1_000_000} ms")
+                    }
+
                     try {
                         mp.start()
                     } catch (t: Throwable) {
@@ -510,6 +519,9 @@ class MusicPlayerController(
 
                 setOnErrorListener { mp, what, extra ->
                     Log.w(TAG, "MediaPlayer error: what=$what, extra=$extra")
+                    if (song.filePath.startsWith("http") && song.format.contains("YouTube", ignoreCase = true)) {
+                        com.example.data.YouTubeMusicService.invalidateStreamUrl(song.filePath)
+                    }
                     if (preparingPlayer == mp) {
                         preparingPlayer = null
                     }
@@ -531,6 +543,9 @@ class MusicPlayerController(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error playing song: ${e.message}", e)
+            if (song.filePath.startsWith("http") && song.format.contains("YouTube", ignoreCase = true)) {
+                com.example.data.YouTubeMusicService.invalidateStreamUrl(song.filePath)
+            }
             preparingPlayer = null
             _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
         }
