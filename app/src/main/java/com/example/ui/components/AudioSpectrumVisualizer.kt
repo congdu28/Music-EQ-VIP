@@ -2,7 +2,6 @@ package com.example.ui.components
 
 import android.media.audiofx.Visualizer
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -60,18 +59,20 @@ fun AudioSpectrumVisualizer(
         fft.maxOrNull()?.let { it > 0.015f } == true
     }
     val useFallback = isPlaying && !hasCurrentSignal
-    val fallbackTransition = rememberInfiniteTransition(label = "fallback_visualizer")
-    val fallbackSpec: AnimationSpec<Float> = if (useFallback) {
-        infiniteRepeatable<Float>(tween(900, easing = LinearEasing), RepeatMode.Restart)
+    val fallbackPhase = if (useFallback) {
+        val fallbackTransition = rememberInfiniteTransition(label = "fallback_visualizer")
+        fallbackTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = (2 * Math.PI).toFloat(),
+            animationSpec = infiniteRepeatable(
+                animation = tween(easing = LinearEasing, durationMillis = 900),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "fallback_phase"
+        ).value
     } else {
-        tween<Float>(0)
+        0f
     }
-    val fallbackPhase by fallbackTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = (2 * Math.PI).toFloat(),
-        animationSpec = fallbackSpec,
-        label = "fallback_phase"
-    )
 
     DisposableEffect(audioSessionId, isPlaying, hasAudioCapturePermission) {
         var visualizer: Visualizer? = null
