@@ -407,10 +407,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
-        playerController.playQueue(songs, startIndex)
-        // Publish the tapped track (including saved YouTube artwork and metadata) first,
-        // so the player screen can render it on its first frame while stream resolution runs.
         setTab(MainTab.NOW_PLAYING)
+        playerController.playQueue(songs, startIndex)
     }
 
     fun playSong(song: Song) {

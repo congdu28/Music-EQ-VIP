@@ -57,6 +57,7 @@ class MusicPlayerController(
     private var preparingPlayer: MediaPlayer? = null
     private var crossfadeJob: Job? = null
     private var resolveStreamJob: Job? = null
+    private var onlineTransitionJob: Job? = null
 
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
@@ -270,7 +271,11 @@ class MusicPlayerController(
      * Completely stops, cleans up, and releases all active and preparing media players and coroutine jobs.
      * Prevents dual playback, overlapping audio, or memory leaks.
      */
-    fun stopAllPlayback() {
+    fun stopAllPlayback(cancelOnlineTransition: Boolean = true) {
+        if (cancelOnlineTransition) {
+            onlineTransitionJob?.cancel()
+            onlineTransitionJob = null
+        }
         resolveStreamJob?.cancel()
         resolveStreamJob = null
 
@@ -312,59 +317,74 @@ class MusicPlayerController(
         if (song.filePath.startsWith("yt://") || (song.format.contains("YouTube") && !song.filePath.startsWith("http"))) {
             val videoId = song.filePath.removePrefix("yt://").trim()
 
-            // IMMEDIATELY stop any existing playback (including library music)
-            // so audio never overlaps while the online stream is being fetched!
-            stopAllPlayback()
-
+            // Publish the selected queue item before any MediaPlayer teardown. Some devices
+            // block for seconds in stop/reset/release; never make the player screen keep
+            // presenting the previously selected song during that cleanup.
+            onlineTransitionJob?.cancel()
+            resolveStreamJob?.cancel()
+            try { mediaPlayer?.pause() } catch (_: Throwable) {}
             _uiState.update {
                 it.copy(
+                    queue = it.queue.map { queued -> if (queued.filePath == song.filePath) song else queued },
                     currentSong = song,
                     isPlaying = false,
                     isLoadingOnlineStream = true,
-                    currentPositionMs = 0
+                    currentPositionMs = 0,
+                    totalDurationMs = song.durationMs,
+                    isHiResAudioActive = song.isHiRes
                 )
             }
             MusicPlaybackService.startOrUpdate(context, song, false)
 
-            resolveStreamJob = scope.launch {
-                val streamUrl = withContext(Dispatchers.IO) {
-                    try {
-                        com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
-                    } catch (t: Throwable) {
-                        null
-                    }
-                }
-                if (isActive && currentPlaybackSessionId == sessionId) {
-                    if (streamUrl != null) {
-                        // Lyrics or metadata can finish loading while the stream
-                        // URL is resolving. Base the resolved queue item on the
-                        // latest version so replacing yt:// does not discard it.
-                        val latestSong = _uiState.value.queue.firstOrNull { it.filePath == song.filePath }
-                            ?: _uiState.value.currentSong?.takeIf {
-                                it.id == song.id && it.title == song.title && it.artist == song.artist
-                            }
-                            ?: song
-                        val resolvedSong = latestSong.copy(filePath = streamUrl)
-                        _uiState.update { current ->
-                            // YouTube song IDs are derived from video IDs and can collide. Match the
-                            // unresolved source path so only this queue item receives its stream URL.
-                            val updatedQueue = current.queue.map {
-                                if (it.filePath == song.filePath) resolvedSong else it
-                            }
-                            current.copy(queue = updatedQueue, currentSong = resolvedSong)
+            // Let Compose draw the newly selected song, cover, and loading state first.
+            // The old MediaPlayer cleanup can be slow on a few Android devices.
+            onlineTransitionJob = scope.launch {
+                delay(48)
+                if (!isActive || currentPlaybackSessionId != sessionId) return@launch
+
+                stopAllPlayback(cancelOnlineTransition = false)
+                if (!isActive || currentPlaybackSessionId != sessionId) return@launch
+
+                resolveStreamJob = launch {
+                    val streamUrl = withContext(Dispatchers.IO) {
+                        try {
+                            com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
+                        } catch (t: Throwable) {
+                            null
                         }
-                        playSongInternal(resolvedSong, sessionId, playbackRequestedAtNanos)
-                    } else {
-                        Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
-                        _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
-                        withContext(Dispatchers.Main) {
-                            try {
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Không thể phát bài hát này từ YouTube. Vui lòng chọn bài khác.",
-                                    android.widget.Toast.LENGTH_SHORT
-                                ).show()
-                            } catch (t: Throwable) {}
+                    }
+                    if (isActive && currentPlaybackSessionId == sessionId) {
+                        if (streamUrl != null) {
+                            // Lyrics or metadata can finish loading while the stream
+                            // URL is resolving. Base the resolved queue item on the
+                            // latest version so replacing yt:// does not discard it.
+                            val latestSong = _uiState.value.queue.firstOrNull { it.filePath == song.filePath }
+                                ?: _uiState.value.currentSong?.takeIf {
+                                    it.id == song.id && it.title == song.title && it.artist == song.artist
+                                }
+                                ?: song
+                            val resolvedSong = latestSong.copy(filePath = streamUrl)
+                            _uiState.update { current ->
+                                // YouTube song IDs are derived from video IDs and can collide. Match the
+                                // unresolved source path so only this queue item receives its stream URL.
+                                val updatedQueue = current.queue.map {
+                                    if (it.filePath == song.filePath) resolvedSong else it
+                                }
+                                current.copy(queue = updatedQueue, currentSong = resolvedSong)
+                            }
+                            playSongInternal(resolvedSong, sessionId, playbackRequestedAtNanos)
+                        } else {
+                            Log.e(TAG, "Failed to resolve online audio stream for YouTube ID: $videoId")
+                            _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                            withContext(Dispatchers.Main) {
+                                try {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Không thể phát bài hát này từ YouTube. Vui lòng chọn bài khác.",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                } catch (t: Throwable) {}
+                            }
                         }
                     }
                 }
