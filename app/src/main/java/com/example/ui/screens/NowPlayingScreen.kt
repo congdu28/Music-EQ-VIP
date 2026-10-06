@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import android.content.Intent
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
@@ -45,10 +46,15 @@ import com.example.player.PlayerUiState
 import com.example.player.RepeatMode
 import com.example.ui.MainTab
 import com.example.ui.MusicViewModel
+import com.example.ui.PlayerAmbientMode
 import com.example.ui.components.AudioSpectrumVisualizer
 import com.example.ui.theme.*
+import coil.Coil
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
+import coil.request.SuccessResult
 import androidx.compose.ui.layout.ContentScale
+import kotlinx.coroutines.withTimeoutOrNull
 
 enum class NowPlayingDisplayMode {
     ALBUM_ART,
@@ -246,15 +252,57 @@ fun NowPlayingScreen(
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "secondaryColor"
     )
-    val animatedGlow by animateColorAsState(
-        targetValue = selectedAccent,
-        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "glowColor"
-    )
     val animatedButtonGlow by animateColorAsState(
         targetValue = selectedAccent,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "buttonGlow"
+    )
+    val context = LocalContext.current
+    val albumAmbientColor by produceState<Color?>(
+        initialValue = null,
+        key1 = song.albumArtUri,
+        key2 = uiState.playerAmbientMode
+    ) {
+        value = null
+        if (uiState.playerAmbientMode == PlayerAmbientMode.ALBUM && !song.albumArtUri.isNullOrBlank()) {
+            value = try {
+                withTimeoutOrNull(5_000L) {
+                    val request = ImageRequest.Builder(context)
+                        .data(song.albumArtUri)
+                        .size(96, 96)
+                        .allowHardware(false)
+                        .build()
+                    val result = Coil.imageLoader(context).execute(request) as? SuccessResult
+                    val bitmap = (result?.drawable as? BitmapDrawable)?.bitmap
+                    bitmap?.let { AlbumArtColorExtractor.extractFromBitmap(it).primary }
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+    }
+    val rgbHue = if (uiState.playerAmbientMode == PlayerAmbientMode.RGB) {
+        val hue by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(24_000, easing = LinearEasing)),
+            label = "ambient_rgb_hue"
+        )
+        hue
+    } else 0f
+    val ambientColor = when (uiState.playerAmbientMode) {
+        PlayerAmbientMode.OFF -> Color.Transparent
+        PlayerAmbientMode.ALBUM -> albumAmbientColor ?: selectedAccent
+        PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf(rgbHue, 0.70f, 0.90f)))
+    }
+    val ambientSecondary = when (uiState.playerAmbientMode) {
+        PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 110f) % 360f, 0.70f, 0.90f)))
+        else -> lerp(ambientColor, selectedAccent, 0.35f)
+    }
+    val animatedAmbient by animateColorAsState(
+        targetValue = ambientColor,
+        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
+        label = "ambientColor"
     )
 
     Box(
@@ -262,21 +310,22 @@ fun NowPlayingScreen(
             .fillMaxSize()
             .musicScreenBackground()
     ) {
-        // Atmospheric top glow follows the selected accent.
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            animatedGlow.copy(alpha = if (uiState.isDarkTheme) 0.22f else 0.10f),
-                            Color.Transparent
-                        ),
-                        radius = 600f
+        if (uiState.playerAmbientMode != PlayerAmbientMode.OFF) {
+            val ambientAlpha = if (uiState.isDarkTheme) 0.30f else 0.18f
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                animatedAmbient.copy(alpha = ambientAlpha),
+                                ambientSecondary.copy(alpha = ambientAlpha * 0.45f),
+                                animatedAmbient.copy(alpha = ambientAlpha * 0.65f)
+                            )
+                        )
                     )
-                )
-        )
+            )
+        }
 
         // Main player layout: uses verticalScroll as fallback for small screens,
         // but carefully dimensioned so standard devices display everything without scrolling.
@@ -291,7 +340,7 @@ fun NowPlayingScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(44.dp),
+                    .height(48.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -300,7 +349,7 @@ fun NowPlayingScreen(
                     shape = CircleShape,
                     color = DarkSurfaceVariant,
                     modifier = Modifier
-                        .size(38.dp)
+                        .size(44.dp)
                         .clip(CircleShape)
                         .clickable { viewModel.setTab(MainTab.LIBRARY) }
                         .testTag("now_playing_minimize_button")
@@ -349,7 +398,7 @@ fun NowPlayingScreen(
                         shape = CircleShape,
                         color = if (uiState.isSearchingLyrics) NeonPink.copy(alpha = 0.2f) else DarkSurfaceVariant,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .clickable(enabled = !uiState.isSearchingLyrics) { viewModel.searchLyricsOnline(song) }
                             .testTag("now_playing_search_lyrics_button")
@@ -377,7 +426,7 @@ fun NowPlayingScreen(
                         shape = CircleShape,
                         color = DarkSurfaceVariant,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(44.dp)
                             .clip(CircleShape)
                             .clickable { viewModel.setShowEditMetadata(song) }
                             .testTag("now_playing_edit_tag_button")
@@ -520,23 +569,24 @@ fun NowPlayingScreen(
                                         }
                                     }
 
-                                    // Top-Right HI-RES / FORMAT Badge
+                                    // Format badge follows the artwork's top-right corner.
                                     Surface(
-                                        shape = RoundedCornerShape(4.dp),
+                                        shape = RoundedCornerShape(topEnd = 28.dp, bottomStart = 12.dp),
                                         color = animatedPrimary.copy(alpha = 0.2f),
                                         border = androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary.copy(alpha = 0.4f)),
                                         modifier = Modifier
                                             .align(Alignment.TopEnd)
-                                            .padding(8.dp)
                                             .clickable { viewModel.setShowAudioSpecs(true) }
                                     ) {
                                         Text(
                                             text = if (song.isHiRes) "HI-RES" else song.format,
                                             color = animatedPrimary,
-                                            fontSize = 8.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
-                                            letterSpacing = 0.8.sp,
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                            letterSpacing = 0.4.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.padding(start = 10.dp, end = 16.dp, top = 8.dp, bottom = 7.dp)
                                         )
                                     }
 
@@ -597,7 +647,10 @@ fun NowPlayingScreen(
                                 text = "Lời Karaoke đồng bộ",
                                 color = animatedPrimary,
                                 fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             val context = LocalContext.current
                             var showSearchMenu by remember { mutableStateOf(false) }
@@ -722,30 +775,31 @@ fun NowPlayingScreen(
                                     .fillMaxWidth()
                                     .weight(1f),
                                 contentPadding = PaddingValues(vertical = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 itemsIndexed(parsedLyrics.lines) { index, line ->
                                     val isActive = index == activeIndex
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = RoundedCornerShape(12.dp),
                                         color = if (isActive) animatedPrimary.copy(alpha = 0.2f) else Color.Transparent,
                                         border = if (isActive) androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary.copy(alpha = 0.5f)) else null,
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clip(RoundedCornerShape(8.dp))
+                                            .clip(RoundedCornerShape(12.dp))
                                             .clickable {
                                                 if (line.timeMs >= 0) {
                                                     viewModel.seekTo(line.timeMs)
                                                 }
                                             }
-                                            .padding(vertical = 4.dp, horizontal = 8.dp)
                                     ) {
                                         Text(
                                             text = line.text,
                                             color = if (isActive) TextPrimary else TextSecondary.copy(alpha = 0.72f),
                                             fontSize = if (isActive) 15.sp else 13.sp,
+                                            lineHeight = if (isActive) 23.sp else 20.sp,
                                             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
-                                            textAlign = TextAlign.Center
+                                            textAlign = TextAlign.Center,
+                                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
                                         )
                                     }
                                 }
@@ -926,7 +980,7 @@ fun NowPlayingScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(28.dp)
+                    .height(48.dp)
                     .testTag("now_playing_seek_slider")
             )
 
@@ -1104,7 +1158,7 @@ fun NowPlayingScreen(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
+                        .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { showSpeedDialog = true }
                         .testTag("now_playing_speed_button")
@@ -1143,7 +1197,7 @@ fun NowPlayingScreen(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
+                        .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { viewModel.setTab(MainTab.EQUALIZER) }
                         .testTag("now_playing_eq_trigger_button")
@@ -1182,7 +1236,7 @@ fun NowPlayingScreen(
                     ),
                     modifier = Modifier
                         .weight(1f)
-                        .height(38.dp)
+                        .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { viewModel.setShowSleepTimer(true) }
                 ) {
@@ -1220,7 +1274,7 @@ fun NowPlayingScreen(
                     ),
                     modifier = Modifier
                         .weight(1.05f)
-                        .height(38.dp)
+                        .height(44.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { viewModel.toggleFavorite(song) }
                         .testTag("now_playing_favorite_button")

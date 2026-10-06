@@ -1,16 +1,10 @@
 package com.example.ui.theme
 
-import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.compose.ui.graphics.Color
 import com.example.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.InputStream
-import kotlin.math.abs
 
 /**
  * Dynamic Color Palette extracted from song artwork or metadata.
@@ -87,16 +81,13 @@ object AlbumArtColorExtractor {
     )
 
     /**
-     * Obtains a dynamic theme palette for a given song.
-     * Uses artwork image if available, with deterministic fallback based on song traits.
+     * Deterministic fallback palette when actual artwork colors are unavailable.
      */
     fun getPaletteForSong(song: Song?): DynamicThemePalette {
         if (song == null) return PRESET_PALETTES[0]
 
-        // If song has an albumArtUri that points to a local file, we can also extract
-        // Dominant colors, otherwise hash-mapped deterministic palette
         val key = "${song.title}_${song.artist}_${song.album}_${song.format}"
-        val hash = abs(key.hashCode())
+        val hash = key.hashCode() and Int.MAX_VALUE
         val index = hash % PRESET_PALETTES.size
         return PRESET_PALETTES[index]
     }
@@ -127,6 +118,22 @@ object AlbumArtColorExtractor {
                         gTotal += g
                         bTotal += b
                         count++
+                    }
+                }
+            }
+
+            // Dark or pale covers may have no pixels in the preferred brightness range.
+            // Use their actual visible colors instead of an unrelated preset palette.
+            if (count == 0) {
+                for (x in 0 until scaled.width) {
+                    for (y in 0 until scaled.height) {
+                        val pixel = scaled.getPixel(x, y)
+                        if (android.graphics.Color.alpha(pixel) > 0) {
+                            rTotal += android.graphics.Color.red(pixel)
+                            gTotal += android.graphics.Color.green(pixel)
+                            bTotal += android.graphics.Color.blue(pixel)
+                            count++
+                        }
                     }
                 }
             }

@@ -81,8 +81,7 @@ fun LibraryScreen(
     val canCollapseLibraryChrome = filteredSongs.isNotEmpty() && uiState.librarySubTab in setOf(
         LibrarySubTab.ALL_SONGS,
         LibrarySubTab.FAVORITES,
-        LibrarySubTab.HI_RES,
-        LibrarySubTab.RECENT
+        LibrarySubTab.HI_RES
     )
     val collapseThresholdPx = with(LocalDensity.current) { 28.dp.roundToPx() }
 
@@ -343,7 +342,7 @@ fun LibraryScreen(
                 val shortcuts = listOf(
                     Triple(Icons.Default.Favorite, "Yêu thích", uiState.favoriteSongs.size) to LibrarySubTab.FAVORITES,
                     Triple(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", uiState.playlists.size) to LibrarySubTab.PLAYLISTS,
-                    Triple(Icons.Default.History, "Gần đây", uiState.recentlyPlayedSongs.size.coerceAtMost(15)) to LibrarySubTab.RECENT
+                    Triple(Icons.Default.History, "Gần đây", uiState.recentlyPlayedSongs.size.coerceAtMost(20)) to LibrarySubTab.RECENT
                 )
                 shortcuts.forEach { (shortcut, target) ->
                     val (icon, title, count) = shortcut
@@ -495,7 +494,9 @@ fun LibraryScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Box {
+                        if (uiState.librarySubTab == LibrarySubTab.RECENT) {
+                            Text("Mới nghe", color = TextSecondary, fontSize = 11.sp)
+                        } else Box {
                             TextButton(
                                 onClick = { showSortMenu = true },
                                 contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)

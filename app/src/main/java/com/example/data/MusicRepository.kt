@@ -59,6 +59,12 @@ class MusicRepository(private val context: Context) {
         prefs.edit().putInt("appearance_accent_color", color).apply()
     }
 
+    fun getPlayerAmbientMode(): String = prefs.getString("player_ambient_mode", "OFF") ?: "OFF"
+
+    fun setPlayerAmbientMode(mode: String) {
+        prefs.edit().putString("player_ambient_mode", mode).apply()
+    }
+
     fun getGeminiApiKey(): String {
         val def = com.example.lyrics.OnlineLyricsService.getDefaultGeminiApiKey()
         return getCustomGeminiApiKey() ?: def
@@ -132,21 +138,21 @@ class MusicRepository(private val context: Context) {
                         )
                     )
                 }
-            }.take(15)
+            }.take(20)
         }.getOrDefault(emptyList())
     }
 
     fun recordRecentlyPlayed(song: Song): List<Song> {
         val updated = (listOf(song) + getRecentlyPlayedSongs())
             .distinctBy { if (it.id != 0L) it.id else it.filePath }
-            .take(15)
+            .take(20)
         replaceRecentlyPlayedSongs(updated)
         return updated
     }
 
     fun replaceRecentlyPlayedSongs(songs: List<Song>) {
         val items = JSONArray()
-        songs.take(15).forEach { item ->
+        songs.take(20).forEach { item ->
             items.put(
                 JSONObject()
                     .put("id", item.id)

@@ -51,6 +51,12 @@ enum class LibrarySortOrder(val label: String) {
     OLDEST("Cũ nhất")
 }
 
+enum class PlayerAmbientMode(val label: String) {
+    OFF("Tắt"),
+    ALBUM("Ảnh bìa"),
+    RGB("RGB")
+}
+
 data class MusicFolder(
     val name: String,
     val path: String,
@@ -95,6 +101,7 @@ data class MusicAppUiState(
     val isDarkTheme: Boolean = false,
     val appearanceMode: String = "LIGHT",
     val accentColor: Int = 0xFF3399FF.toInt(),
+    val playerAmbientMode: PlayerAmbientMode = PlayerAmbientMode.OFF,
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
     val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
@@ -128,6 +135,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             else -> false
         }
         val savedAccentColor = repository.getAccentColor()
+        val savedAmbientModeName = repository.getPlayerAmbientMode()
+        val savedAmbientMode = PlayerAmbientMode.entries.firstOrNull {
+            it.name == savedAmbientModeName
+        } ?: PlayerAmbientMode.OFF
         AppThemeColors.update(savedDarkTheme, Color(savedAccentColor))
         _appUiState.update {
             it.copy(
@@ -136,6 +147,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 isDarkTheme = savedDarkTheme,
                 appearanceMode = savedAppearanceMode,
                 accentColor = savedAccentColor,
+                playerAmbientMode = savedAmbientMode,
                 showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan(),
                 hasCompletedLibraryScan = repository.hasCompletedLibraryScan(),
                 recentlyPlayedSongs = repository.getRecentlyPlayedSongs()
@@ -878,6 +890,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         repository.setAccentColor(color)
         AppThemeColors.update(accentColor = Color(color))
         _appUiState.update { it.copy(accentColor = color) }
+    }
+
+    fun setPlayerAmbientMode(mode: PlayerAmbientMode) {
+        repository.setPlayerAmbientMode(mode.name)
+        _appUiState.update { it.copy(playerAmbientMode = mode) }
     }
 
     private fun lyricsTrackKey(song: Song): String = "${song.id}|${song.title}|${song.artist}"
