@@ -40,6 +40,7 @@ import com.example.model.Playlist
 import com.example.model.Song
 import com.example.player.PlayerUiState
 import com.example.ui.LibrarySubTab
+import com.example.ui.LibrarySortOrder
 import com.example.ui.MusicAppUiState
 import com.example.ui.MusicFolder
 import com.example.ui.MusicViewModel
@@ -55,8 +56,16 @@ fun LibraryScreen(
     onPickSuggestedFolder: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val filteredSongs = viewModel.getFilteredSongs()
+    val matchingSongs = viewModel.getFilteredSongs()
+    val filteredSongs = remember(matchingSongs, uiState.librarySortOrder) {
+        when (uiState.librarySortOrder) {
+            LibrarySortOrder.TITLE_ASC -> matchingSongs.sortedBy { it.title.lowercase() }
+            LibrarySortOrder.NEWEST -> matchingSongs.sortedByDescending { it.addedTimestamp }
+            LibrarySortOrder.OLDEST -> matchingSongs.sortedBy { it.addedTimestamp }
+        }
+    }
     val musicFolders = remember(uiState.songs) { viewModel.getMusicFolders() }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -385,6 +394,37 @@ fun LibraryScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        Box {
+                            TextButton(
+                                onClick = { showSortMenu = true },
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = "${uiState.librarySortOrder.label}  ▾",
+                                    color = NeonCyan,
+                                    fontSize = 11.sp,
+                                    maxLines = 1
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showSortMenu,
+                                onDismissRequest = { showSortMenu = false }
+                            ) {
+                                LibrarySortOrder.entries.forEach { sortOrder ->
+                                    DropdownMenuItem(
+                                        text = { Text(sortOrder.label) },
+                                        onClick = {
+                                            viewModel.setLibrarySortOrder(sortOrder)
+                                            showSortMenu = false
+                                        },
+                                        trailingIcon = if (uiState.librarySortOrder == sortOrder) {
+                                            { Icon(Icons.Default.Check, contentDescription = null, tint = NeonCyan) }
+                                        } else null
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text("${filteredSongs.size} bài", color = TextSecondary, fontSize = 11.sp)
                     }
 

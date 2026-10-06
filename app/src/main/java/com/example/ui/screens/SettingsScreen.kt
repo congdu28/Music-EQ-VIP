@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -19,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -28,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.example.equalizer.EqualizerState
 import com.example.BuildConfig
 import com.example.player.PlayerUiState
@@ -48,6 +52,7 @@ fun SettingsScreen(
     var showCustomAccentDialog by remember { mutableStateOf(false) }
     var showFormats by remember { mutableStateOf(false) }
     var showLibraryOptions by remember { mutableStateOf(false) }
+    var showSleepTimerOptions by remember { mutableStateOf(false) }
     var showCrossfadeOptions by remember { mutableStateOf(false) }
     var showEqualizerOptions by remember { mutableStateOf(false) }
     var showLyricsAiOptions by remember { mutableStateOf(false) }
@@ -142,48 +147,84 @@ fun SettingsScreen(
 
                 Text("Màu nhấn", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 val accentOptions = listOf(
-                    0xFF3399FF.toInt(), 0xFF8B5CF6.toInt(), 0xFFEC4899.toInt(),
-                    0xFF22C55E.toInt(), 0xFFF59E0B.toInt(), 0xFF14B8A6.toInt()
+                    0xFF8B5CF6.toInt(), 0xFF3399FF.toInt(), 0xFFEC4899.toInt(),
+                    0xFFF59E0B.toInt(), 0xFF22C55E.toInt()
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     accentOptions.forEach { colorInt ->
                         val selected = uiState.accentColor == colorInt
                         Box(
                             modifier = Modifier
-                                .weight(1f)
-                                .height(42.dp)
+                                .size(42.dp)
                                 .selectable(selected = selected, role = Role.RadioButton) { viewModel.setAccentColor(colorInt) },
                             contentAlignment = Alignment.Center
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = Color(colorInt),
+                                color = Color.Transparent,
                                 border = androidx.compose.foundation.BorderStroke(
-                                    if (selected) 3.dp else 1.dp,
-                                    if (selected) TextPrimary else DarkBorder
+                                    if (selected) 2.dp else 0.dp,
+                                    if (selected) TextPrimary else Color.Transparent
                                 ),
-                                modifier = Modifier.size(if (selected) 32.dp else 28.dp)
-                            ) {}
+                                modifier = Modifier.size(if (selected) 38.dp else 34.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(4.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(colorInt))
+                                )
+                            }
+                        }
+                    }
+                    val customSelected = accentOptions.none { it == uiState.accentColor }
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .selectable(selected = customSelected, role = Role.RadioButton) {
+                                val currentColor = Color(uiState.accentColor)
+                                customRed = currentColor.red
+                                customGreen = currentColor.green
+                                customBlue = currentColor.blue
+                                showCustomAccentDialog = true
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = Color.Transparent,
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (customSelected) 2.dp else 0.dp,
+                                if (customSelected) TextPrimary else Color.Transparent
+                            ),
+                            modifier = Modifier.size(if (customSelected) 38.dp else 34.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(4.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        Brush.sweepGradient(
+                                            listOf(
+                                                Color(0xFFFF3344), Color(0xFFFFB52E), Color(0xFF25D366),
+                                                Color(0xFF21C8E8), Color(0xFF536BFF), Color(0xFFB64DFF), Color(0xFFFF3344)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Colorize, contentDescription = "Chọn màu tùy chỉnh", tint = Color.White, modifier = Modifier.size(15.dp))
+                            }
                         }
                     }
                 }
-                TextButton(
-                    onClick = {
-                        val currentColor = Color(uiState.accentColor)
-                        customRed = currentColor.red
-                        customGreen = currentColor.green
-                        customBlue = currentColor.blue
-                        showCustomAccentDialog = true
-                    },
-                    modifier = Modifier.align(Alignment.End)
-                ) {
-                    Text("Tùy chỉnh màu…", color = NeonCyan, fontSize = 12.sp)
-                }
-                Text("Màu nhấn áp dụng cho nút, biểu tượng và điểm nổi bật.", color = TextMuted, fontSize = 10.sp)
+                Text("Chạm màu phổ biến hoặc chọn vòng màu để tùy chỉnh.", color = TextMuted, fontSize = 10.sp)
             }
         }
 
@@ -195,7 +236,7 @@ fun SettingsScreen(
             expanded = showFormats,
             onClick = { showFormats = !showFormats }
         )
-        AnimatedVisibility(visible = showFormats) {
+        AnimatedVisibility(visible = showFormats, modifier = rememberRevealOnExpand(showFormats)) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -254,11 +295,11 @@ fun SettingsScreen(
             icon = Icons.Default.FolderOpen,
             iconTint = NeonCyan,
             title = "Thư viện nhạc",
-            subtitle = "Quét nhạc trên thiết bị và hẹn giờ tắt",
+            subtitle = "Quét toàn bộ bộ nhớ hoặc thư mục",
             expanded = showLibraryOptions,
             onClick = { showLibraryOptions = !showLibraryOptions }
         )
-        AnimatedVisibility(visible = showLibraryOptions) {
+        AnimatedVisibility(visible = showLibraryOptions, modifier = rememberRevealOnExpand(showLibraryOptions)) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -274,18 +315,36 @@ fun SettingsScreen(
                     onClick = onRequestScan
                 )
 
-                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp), color = DarkBorder)
-
-                SettingItemRow(
-                    icon = Icons.Default.Bedtime,
-                    iconTint = NeonPurple,
-                    title = "Hẹn giờ tắt nhạc (Sleep Timer)",
-                    subtitle = if (playerState.isSleepTimerActive) "Đang hẹn giờ: ${playerState.sleepTimerRemainingSeconds / 60} phút còn lại" else "Tự động dừng phát khi đi ngủ",
-                    onClick = { viewModel.setShowSleepTimer(true) }
-                )
             }
         }
 
+        }
+
+        SettingsSectionHeader(
+            icon = Icons.Default.Bedtime,
+            iconTint = NeonPurple,
+            title = "Hẹn giờ",
+            subtitle = if (playerState.isSleepTimerActive) "Đang bật · còn ${playerState.sleepTimerRemainingSeconds / 60} phút" else "Tự động dừng nhạc sau thời gian đã chọn",
+            expanded = showSleepTimerOptions,
+            onClick = { showSleepTimerOptions = !showSleepTimerOptions }
+        )
+        AnimatedVisibility(visible = showSleepTimerOptions, modifier = rememberRevealOnExpand(showSleepTimerOptions)) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = DarkSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    SettingItemRow(
+                        icon = Icons.Default.Bedtime,
+                        iconTint = NeonPurple,
+                        title = "Hẹn giờ tắt nhạc",
+                        subtitle = if (playerState.isSleepTimerActive) "Đang hẹn giờ: ${playerState.sleepTimerRemainingSeconds / 60} phút còn lại" else "Tự chọn thời lượng trước khi nhạc tự dừng",
+                        onClick = { viewModel.setShowSleepTimer(true) }
+                    )
+                }
+            }
         }
 
         SettingsSectionHeader(
@@ -296,7 +355,7 @@ fun SettingsScreen(
             expanded = showCrossfadeOptions,
             onClick = { showCrossfadeOptions = !showCrossfadeOptions }
         )
-        AnimatedVisibility(visible = showCrossfadeOptions) {
+        AnimatedVisibility(visible = showCrossfadeOptions, modifier = rememberRevealOnExpand(showCrossfadeOptions)) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -385,7 +444,7 @@ fun SettingsScreen(
             expanded = showEqualizerOptions,
             onClick = { showEqualizerOptions = !showEqualizerOptions }
         )
-        AnimatedVisibility(visible = showEqualizerOptions) {
+        AnimatedVisibility(visible = showEqualizerOptions, modifier = rememberRevealOnExpand(showEqualizerOptions)) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -439,7 +498,7 @@ fun SettingsScreen(
         }
         var revealApiKey by remember { mutableStateOf(false) }
 
-        AnimatedVisibility(visible = showLyricsAiOptions) {
+        AnimatedVisibility(visible = showLyricsAiOptions, modifier = rememberRevealOnExpand(showLyricsAiOptions)) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -649,7 +708,7 @@ fun SettingsScreen(
             expanded = showAppInfo,
             onClick = { showAppInfo = !showAppInfo }
         )
-        AnimatedVisibility(visible = showAppInfo) {
+        AnimatedVisibility(visible = showAppInfo, modifier = rememberRevealOnExpand(showAppInfo)) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -698,6 +757,18 @@ fun SettingsScreen(
             }
         )
     }
+}
+
+@Composable
+private fun rememberRevealOnExpand(expanded: Boolean): Modifier {
+    val requester = remember { BringIntoViewRequester() }
+    LaunchedEffect(expanded, requester) {
+        if (expanded) {
+            delay(140)
+            requester.bringIntoView()
+        }
+    }
+    return Modifier.bringIntoViewRequester(requester)
 }
 
 @Composable

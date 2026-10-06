@@ -230,7 +230,7 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
-    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.34f).coerceIn(205.dp, 280.dp)
+    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.30f).coerceIn(185.dp, 250.dp)
 
     // Dynamic Color Palette extracted from current album art / song
     val dynamicPalette = remember(song.id, song.title) {
@@ -782,17 +782,6 @@ fun NowPlayingScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                IconButton(
-                    onClick = { viewModel.toggleFavorite(song) },
-                    modifier = Modifier.size(44.dp).testTag("now_playing_favorite_button")
-                ) {
-                    Icon(
-                        imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
-                        tint = if (song.isFavorite) NeonPink else TextMuted,
-                        modifier = Modifier.size(25.dp)
-                    )
-                }
             }
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -847,7 +836,6 @@ fun NowPlayingScreen(
                                     color = TextPrimary,
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                     maxLines = 1,
                                     textAlign = TextAlign.Center,
                                     overflow = TextOverflow.Ellipsis
@@ -900,7 +888,7 @@ fun NowPlayingScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(62.dp)
+                    .height(76.dp)
             ) {
                 AudioSpectrumVisualizer(
                     isPlaying = playerState.isPlaying,
@@ -1094,7 +1082,7 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // DEDICATED QUICK CONTROLS BAR: SPEED (PROMINENT!), EQ, SLEEP TIMER, ONLINE LYRICS
+            // DEDICATED QUICK CONTROLS BAR: SPEED, EQ, SLEEP TIMER, FAVORITE
             // Fully responsive, auto-ellipsis, single-line protection, never wraps or clips
             Row(
                 modifier = Modifier
@@ -1220,16 +1208,20 @@ fun NowPlayingScreen(
                     }
                 }
 
-                // 4. TÌM LỜI ONLINE / CHI TIẾT
+                // 4. YÊU THÍCH
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = DarkSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                    color = if (song.isFavorite) NeonPink.copy(alpha = 0.16f) else DarkSurfaceVariant,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        if (song.isFavorite) NeonPink.copy(alpha = 0.7f) else DarkBorder
+                    ),
                     modifier = Modifier
                         .weight(1.05f)
                         .height(38.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { viewModel.searchLyricsOnline(song) }
+                        .clickable { viewModel.toggleFavorite(song) }
+                        .testTag("now_playing_favorite_button")
                 ) {
                     Row(
                         modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
@@ -1237,15 +1229,15 @@ fun NowPlayingScreen(
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.CloudDownload,
-                            contentDescription = "Tải lời",
-                            tint = NeonPink,
+                            imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
+                            tint = if (song.isFavorite) NeonPink else TextSecondary,
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = "Lời online",
-                            color = NeonPink,
+                            text = if (song.isFavorite) "Đã thích" else "Yêu thích",
+                            color = if (song.isFavorite) NeonPink else TextPrimary,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,

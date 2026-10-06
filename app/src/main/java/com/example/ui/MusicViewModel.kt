@@ -44,6 +44,12 @@ enum class LibrarySubTab(val title: String) {
     ARTISTS("Nghệ sĩ")
 }
 
+enum class LibrarySortOrder(val label: String) {
+    TITLE_ASC("A–Z"),
+    NEWEST("Mới nhất"),
+    OLDEST("Cũ nhất")
+}
+
 data class MusicFolder(
     val name: String,
     val path: String,
@@ -57,6 +63,7 @@ data class MusicAppUiState(
     val currentTab: MainTab = MainTab.LIBRARY,
     val pendingOnlineSong: Song? = null,
     val librarySubTab: LibrarySubTab = LibrarySubTab.ALL_SONGS,
+    val librarySortOrder: LibrarySortOrder = LibrarySortOrder.NEWEST,
     val searchQuery: String = "",
     val songs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
@@ -255,6 +262,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setLibrarySubTab(subTab: LibrarySubTab) {
         _appUiState.update { it.copy(librarySubTab = subTab, selectedFolder = null) }
+    }
+
+    fun setLibrarySortOrder(sortOrder: LibrarySortOrder) {
+        _appUiState.update { it.copy(librarySortOrder = sortOrder) }
     }
 
     fun setYouTubeQuery(query: String) {
