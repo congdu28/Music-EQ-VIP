@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -68,7 +67,7 @@ fun YouTubeOnlineScreen(
     ) {
         // DEDICATED SEARCH BAR
         Surface(
-            shape = RoundedCornerShape(14.dp),
+            shape = RoundedCornerShape(24.dp),
             color = DarkSurface,
             border = androidx.compose.foundation.BorderStroke(
                 1.dp,
@@ -76,11 +75,11 @@ fun YouTubeOnlineScreen(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(44.dp)
+                .height(52.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 12.dp)
+                modifier = Modifier.padding(horizontal = 14.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -92,9 +91,9 @@ fun YouTubeOnlineScreen(
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (uiState.youtubeQuery.isEmpty()) {
                         Text(
-                            "Tìm bài hát, ca sĩ, remix trên YouTube...",
+                            "Tìm kiếm nhạc trên YouTube...",
                             color = TextMuted,
-                            fontSize = 12.5.sp,
+                            fontSize = 14.sp,
                             maxLines = 1
                         )
                     }
@@ -136,18 +135,15 @@ fun YouTubeOnlineScreen(
                     }
                 }
 
-                Button(
+                IconButton(
                     onClick = {
                         viewModel.searchYouTube(uiState.youtubeQuery)
                         isSearchFocused = false
                         focusManager.clearFocus()
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed, contentColor = Color.White),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.height(30.dp)
+                    modifier = Modifier.size(40.dp)
                 ) {
-                    Text("Tìm", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Search, contentDescription = "Tìm kiếm", tint = YouTubeRed, modifier = Modifier.size(22.dp))
                 }
             }
         }
@@ -197,31 +193,31 @@ fun YouTubeOnlineScreen(
 
         // POPULAR CURATED CATEGORIES ROW
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 2.dp)
         ) {
             items(YouTubeMusicService.CATEGORIES) { cat ->
                 val isCatSelected = uiState.selectedYouTubeCategory == cat && uiState.youtubeQuery.isEmpty()
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = if (isCatSelected) YouTubeRed else DarkSurface,
                     border = androidx.compose.foundation.BorderStroke(
                         0.8.dp,
                         if (isCatSelected) YouTubeRed else DarkBorder
                     ),
                     modifier = Modifier
-                        .height(30.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .height(36.dp)
+                        .clip(RoundedCornerShape(18.dp))
                         .clickable { viewModel.selectYouTubeCategory(cat) }
                 ) {
                     Box(
-                        modifier = Modifier.padding(horizontal = 12.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = cat,
                             color = if (isCatSelected) Color.White else TextPrimary,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             fontWeight = if (isCatSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
@@ -229,84 +225,7 @@ fun YouTubeOnlineScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(6.dp))
-
-        // QUICK ACTIONS: PLAY ALL & SHUFFLE (Visible when songs loaded)
-        if (uiState.youtubeSongs.isNotEmpty() && !uiState.isSearchingYouTube) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = YouTubeRed.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, YouTubeRed.copy(alpha = 0.6f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            viewModel.playQueue(uiState.youtubeSongs, 0)
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
-                            tint = YouTubeRed,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Phát tất cả (${uiState.youtubeSongs.size})",
-                            color = TextPrimary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = NeonPurple.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonPurple.copy(alpha = 0.6f)),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable {
-                            viewModel.playAllShuffled(uiState.youtubeSongs)
-                        }
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Shuffle,
-                            contentDescription = null,
-                            tint = NeonPurple,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "Trộn bài ngẫu nhiên",
-                            color = TextPrimary,
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-            }
-        }
+        Spacer(modifier = Modifier.height(8.dp))
 
         // CONTENT AREA: Takes all remaining screen space (weight 1f)
         Box(
@@ -405,7 +324,7 @@ fun YouTubeOnlineScreen(
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 4.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         itemsIndexed(
                             items = uiState.youtubeSongs,
@@ -457,28 +376,31 @@ fun YouTubeSongItem(
     onViewSpecs: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val minutes = (song.durationMs / 1000) / 60
+    val seconds = (song.durationMs / 1000) % 60
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (isCurrentSong) DarkSurfaceElevated else DarkSurface,
-        border = androidx.compose.foundation.BorderStroke(
-            0.8.dp,
-            if (isCurrentSong) YouTubeRed.copy(alpha = 0.7f) else DarkBorder
-        ),
+        shape = RoundedCornerShape(14.dp),
+        color = if (isCurrentSong) YouTubeRed.copy(alpha = 0.08f) else Color.Transparent,
+        border = if (isCurrentSong) androidx.compose.foundation.BorderStroke(
+            1.dp,
+            YouTubeRed.copy(alpha = 0.35f)
+        ) else null,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Thumbnail with badge and play state
+            // Landscape artwork matches YouTube's familiar thumbnail layout.
             Box(
                 modifier = Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .width(116.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(DarkSurfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
@@ -494,7 +416,23 @@ fun YouTubeSongItem(
                         imageVector = Icons.Default.MusicNote,
                         contentDescription = null,
                         tint = TextMuted,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(5.dp),
+                    color = Color.Black.copy(alpha = 0.78f),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(5.dp)
+                ) {
+                    Text(
+                        text = String.format("%d:%02d", minutes, seconds),
+                        color = Color.White,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
 
@@ -530,85 +468,46 @@ fun YouTubeSongItem(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Title & Channel
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
                 Text(
                     text = song.title,
                     color = if (isCurrentSong) YouTubeRedLight else TextPrimary,
-                    fontSize = 13.sp,
-                    fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
+                    fontSize = 14.sp,
+                    fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                Text(
+                    text = song.artist,
+                    color = TextSecondary,
+                    fontSize = 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = song.artist,
-                        color = TextSecondary,
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
-                    )
-
-                    Spacer(modifier = Modifier.width(6.dp))
-
-                    // YouTube Red Tag
-                    Surface(
-                        shape = RoundedCornerShape(3.dp),
-                        color = YouTubeRed.copy(alpha = 0.15f),
-                        border = androidx.compose.foundation.BorderStroke(0.6.dp, YouTubeRed)
-                    ) {
-                        Text(
-                            text = "YouTube",
-                            color = YouTubeRed,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.5.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    // Duration Tag
-                    val minutes = (song.durationMs / 1000) / 60
-                    val seconds = (song.durationMs / 1000) % 60
-                    Text(
-                        text = String.format("%02d:%02d", minutes, seconds),
-                        color = TextMuted,
-                        fontSize = 9.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(4.dp))
-
-            // Play button shortcut
-            IconButton(
-                onClick = onClick,
-                modifier = Modifier.size(30.dp)
-            ) {
-                Icon(
-                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                    contentDescription = if (isPlaying) "Tạm dừng" else "Phát",
-                    tint = if (isCurrentSong) YouTubeRed else TextSecondary,
-                    modifier = Modifier.size(18.dp)
+                Text(
+                    text = "Phát trực tuyến trên YouTube Music",
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // More Options
             Box {
                 IconButton(
                     onClick = { showMenu = true },
-                    modifier = Modifier.size(30.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "Tùy chọn",
                         tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 

@@ -88,7 +88,7 @@ data class MusicAppUiState(
     val accentColor: Int = 0xFF3399FF.toInt(),
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
-    val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
+    val selectedYouTubeCategory: String = "Tất cả",
     val youtubeSongs: List<Song> = emptyList(),
     val isSearchingYouTube: Boolean = false,
     val youtubeErrorMessage: String? = null
