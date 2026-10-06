@@ -97,7 +97,7 @@ data class MusicAppUiState(
     val accentColor: Int = 0xFF3399FF.toInt(),
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
-    val selectedYouTubeCategory: String = "Tất cả",
+    val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
     val youtubeSongs: List<Song> = emptyList(),
     val isSearchingYouTube: Boolean = false,
     val youtubeErrorMessage: String? = null
@@ -549,12 +549,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     // Visualizer Style
     fun toggleVisualizerStyle() {
-        val nextStyle = if (_appUiState.value.visualizerStyle == VisualizerStyle.WAVE) {
-            VisualizerStyle.SPECTRUM
-        } else {
-            VisualizerStyle.WAVE
-        }
-        _appUiState.update { it.copy(visualizerStyle = nextStyle) }
+        val styles = VisualizerStyle.entries
+        val nextIndex = (styles.indexOf(_appUiState.value.visualizerStyle) + 1) % styles.size
+        setVisualizerStyle(styles[nextIndex])
+    }
+
+    fun setVisualizerStyle(style: VisualizerStyle) {
+        _appUiState.update { it.copy(visualizerStyle = style) }
     }
 
     // Folder Browsing

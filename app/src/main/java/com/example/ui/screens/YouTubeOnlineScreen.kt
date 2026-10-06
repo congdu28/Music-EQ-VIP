@@ -91,7 +91,7 @@ fun YouTubeOnlineScreen(
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (uiState.youtubeQuery.isEmpty()) {
                         Text(
-                            "Tìm kiếm nhạc trên YouTube...",
+                            "Tìm bài hát, ca sĩ, remix trên YouTube...",
                             color = TextMuted,
                             fontSize = 14.sp,
                             maxLines = 1

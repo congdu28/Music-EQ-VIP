@@ -633,18 +633,20 @@ object YouTubeMusicService {
      * Curated category presets for instant discovery without typing.
      */
     val CATEGORIES = listOf(
-        "Tất cả",
-        "Music",
-        "Remix",
-        "Chill",
+        "🔥 Hot V-Pop",
+        "⚡ Remix TikTok",
+        "☕ Acoustic Chill",
+        "🌙 Lofi Thư Giãn",
+        "🏆 Top Hits",
     )
 
     fun getCategoryQuery(category: String): String {
         return when (category) {
-            "Tất cả" -> "nhac viet nam hay nhat official music video"
-            "Music" -> "Vietnamese music official music video"
-            "Remix" -> "nhac remix viet nam hot tiktok"
-            "Chill" -> "nhac chill viet nam acoustic"
+            "🔥 Hot V-Pop" -> "nhạc trẻ Việt Nam hay nhất official music video"
+            "⚡ Remix TikTok" -> "nhạc remix TikTok hot nhất"
+            "☕ Acoustic Chill" -> "nhạc acoustic chill Việt Nam hay nhất"
+            "🌙 Lofi Thư Giãn" -> "nhạc lofi thư giãn chill Việt Nam"
+            "🏆 Top Hits" -> "nhạc Việt Nam top hits mới nhất"
             else -> category
         }
     }

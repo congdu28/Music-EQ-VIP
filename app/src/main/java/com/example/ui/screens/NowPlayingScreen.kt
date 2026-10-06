@@ -757,9 +757,9 @@ fun NowPlayingScreen(
 
             Spacer(modifier = Modifier.height(10.dp))
 
-            // SONG TITLE & ARTIST: Fixed-height single-line text containers (NO line jumping!)
+            // Keep the song title to two lines so longer Vietnamese titles remain readable.
             Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).padding(horizontal = 4.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -768,8 +768,9 @@ fun NowPlayingScreen(
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
                         fontSize = 18.sp,
+                        lineHeight = 21.sp,
                         letterSpacing = (-0.2).sp,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
@@ -899,7 +900,8 @@ fun NowPlayingScreen(
                         .padding(horizontal = 8.dp, vertical = 2.dp),
                     customColors = listOf(animatedPrimary, animatedSecondary, NeonPink),
                     style = uiState.visualizerStyle,
-                    onToggleStyle = { viewModel.toggleVisualizerStyle() }
+                    onToggleStyle = { viewModel.toggleVisualizerStyle() },
+                    onSelectStyle = { viewModel.setVisualizerStyle(it) }
                 )
             }
 

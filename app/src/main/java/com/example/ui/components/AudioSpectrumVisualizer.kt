@@ -14,6 +14,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Waves
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -36,8 +39,10 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class VisualizerStyle(val displayName: String) {
-    WAVE("Sóng nhạc uốn lượn"),
-    SPECTRUM("Cột tần số Neon")
+    WAVE("Sóng uốn lượn"),
+    SPECTRUM("Cột tần số"),
+    MIRRORED("Cột đối xứng"),
+    DOTS("Sóng hạt")
 }
 
 /** Draws samples captured from the currently playing MediaPlayer audio session. */
@@ -49,11 +54,14 @@ fun AudioSpectrumVisualizer(
     modifier: Modifier = Modifier.fillMaxWidth().height(90.dp),
     customColors: List<Color>? = null,
     style: VisualizerStyle = VisualizerStyle.WAVE,
-    onToggleStyle: (() -> Unit)? = null
+    onToggleStyle: (() -> Unit)? = null,
+    onSelectStyle: ((VisualizerStyle) -> Unit)? = null
 ) {
     var waveform by remember(audioSessionId) { mutableStateOf(FloatArray(0)) }
     var fft by remember(audioSessionId) { mutableStateOf(FloatArray(0)) }
-    val hasCurrentSignal = if (style == VisualizerStyle.WAVE) {
+    var showStyleMenu by remember { mutableStateOf(false) }
+    val usesWaveform = style == VisualizerStyle.WAVE || style == VisualizerStyle.DOTS
+    val hasCurrentSignal = if (usesWaveform) {
         waveform.maxOfOrNull { abs(it) }?.let { it > 0.015f } == true
     } else {
         fft.maxOrNull()?.let { it > 0.015f } == true
@@ -135,31 +143,58 @@ fun AudioSpectrumVisualizer(
     )
 
     Column(modifier = modifier) {
-        if (onToggleStyle != null) {
+        if (onToggleStyle != null || onSelectStyle != null) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggleStyle).padding(horizontal = 6.dp, vertical = 2.dp)
-                ) {
-                    Icon(
-                        imageVector = if (style == VisualizerStyle.WAVE) Icons.Default.Waves else Icons.Default.GraphicEq,
-                        contentDescription = null,
-                        tint = waveColors.first(),
-                        modifier = Modifier.size(13.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(style.displayName, color = TextSecondary, fontSize = 10.sp)
+                Box {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable {
+                                if (onSelectStyle != null) showStyleMenu = true else onToggleStyle?.invoke()
+                            }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (usesWaveform) Icons.Default.Waves else Icons.Default.GraphicEq,
+                            contentDescription = null,
+                            tint = waveColors.first(),
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(style.displayName, color = TextSecondary, fontSize = 10.sp)
+                        if (onSelectStyle != null) {
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Chọn kiểu sóng", tint = TextMuted, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    DropdownMenu(expanded = showStyleMenu, onDismissRequest = { showStyleMenu = false }) {
+                        VisualizerStyle.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.displayName) },
+                                onClick = {
+                                    showStyleMenu = false
+                                    onSelectStyle?.invoke(option)
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = if (option == VisualizerStyle.WAVE || option == VisualizerStyle.DOTS) Icons.Default.Waves else Icons.Default.GraphicEq,
+                                        contentDescription = null
+                                    )
+                                }
+                            )
+                        }
+                    }
                 }
                 Text(
                     text = when {
                         !isPlaying -> "Tạm dừng"
                         !hasAudioCapturePermission -> "Cần quyền để đồng bộ sóng"
-                        (style == VisualizerStyle.WAVE && waveform.isNotEmpty()) ||
-                            (style == VisualizerStyle.SPECTRUM && fft.isNotEmpty()) -> "Tín hiệu âm thanh trực tiếp"
+                        (usesWaveform && waveform.isNotEmpty()) ||
+                            (!usesWaveform && fft.isNotEmpty()) -> "Tín hiệu âm thanh trực tiếp"
                         else -> "Sóng nhạc mô phỏng"
                     },
                     color = TextMuted,
@@ -201,6 +236,25 @@ fun AudioSpectrumVisualizer(
                 } else {
                     drawLine(waveColors.first().copy(alpha = 0.35f), Offset(0f, centerY), Offset(size.width, centerY), 1.dp.toPx())
                 }
+            } else if (style == VisualizerStyle.DOTS) {
+                val dotCount = 48
+                val dotRadius = 2.1.dp.toPx()
+                for (i in 0 until dotCount) {
+                    val fraction = i.toFloat() / (dotCount - 1)
+                    val sampleIndex = (fraction * (waveform.size - 1).coerceAtLeast(0)).toInt()
+                    val signal = if (waveform.isNotEmpty() && hasCurrentSignal) {
+                        waveform[sampleIndex]
+                    } else if (isPlaying) {
+                        (sin(fraction * Math.PI * 5 + fallbackPhase) * 0.7).toFloat()
+                    } else 0f
+                    val x = fraction * size.width
+                    val y = centerY - signal * size.height * 0.4f
+                    drawCircle(
+                        brush = gradientBrush,
+                        radius = dotRadius + abs(signal) * 2.2.dp.toPx(),
+                        center = Offset(x, y)
+                    )
+                }
             } else {
                 val spectrum = fft
                 val totalBars = 28
@@ -220,12 +274,28 @@ fun AudioSpectrumVisualizer(
                     } else 0.025f
                     val barHeight = size.height * heightFraction
                     val x = i * (barWidth + spacing)
-                    drawRoundRect(
-                        brush = verticalBrush,
-                        topLeft = Offset(x, centerY - barHeight / 2f),
-                        size = Size(barWidth, barHeight),
-                        cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
-                    )
+                    if (style == VisualizerStyle.MIRRORED) {
+                        val halfHeight = (size.height / 2f * heightFraction).coerceAtLeast(1.dp.toPx())
+                        drawRoundRect(
+                            brush = verticalBrush,
+                            topLeft = Offset(x, centerY - halfHeight),
+                            size = Size(barWidth, halfHeight),
+                            cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+                        )
+                        drawRoundRect(
+                            brush = verticalBrush,
+                            topLeft = Offset(x, centerY),
+                            size = Size(barWidth, halfHeight),
+                            cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+                        )
+                    } else {
+                        drawRoundRect(
+                            brush = verticalBrush,
+                            topLeft = Offset(x, size.height - barHeight),
+                            size = Size(barWidth, barHeight),
+                            cornerRadius = CornerRadius(barWidth / 2f, barWidth / 2f)
+                        )
+                    }
                 }
             }
         }
