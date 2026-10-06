@@ -278,7 +278,7 @@ fun LibraryScreen(
             }
         }
 
-        // Six categories adapt to the available width instead of clipping in a horizontal strip.
+        // Match the reference: keep every library category in one horizontally scrollable row.
         val libraryTabs = listOf(
             LibrarySubTab.ALL_SONGS,
             LibrarySubTab.FOLDERS,
@@ -287,49 +287,42 @@ fun LibraryScreen(
             LibrarySubTab.PLAYLISTS,
             LibrarySubTab.ARTISTS
         )
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 3.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            libraryTabs.chunked(3).forEach { rowTabs ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+            items(libraryTabs) { tab ->
+                val isSelected = uiState.librarySubTab == tab
+                val label = when (tab) {
+                    LibrarySubTab.ALL_SONGS -> "Bài hát"
+                    LibrarySubTab.FOLDERS -> "Thư mục"
+                    LibrarySubTab.HI_RES -> "Hi-Res"
+                    LibrarySubTab.FAVORITES -> "Yêu thích"
+                    LibrarySubTab.PLAYLISTS -> "Playlist"
+                    LibrarySubTab.ARTISTS -> "Nghệ sĩ"
+                }
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isSelected) NeonCyan else DarkSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) NeonCyan else DarkBorder),
+                    modifier = Modifier
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable { viewModel.setLibrarySubTab(tab) }
                 ) {
-                    rowTabs.forEach { tab ->
-                        val isSelected = uiState.librarySubTab == tab
-                        val label = when (tab) {
-                            LibrarySubTab.ALL_SONGS -> "Bài hát"
-                            LibrarySubTab.FOLDERS -> "Thư mục"
-                            LibrarySubTab.HI_RES -> "Hi-Res"
-                            LibrarySubTab.FAVORITES -> "Yêu thích"
-                            LibrarySubTab.PLAYLISTS -> "Playlist"
-                            LibrarySubTab.ARTISTS -> "Nghệ sĩ"
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(18.dp),
-                            color = if (isSelected) NeonCyan else DarkSurface,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) NeonCyan else DarkBorder),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(38.dp)
-                                .clip(RoundedCornerShape(18.dp))
-                                .clickable { viewModel.setLibrarySubTab(tab) }
-                        ) {
-                            Box(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (isSelected) AccentContent else TextPrimary,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        }
+                    Box(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            color = if (isSelected) AccentContent else TextPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -458,11 +451,11 @@ fun LibraryScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            when (uiState.librarySubTab) {
+                            text = when (uiState.librarySubTab) {
                                 LibrarySubTab.FAVORITES -> "Bài hát yêu thích"
                                 LibrarySubTab.HI_RES -> "Thư viện Hi-Res"
                                 else -> "Tất cả bài hát"
-                            },
+                            } + " (${filteredSongs.size})",
                             color = TextPrimary,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold,
@@ -497,70 +490,25 @@ fun LibraryScreen(
                                             { Icon(Icons.Default.Check, contentDescription = null, tint = NeonCyan) }
                                         } else null
                                     )
-                                }
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("${filteredSongs.size} bài", color = TextSecondary, fontSize = 11.sp)
-                    }
-
-                    // Keep both frequent library actions together with a comfortable touch target.
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Surface(
-                            modifier = Modifier
-                                .weight(1.15f)
-                                .height(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable {
-                                    if (uiState.librarySubTab == LibrarySubTab.FAVORITES) {
-                                        viewModel.playFavoriteQueue(filteredSongs, 0)
-                                    } else {
-                                        viewModel.playAllSequential(filteredSongs, 0)
                                     }
                                 }
-                                .testTag("play_sequential_button"),
-                            shape = RoundedCornerShape(12.dp),
-                            color = NeonCyan.copy(alpha = 0.12f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.65f))
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text("Phát tất cả", color = NeonCyan, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                             }
-                        }
-
-                        Surface(
-                            modifier = Modifier
-                                .weight(0.9f)
-                                .height(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { viewModel.setLibrarySubTab(LibrarySubTab.FAVORITES) }
-                                .testTag("open_favorites_button"),
-                            shape = RoundedCornerShape(12.dp),
-                            color = NeonPink.copy(alpha = 0.1f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink.copy(alpha = 0.55f))
+                        IconButton(
+                            onClick = {
+                                if (uiState.librarySubTab == LibrarySubTab.FAVORITES) {
+                                    viewModel.playFavoriteQueue(filteredSongs, 0)
+                                } else {
+                                    viewModel.playAllSequential(filteredSongs, 0)
+                                }
+                            },
+                            modifier = Modifier.size(40.dp).testTag("play_sequential_button")
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Icon(Icons.Default.Favorite, contentDescription = null, tint = NeonPink, modifier = Modifier.size(17.dp))
-                                Spacer(modifier = Modifier.width(5.dp))
-                                Text("Yêu thích", color = NeonPink, fontSize = 11.5.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("${uiState.favoriteSongs.size}", color = NeonPink, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                            }
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                contentDescription = "Phát tất cả",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(21.dp)
+                            )
                         }
                     }
                     }
