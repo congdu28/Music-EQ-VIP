@@ -640,7 +640,6 @@ fun SettingsScreen(
             }
         }
         }
-        }
 
         SettingsSectionHeader(
             icon = Icons.Default.Info,
