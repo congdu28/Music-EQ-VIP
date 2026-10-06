@@ -31,9 +31,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -50,7 +54,6 @@ import com.example.ui.MusicAppUiState
 import com.example.ui.MusicFolder
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.*
-import kotlinx.coroutines.flow.collect
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
@@ -87,25 +90,29 @@ fun LibraryScreen(
         showLibraryChrome = true
         songListState.scrollToItem(0)
     }
-    LaunchedEffect(songListState, canCollapseLibraryChrome, collapseThresholdPx) {
-        if (!canCollapseLibraryChrome) {
-            showLibraryChrome = true
-            return@LaunchedEffect
-        }
-        var previousIndex = songListState.firstVisibleItemIndex
-        var previousOffset = songListState.firstVisibleItemScrollOffset
-        snapshotFlow {
-            songListState.firstVisibleItemIndex to songListState.firstVisibleItemScrollOffset
-        }.collect { (index, offset) ->
-            val movingDown = index > previousIndex || (index == previousIndex && offset > previousOffset)
-            val movingUp = index < previousIndex || (index == previousIndex && offset < previousOffset)
-            if (movingDown && (index > 0 || offset > collapseThresholdPx)) {
-                showLibraryChrome = false
-            } else if (movingUp) {
-                showLibraryChrome = true
+    val chromeScrollConnection = remember(canCollapseLibraryChrome, collapseThresholdPx) {
+        object : NestedScrollConnection {
+            private var accumulatedScroll = 0f
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource
+            ): Offset {
+                if (!canCollapseLibraryChrome || source != NestedScrollSource.UserInput || consumed.y == 0f) {
+                    return Offset.Zero
+                }
+                if (accumulatedScroll * consumed.y < 0f) accumulatedScroll = 0f
+                accumulatedScroll += consumed.y
+                if (accumulatedScroll <= -collapseThresholdPx) {
+                    showLibraryChrome = false
+                    accumulatedScroll = 0f
+                } else if (accumulatedScroll >= collapseThresholdPx) {
+                    showLibraryChrome = true
+                    accumulatedScroll = 0f
+                }
+                return Offset.Zero
             }
-            previousIndex = index
-            previousOffset = offset
         }
     }
 
@@ -542,7 +549,7 @@ fun LibraryScreen(
                     // Song List
                     LazyColumn(
                         state = songListState,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().nestedScroll(chromeScrollConnection),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {

@@ -642,11 +642,11 @@ object YouTubeMusicService {
 
     fun getCategoryQuery(category: String): String {
         return when (category) {
-            "🔥 Hot V-Pop" -> "nhạc trẻ Việt Nam hay nhất official music video"
-            "⚡ Remix TikTok" -> "nhạc remix TikTok hot nhất"
-            "☕ Acoustic Chill" -> "nhạc acoustic chill Việt Nam hay nhất"
-            "🌙 Lofi Thư Giãn" -> "nhạc lofi thư giãn chill Việt Nam"
-            "🏆 Top Hits" -> "nhạc Việt Nam top hits mới nhất"
+            "🔥 Hot V-Pop" -> "top nhac tre viet nam hot nhat hien nay"
+            "⚡ Remix TikTok" -> "nhac tre remix hot tiktok bay phong"
+            "☕ Acoustic Chill" -> "acoustic viet nam nhe nhang chill"
+            "🌙 Lofi Thư Giãn" -> "nhac lofi viet nam chill thu gian dem khuya"
+            "🏆 Top Hits" -> "top hits global billboard"
             else -> category
         }
     }

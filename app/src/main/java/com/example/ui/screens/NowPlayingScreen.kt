@@ -27,6 +27,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
@@ -230,29 +231,28 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
-    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.30f).coerceIn(185.dp, 250.dp)
+    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.27f).coerceIn(165.dp, 220.dp)
 
-    // Dynamic Color Palette extracted from current album art / song
-    val dynamicPalette = remember(song.id, song.title) {
-        AlbumArtColorExtractor.getPaletteForSong(song)
-    }
+    // Use the accent selected in Settings throughout the player.
+    val selectedAccent = Color(uiState.accentColor)
+    val secondaryAccent = lerp(selectedAccent, if (uiState.isDarkTheme) Color.White else Color.Black, 0.18f)
     val animatedPrimary by animateColorAsState(
-        targetValue = dynamicPalette.primary,
+        targetValue = selectedAccent,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "primaryColor"
     )
     val animatedSecondary by animateColorAsState(
-        targetValue = dynamicPalette.secondary,
+        targetValue = secondaryAccent,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "secondaryColor"
     )
     val animatedGlow by animateColorAsState(
-        targetValue = dynamicPalette.backgroundGlow,
+        targetValue = selectedAccent,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "glowColor"
     )
     val animatedButtonGlow by animateColorAsState(
-        targetValue = dynamicPalette.buttonGlow,
+        targetValue = selectedAccent,
         animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
         label = "buttonGlow"
     )
@@ -262,7 +262,7 @@ fun NowPlayingScreen(
             .fillMaxSize()
             .musicScreenBackground()
     ) {
-        // Atmospheric Top Radial Glow with Dynamic Album Art Tint
+        // Atmospheric top glow follows the selected accent.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -270,7 +270,7 @@ fun NowPlayingScreen(
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            animatedGlow.copy(alpha = 0.55f),
+                            animatedGlow.copy(alpha = if (uiState.isDarkTheme) 0.22f else 0.10f),
                             Color.Transparent
                         ),
                         radius = 600f
@@ -898,7 +898,7 @@ fun NowPlayingScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = 8.dp, vertical = 2.dp),
-                    customColors = listOf(animatedPrimary, animatedSecondary, NeonPink),
+                    customColors = listOf(animatedPrimary, animatedSecondary, animatedPrimary),
                     style = uiState.visualizerStyle,
                     onToggleStyle = { viewModel.toggleVisualizerStyle() },
                     onSelectStyle = { viewModel.setVisualizerStyle(it) }
@@ -999,7 +999,7 @@ fun NowPlayingScreen(
                     Icon(
                         imageVector = if (playerState.isShuffle) Icons.Default.Shuffle else Icons.AutoMirrored.Filled.QueueMusic,
                         contentDescription = if (playerState.isShuffle) "Đang phát ngẫu nhiên" else "Đang phát theo thứ tự",
-                        tint = if (playerState.isShuffle) NeonPurple else animatedPrimary,
+                        tint = if (playerState.isShuffle) animatedPrimary else TextMuted,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -1449,8 +1449,8 @@ private fun NowPlayingModeSelector(
         color = DarkSurfaceVariant.copy(alpha = 0.82f),
         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
         modifier = Modifier
-            .fillMaxWidth()
-            .height(50.dp)
+            .fillMaxWidth(0.90f)
+            .height(48.dp)
             .animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing))
             .testTag("now_playing_mode_selector")
     ) {
@@ -1518,8 +1518,8 @@ private fun NowPlayingModeOption(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(17.dp))
-            Spacer(modifier = Modifier.width(7.dp))
+            Icon(imageVector = icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(5.dp))
             Text(
                 text = label,
                 color = contentColor,
