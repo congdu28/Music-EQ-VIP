@@ -306,7 +306,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectYouTubeCategory(category: String) {
         youtubeSuggestionJob?.cancel()
-        _appUiState.update { it.copy(selectedYouTubeCategory = category, youtubeQuery = "", youtubeSuggestions = emptyList()) }
+        _appUiState.update {
+            it.copy(
+                selectedYouTubeCategory = category,
+                youtubeQuery = "",
+                youtubeSuggestions = emptyList(),
+                youtubeSongs = if (category == "Thịnh hành") emptyList() else it.youtubeSongs,
+                youtubeErrorMessage = null,
+                isSearchingYouTube = category != "Thịnh hành"
+            )
+        }
+        if (category == "Thịnh hành") return
         viewModelScope.launch {
             try {
                 _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }

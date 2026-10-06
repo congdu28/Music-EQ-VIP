@@ -235,6 +235,64 @@ fun YouTubeOnlineScreen(
         ) {
             when {
                 // Loading State
+                uiState.selectedYouTubeCategory == "Thịnh hành" && uiState.youtubeQuery.isEmpty() -> {
+                    val context = androidx.compose.ui.platform.LocalContext.current
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 18.dp)
+                            .align(Alignment.Center),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(24.dp),
+                            color = YouTubeRed.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, YouTubeRed.copy(alpha = 0.25f)),
+                            modifier = Modifier.size(72.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.TrendingUp,
+                                    contentDescription = null,
+                                    tint = YouTubeRed,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "Trending Music Videos",
+                            color = TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "YouTube hiện hiển thị xu hướng qua bảng xếp hạng theo danh mục.",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Button(
+                            onClick = {
+                                val intent = android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse("https://charts.youtube.com/charts/TrendingVideos/vn")
+                                )
+                                context.startActivity(intent)
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = YouTubeRed, contentColor = Color.White),
+                            shape = RoundedCornerShape(22.dp)
+                        ) {
+                            Icon(Icons.Default.OpenInNew, contentDescription = null, modifier = Modifier.size(17.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Mở bảng thịnh hành YouTube", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+
                 uiState.isSearchingYouTube -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),

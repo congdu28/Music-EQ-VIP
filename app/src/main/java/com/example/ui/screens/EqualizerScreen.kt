@@ -61,6 +61,7 @@ fun EqualizerScreen(
     modifier: Modifier = Modifier
 ) {
     val scrollState = rememberScrollState()
+    var showSoundEffects by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -68,7 +69,7 @@ fun EqualizerScreen(
             .musicScreenBackground()
             .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
@@ -83,113 +84,51 @@ fun EqualizerScreen(
                 Text("Bộ chỉnh âm (EQ)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 19.sp)
                 Text("Tạo chất âm theo sở thích", color = TextSecondary, fontSize = 11.sp)
             }
+            Switch(
+                checked = equalizerState.isEnabled,
+                onCheckedChange = { viewModel.toggleEqualizerEnabled(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = AccentContent,
+                    checkedTrackColor = NeonCyan,
+                    uncheckedThumbColor = TextMuted,
+                    uncheckedTrackColor = DarkSurfaceVariant
+                ),
+                modifier = Modifier.testTag("eq_master_switch")
+            )
         }
 
-        // Master Equalizer Switch Card
+        // Keep reset and save actions together in a compact panel.
         Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = DarkSurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                if (equalizerState.isEnabled) NeonCyan.copy(alpha = 0.5f) else DarkBorder
-            ),
+            shape = RoundedCornerShape(16.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Column(modifier = Modifier.padding(18.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.resetEqualizerToFlat() },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                    modifier = Modifier.weight(1f).height(38.dp).testTag("eq_reset_flat_button")
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (equalizerState.isEnabled) NeonCyan.copy(alpha = 0.2f) else DarkSurfaceVariant,
-                            modifier = Modifier.size(46.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    imageVector = Icons.Default.Tune,
-                                    contentDescription = null,
-                                    tint = if (equalizerState.isEnabled) NeonCyan else TextMuted,
-                                    modifier = Modifier.size(26.dp)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Column {
-                            Text(
-                                "Trạng thái bộ chỉnh âm",
-                                color = TextPrimary,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(7.dp)
-                                        .clip(CircleShape)
-                                        .background(if (equalizerState.isEnabled) NeonGreen else TextMuted)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    if (equalizerState.isEnabled) "Đang bật: ${equalizerState.activePresetName}" else "Đã tắt · vẫn có thể chỉnh và lưu preset",
-                                    color = if (equalizerState.isEnabled) NeonCyan else TextMuted,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                        }
-                    }
-
-                    Switch(
-                        checked = equalizerState.isEnabled,
-                        onCheckedChange = { viewModel.toggleEqualizerEnabled(it) },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = AccentContent,
-                            checkedTrackColor = NeonCyan,
-                            uncheckedThumbColor = TextMuted,
-                            uncheckedTrackColor = DarkSurfaceVariant
-                        ),
-                        modifier = Modifier.testTag("eq_master_switch")
-                    )
+                    Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Mặc định", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
-
-                // Action buttons: Reset to Flat & Save Custom Preset
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                Button(
+                    onClick = { viewModel.setShowSavePreset(true) },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonPurple, contentColor = Color.White),
+                    modifier = Modifier.weight(1f).height(38.dp).testTag("eq_save_preset_button")
                 ) {
-                    OutlinedButton(
-                        onClick = { viewModel.resetEqualizerToFlat() },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                        modifier = Modifier.weight(1f).height(38.dp).testTag("eq_reset_flat_button")
-                    ) {
-                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Về mặc định (Flat)", fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    }
-
-                    Button(
-                        onClick = { viewModel.setShowSavePreset(true) },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = NeonPurple,
-                            contentColor = Color.White
-                        ),
-                        modifier = Modifier.weight(1f).height(38.dp).testTag("eq_save_preset_button")
-                    ) {
-                        Icon(imageVector = Icons.Default.BookmarkBorder, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Lưu Preset", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    }
+                    Icon(imageVector = Icons.Default.BookmarkBorder, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Lưu Preset", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
         }
@@ -349,7 +288,7 @@ fun EqualizerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(168.dp)
+                        .height(142.dp)
                         .clip(RoundedCornerShape(16.dp))
                         .background(DarkSurfaceVariant)
                         .padding(horizontal = 8.dp, vertical = 8.dp),
@@ -425,7 +364,7 @@ fun EqualizerScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(228.dp)
+                        .height(206.dp)
                         .horizontalScroll(bandScrollState)
                         .testTag("eq_bands_scroll"),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -453,6 +392,35 @@ fun EqualizerScreen(
             }
         }
 
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = DarkSurface,
+            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable { showSoundEffects = !showSoundEffects }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(shape = RoundedCornerShape(10.dp), color = NeonViolet.copy(alpha = 0.15f), modifier = Modifier.size(38.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.GraphicEq, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(21.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.width(11.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Hiệu ứng bổ trợ", color = TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text("Bass, âm vòm, limiter, vang và loudness", color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Icon(
+                    imageVector = if (showSoundEffects) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (showSoundEffects) "Thu gọn hiệu ứng" else "Mở hiệu ứng",
+                    tint = TextSecondary
+                )
+            }
+        }
+
+        AnimatedVisibility(visible = showSoundEffects) {
         // Sound Enhancements: Bass Boost & 3D Virtualizer
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -464,15 +432,6 @@ fun EqualizerScreen(
                 modifier = Modifier.padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text(
-                    "Hiệu Ứng Bổ Trợ (Sound Effects)",
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
                 // Bass Boost Slider
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(
@@ -817,6 +776,7 @@ fun EqualizerScreen(
                     }
                 }
             }
+        }
         }
 
         Spacer(modifier = Modifier.height(20.dp))

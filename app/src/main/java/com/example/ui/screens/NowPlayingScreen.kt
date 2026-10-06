@@ -230,7 +230,7 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
-    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.30f).coerceIn(190.dp, 260.dp)
+    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.34f).coerceIn(205.dp, 280.dp)
 
     // Dynamic Color Palette extracted from current album art / song
     val dynamicPalette = remember(song.id, song.title) {
@@ -758,53 +758,40 @@ fun NowPlayingScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             // SONG TITLE & ARTIST: Fixed-height single-line text containers (NO line jumping!)
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp) // Strict fixed container height prevents layout jumping!
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = song.title,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    letterSpacing = (-0.2).sp,
-                    textAlign = TextAlign.Center,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                )
-
-                Spacer(modifier = Modifier.height(2.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = song.title,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        letterSpacing = (-0.2).sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = song.artist,
                         color = TextSecondary,
-                        fontSize = 13.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
-                        textAlign = TextAlign.Center,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    IconButton(
-                        onClick = { viewModel.toggleFavorite(song) },
-                        modifier = Modifier.size(24.dp).testTag("now_playing_favorite_button")
-                    ) {
-                        Icon(
-                            imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Yêu thích",
-                            tint = if (song.isFavorite) NeonPink else TextMuted,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                }
+                IconButton(
+                    onClick = { viewModel.toggleFavorite(song) },
+                    modifier = Modifier.size(44.dp).testTag("now_playing_favorite_button")
+                ) {
+                    Icon(
+                        imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
+                        tint = if (song.isFavorite) NeonPink else TextMuted,
+                        modifier = Modifier.size(25.dp)
+                    )
                 }
             }
 
@@ -817,7 +804,7 @@ fun NowPlayingScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(42.dp)
+                    .height(46.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .clickable {
                         if (hasLyrics) {
@@ -858,8 +845,9 @@ fun NowPlayingScreen(
                                 Text(
                                     text = lineText,
                                     color = TextPrimary,
-                                    fontSize = 13.sp,
+                                    fontSize = 14.sp,
                                     fontWeight = FontWeight.SemiBold,
+                                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
                                     maxLines = 1,
                                     textAlign = TextAlign.Center,
                                     overflow = TextOverflow.Ellipsis
@@ -912,7 +900,7 @@ fun NowPlayingScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp)
+                    .height(62.dp)
             ) {
                 AudioSpectrumVisualizer(
                     isPlaying = playerState.isPlaying,
@@ -948,7 +936,7 @@ fun NowPlayingScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(32.dp)
+                    .height(28.dp)
                     .testTag("now_playing_seek_slider")
             )
 
@@ -1044,7 +1032,7 @@ fun NowPlayingScreen(
                     shape = CircleShape,
                     color = PlayButtonBackground,
                     modifier = Modifier
-                        .size(62.dp)
+                        .size(68.dp)
                         .shadow(
                             elevation = 12.dp,
                             shape = CircleShape,

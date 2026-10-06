@@ -1,6 +1,7 @@
 package com.example.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
@@ -45,6 +46,12 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var showCustomAccentDialog by remember { mutableStateOf(false) }
+    var showFormats by remember { mutableStateOf(false) }
+    var showLibraryOptions by remember { mutableStateOf(false) }
+    var showCrossfadeOptions by remember { mutableStateOf(false) }
+    var showEqualizerOptions by remember { mutableStateOf(false) }
+    var showLyricsAiOptions by remember { mutableStateOf(false) }
+    var showAppInfo by remember { mutableStateOf(false) }
     var customRed by remember { mutableFloatStateOf(0.2f) }
     var customGreen by remember { mutableFloatStateOf(0.6f) }
     var customBlue by remember { mutableFloatStateOf(1f) }
@@ -62,7 +69,7 @@ fun SettingsScreen(
             .musicScreenBackground()
             .verticalScroll(scrollState)
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Section: Theme mode and customizable accent palette
         Surface(
@@ -180,7 +187,15 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Định dạng âm thanh chất lượng cao hỗ trợ
+        SettingsSectionHeader(
+            icon = Icons.Default.GraphicEq,
+            iconTint = NeonCyan,
+            title = "Âm thanh",
+            subtitle = "Định dạng và chất lượng âm thanh",
+            expanded = showFormats,
+            onClick = { showFormats = !showFormats }
+        )
+        AnimatedVisibility(visible = showFormats) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -188,9 +203,6 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Định dạng âm thanh chất lượng cao hỗ trợ", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Spacer(modifier = Modifier.height(10.dp))
-
                 val formats = listOf(
                     "FLAC (Lossless 24/96)",
                     "WAV (32-bit Float PCM)",
@@ -236,7 +248,17 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Bộ nhớ & Quét thư viện
+        }
+
+        SettingsSectionHeader(
+            icon = Icons.Default.FolderOpen,
+            iconTint = NeonCyan,
+            title = "Thư viện nhạc",
+            subtitle = "Quét nhạc trên thiết bị và hẹn giờ tắt",
+            expanded = showLibraryOptions,
+            onClick = { showLibraryOptions = !showLibraryOptions }
+        )
+        AnimatedVisibility(visible = showLibraryOptions) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -244,9 +266,6 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Thư viện nhạc ngoại tuyến", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(10.dp))
-
                 SettingItemRow(
                     icon = Icons.Default.FolderOpen,
                     iconTint = NeonCyan,
@@ -267,7 +286,17 @@ fun SettingsScreen(
             }
         }
 
-        // Section: Chuyển nhạc mượt mà (Crossfade)
+        }
+
+        SettingsSectionHeader(
+            icon = Icons.Default.SkipNext,
+            iconTint = NeonCyan,
+            title = "Chuyển bài mượt mà",
+            subtitle = if (playerState.isCrossfadeEnabled) "Đang bật · ${String.format("%.1f", playerState.crossfadeDurationSeconds)} giây" else "Chuyển bài lập tức",
+            expanded = showCrossfadeOptions,
+            onClick = { showCrossfadeOptions = !showCrossfadeOptions }
+        )
+        AnimatedVisibility(visible = showCrossfadeOptions) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -346,8 +375,17 @@ fun SettingsScreen(
                 }
             }
         }
+        }
 
-        // Section: Cấu hình EQ & Bộ xử lý âm thanh
+        SettingsSectionHeader(
+            icon = Icons.Default.Tune,
+            iconTint = NeonCyan,
+            title = "Bộ chỉnh âm (EQ)",
+            subtitle = if (equalizerState.isEnabled) "Đang bật · ${equalizerState.activePresetName}" else "Preset, dải tần và hiệu ứng âm thanh",
+            expanded = showEqualizerOptions,
+            onClick = { showEqualizerOptions = !showEqualizerOptions }
+        )
+        AnimatedVisibility(visible = showEqualizerOptions) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -355,9 +393,6 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Bộ chỉnh âm Equalizer", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(10.dp))
-
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -385,8 +420,17 @@ fun SettingsScreen(
                 )
             }
         }
+        }
 
         // Section: Cấu hình Gemini AI & Tìm kiếm Lời bài hát
+        SettingsSectionHeader(
+            icon = Icons.Default.Lyrics,
+            iconTint = NeonViolet,
+            title = "Lời bài hát & AI",
+            subtitle = "Gemini, API Key và đồng bộ lời",
+            expanded = showLyricsAiOptions,
+            onClick = { showLyricsAiOptions = !showLyricsAiOptions }
+        )
         var apiKeyInput by remember {
             mutableStateOf(viewModel.repository.getCustomGeminiApiKey().orEmpty())
         }
@@ -395,6 +439,7 @@ fun SettingsScreen(
         }
         var revealApiKey by remember { mutableStateOf(false) }
 
+        AnimatedVisibility(visible = showLyricsAiOptions) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -594,8 +639,18 @@ fun SettingsScreen(
                 }
             }
         }
+        }
+        }
 
-        // Section: Thông tin ứng dụng
+        SettingsSectionHeader(
+            icon = Icons.Default.Info,
+            iconTint = TextSecondary,
+            title = "Thông tin & Giấy phép",
+            subtitle = "Music EQ ${BuildConfig.VERSION_NAME} · Tác giả CD",
+            expanded = showAppInfo,
+            onClick = { showAppInfo = !showAppInfo }
+        )
+        AnimatedVisibility(visible = showAppInfo) {
         Surface(
             shape = RoundedCornerShape(18.dp),
             color = DarkSurface,
@@ -603,15 +658,13 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Thông tin & Giấy phép", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Spacer(modifier = Modifier.height(8.dp))
-
                 InfoRow("Phiên bản", BuildConfig.VERSION_NAME)
                 InfoRow("Tác giả", "CD")
                 InfoRow("Ngôn ngữ", "Tiếng Việt (100% Native)")
                 InfoRow("Bộ xử lý âm thanh", "Android AudioFX + Native DSP")
                 InfoRow("Trình phân tích lời", "Karaoke LRC Synchronizer v2.0 + Gemini AI")
             }
+        }
         }
     }
 
@@ -645,6 +698,50 @@ fun SettingsScreen(
                 TextButton(onClick = { showCustomAccentDialog = false }) { Text("Hủy") }
             }
         )
+    }
+}
+
+@Composable
+private fun SettingsSectionHeader(
+    icon: ImageVector,
+    iconTint: Color,
+    title: String,
+    subtitle: String,
+    expanded: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = DarkSurface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).clickable(onClick = onClick)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 13.dp, vertical = 11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = iconTint.copy(alpha = 0.14f),
+                modifier = Modifier.size(40.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(21.dp))
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(subtitle, color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            Icon(
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ChevronRight,
+                contentDescription = if (expanded) "Thu gọn" else "Mở mục",
+                tint = TextSecondary,
+                modifier = Modifier.size(22.dp)
+            )
+        }
     }
 }
 

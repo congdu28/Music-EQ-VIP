@@ -634,19 +634,17 @@ object YouTubeMusicService {
      */
     val CATEGORIES = listOf(
         "Tất cả",
-        "Music",
-        "Remix",
+        "Remix Tiktok",
+        "Lofi Chill",
         "Thịnh hành",
-        "Chill"
     )
 
     fun getCategoryQuery(category: String): String {
         return when (category) {
-            "Tất cả" -> "nhac viet nam hay nhat official music video"
-            "Music" -> "Vietnamese music official music video"
-            "Remix" -> "nhac remix viet nam hot tiktok"
-            "Thịnh hành" -> "nhac viet nam trending hien nay"
-            "Chill" -> "nhac chill viet nam acoustic"
+            "Tất cả" -> "Nhạc trẻ hay nhất"
+            "Remix Tiktok" -> "Nhạc remix tiktok hot nhất"
+            "Lofi Chill" -> "Nhạc lofi chill hay nhất"
+            "Thịnh hành" -> ""
             else -> category
         }
     }

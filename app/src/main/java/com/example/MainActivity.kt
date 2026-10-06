@@ -335,7 +335,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 }
 
                 // Persistent Floating MiniPlayer above Bottom Navigation when not on NOW_PLAYING screen
-                if (uiState.currentTab != MainTab.NOW_PLAYING && playerState.currentSong != null) {
+                if (uiState.currentTab !in setOf(MainTab.NOW_PLAYING, MainTab.EQUALIZER) && playerState.currentSong != null) {
                     MiniPlayerBar(
                         playerState = playerState,
                         onBarClick = { viewModel.setTab(MainTab.NOW_PLAYING) },
@@ -346,7 +346,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 }
 
                 // Bottom Navigation Bar with responsive typography & compact paddings
-                if (uiState.currentTab != MainTab.NOW_PLAYING) NavigationBar(
+                if (uiState.currentTab !in setOf(MainTab.NOW_PLAYING, MainTab.EQUALIZER)) NavigationBar(
                     containerColor = DarkSurface,
                     contentColor = TextPrimary,
                     tonalElevation = 8.dp,

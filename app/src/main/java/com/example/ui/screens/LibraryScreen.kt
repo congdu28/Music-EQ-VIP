@@ -63,7 +63,7 @@ fun LibraryScreen(
             .fillMaxSize()
             .musicScreenBackground()
     ) {
-        // Compact Unified Search & Quick Action Header (Saves vertical space)
+        // Search and scan actions stay in one compact, easy-to-find header.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -78,7 +78,7 @@ fun LibraryScreen(
                 border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.searchQuery.isNotEmpty()) NeonCyan else DarkBorder),
                 modifier = Modifier
                     .weight(1f)
-                    .height(38.dp)
+                    .height(44.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -94,7 +94,7 @@ fun LibraryScreen(
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (uiState.searchQuery.isEmpty()) {
                             Text(
-                                "Tìm bài hát, ca sĩ, FLAC...",
+                                "Tìm bài hát, album, nghệ sĩ...",
                                 color = TextMuted,
                                 fontSize = 12.sp,
                                 maxLines = 1
@@ -133,7 +133,7 @@ fun LibraryScreen(
                 IconButton(
                     onClick = onPickAudioFolder,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .clip(CircleShape)
                         .background(DarkSurfaceVariant)
                         .testTag("choose_music_folder_button")
@@ -151,11 +151,11 @@ fun LibraryScreen(
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                     contentPadding = PaddingValues(horizontal = 8.dp),
-                    modifier = Modifier.height(36.dp).testTag("scan_library_button")
+                    modifier = Modifier.height(40.dp).testTag("scan_library_button")
                 ) {
                     Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Quét", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Text("Quét nhạc", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
 
@@ -223,7 +223,7 @@ fun LibraryScreen(
             }
         }
 
-        // Subtabs Navigation with embedded count tags (Ultra-compact 30dp height)
+        // Horizontal library categories, styled as clear touch-friendly chips.
         LazyRow(
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -241,12 +241,12 @@ fun LibraryScreen(
 
 
                 Surface(
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(18.dp),
                     color = if (isSelected) NeonCyan else DarkSurface,
                     border = androidx.compose.foundation.BorderStroke(0.8.dp, if (isSelected) NeonCyan else DarkBorder),
                     modifier = Modifier
-                        .height(30.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .height(34.dp)
+                        .clip(RoundedCornerShape(18.dp))
                         .clickable { viewModel.setLibrarySubTab(tab) }
                 ) {
                     Box(
@@ -256,7 +256,7 @@ fun LibraryScreen(
                         Text(
                             text = "${tab.title}$countLabel",
                             color = if (isSelected) AccentContent else TextPrimary,
-                            fontSize = 11.sp,
+                            fontSize = 11.5.sp,
                             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                         )
                     }
@@ -279,21 +279,21 @@ fun LibraryScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(70.dp)
-                            .clip(RoundedCornerShape(16.dp))
+                            .height(86.dp)
+                            .clip(RoundedCornerShape(18.dp))
                             .clickable { viewModel.setLibrarySubTab(target) },
-                        shape = RoundedCornerShape(16.dp),
-                        color = DarkSurface,
+                        shape = RoundedCornerShape(18.dp),
+                        color = DarkSurfaceElevated,
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp),
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(icon, contentDescription = null, tint = if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan, modifier = Modifier.size(19.dp))
+                            Icon(icon, contentDescription = null, tint = if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan, modifier = Modifier.size(24.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(title, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Text(count.toString(), color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                                Text(title, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Text(count.toString(), color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -398,7 +398,7 @@ fun LibraryScreen(
                         Surface(
                             modifier = Modifier
                                 .weight(1.15f)
-                                .height(44.dp)
+                                .height(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable {
                                     if (uiState.librarySubTab == LibrarySubTab.FAVORITES) {
@@ -426,7 +426,7 @@ fun LibraryScreen(
                         Surface(
                             modifier = Modifier
                                 .weight(0.9f)
-                                .height(44.dp)
+                                .height(38.dp)
                                 .clip(RoundedCornerShape(12.dp))
                                 .clickable { viewModel.setLibrarySubTab(LibrarySubTab.FAVORITES) }
                                 .testTag("open_favorites_button"),
@@ -741,29 +741,28 @@ fun CompactSongItem(
     onViewSpecs: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
+    val durationMinutes = song.durationMs / 60_000L
+    val durationSeconds = (song.durationMs / 1_000L) % 60L
 
     Surface(
-        shape = RoundedCornerShape(10.dp),
-        color = if (isCurrentSong) DarkSurfaceElevated else DarkSurface,
-        border = androidx.compose.foundation.BorderStroke(
-            0.8.dp,
-            if (isCurrentSong) NeonCyan.copy(alpha = 0.6f) else DarkBorder
-        ),
+        shape = RoundedCornerShape(14.dp),
+        color = if (isCurrentSong) NeonCyan.copy(alpha = 0.08f) else Color.Transparent,
+        border = if (isCurrentSong) androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.42f)) else null,
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .testTag("song_item_${song.id}")
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Sized 38.dp Thumbnail
+            // Larger artwork keeps the song list easy to scan at a glance.
             Box(
                 modifier = Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .size(54.dp)
+                    .clip(RoundedCornerShape(13.dp))
                     .background(
                         Brush.linearGradient(
                             colors = if (isCurrentSong) listOf(NeonCyanDim, NeonCyan) else listOf(CardGradientStart, CardGradientEnd)
@@ -805,14 +804,14 @@ fun CompactSongItem(
             }
 
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(11.dp))
 
             // Title & Artist
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.title,
                     color = if (isCurrentSong) NeonCyan else TextPrimary,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -824,7 +823,7 @@ fun CompactSongItem(
                     Text(
                         text = song.artist,
                         color = TextSecondary,
-                        fontSize = 11.sp,
+                    fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
@@ -832,30 +831,41 @@ fun CompactSongItem(
 
                     Spacer(modifier = Modifier.width(6.dp))
 
-                    // Compact Format Pill
-                    Surface(
-                        shape = RoundedCornerShape(3.dp),
-                        color = if (song.isHiRes) HiResGold.copy(alpha = 0.15f) else DarkSurfaceVariant,
-                        border = if (song.isHiRes) androidx.compose.foundation.BorderStroke(0.6.dp, HiResGold) else null
-                    ) {
-                        Text(
-                            text = if (song.isHiRes) "${song.format} ${song.bitDepth}b" else song.format,
-                            color = if (song.isHiRes) HiResGold else TextMuted,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 0.5.dp)
-                        )
+                    if (song.isHiRes) {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = HiResGold.copy(alpha = 0.14f),
+                            border = androidx.compose.foundation.BorderStroke(0.6.dp, HiResGold.copy(alpha = 0.55f))
+                        ) {
+                            Text(
+                                text = "Hi-Res",
+                                color = HiResGold,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(4.dp))
+            Spacer(modifier = Modifier.width(5.dp))
+
+            Text(
+                text = String.format("%d:%02d", durationMinutes, durationSeconds),
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.width(42.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.End
+            )
+
+            Spacer(modifier = Modifier.width(2.dp))
 
             // Action Buttons
             IconToggleButton(
                 checked = song.isFavorite,
                 onCheckedChange = { onFavoriteClick() },
-                modifier = Modifier.size(42.dp).testTag("favorite_button_${song.id}")
+                modifier = Modifier.size(38.dp).testTag("favorite_button_${song.id}")
             ) {
                 Icon(
                     imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -869,14 +879,14 @@ fun CompactSongItem(
                 IconButton(
                     onClick = { showMenu = true },
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(34.dp)
                         .testTag("song_menu_button_${song.id}")
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "Tùy chọn",
                         tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
