@@ -59,57 +59,14 @@ fun SettingsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
             .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // App Hero Card
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = DarkSurfaceElevated,
-            border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(18.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = NeonViolet.copy(alpha = 0.2f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan),
-                    modifier = Modifier.size(56.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(imageVector = Icons.Default.Headphones, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(32.dp))
-                    }
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                Text("Nhịp Điệu Hi-Res Player", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                Text("Trình phát nhạc Hi-Res Lossless & Bộ chỉnh âm 10 dải", color = TextSecondary, fontSize = 12.sp, maxLines = 2, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = ElectricAzure.copy(alpha = 0.15f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ElectricAzure)
-                ) {
-                    Text(
-                        text = "Lossless 24-bit/96kHz Certified",
-                        color = ElectricAzure,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    )
-                }
-            }
-        }
-
         // Section: Theme mode and customizable accent palette
         Surface(
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(22.dp),
             color = DarkSurface,
             border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
             modifier = Modifier.fillMaxWidth()
@@ -119,25 +76,61 @@ fun SettingsScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text("Giao diện", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Text(
+                    when (uiState.appearanceMode) {
+                        "DARK" -> "Giao diện tối đang bật"
+                        "SYSTEM" -> "Đang theo giao diện thiết bị"
+                        else -> "Giao diện sáng đang bật"
+                    },
+                    color = TextSecondary,
+                    fontSize = 11.sp
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Chế độ tối", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (uiState.isDarkTheme) "Đang dùng giao diện tối" else "Đang dùng giao diện sáng",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            maxLines = 1
-                        )
+                    listOf("LIGHT" to "Sáng", "DARK" to "Tối", "SYSTEM" to "Theo máy").forEach { (mode, label) ->
+                        val selected = uiState.appearanceMode == mode
+                        Surface(
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 42.dp)
+                                .clip(RoundedCornerShape(13.dp))
+                                .clickable { viewModel.setAppearanceMode(mode) },
+                            shape = RoundedCornerShape(13.dp),
+                            color = if (selected) NeonCyan.copy(alpha = 0.15f) else DarkSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                if (selected) 1.5.dp else 1.dp,
+                                if (selected) NeonCyan else DarkBorder
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = when (mode) {
+                                        "LIGHT" -> Icons.Default.LightMode
+                                        "DARK" -> Icons.Default.DarkMode
+                                        else -> Icons.Default.SettingsBrightness
+                                    },
+                                    contentDescription = null,
+                                    tint = if (selected) NeonCyan else TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    label,
+                                    color = if (selected) NeonCyan else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
-                    Switch(
-                        checked = uiState.isDarkTheme,
-                        onCheckedChange = viewModel::setDarkTheme,
-                        colors = SwitchDefaults.colors(checkedThumbColor = AccentContent, checkedTrackColor = NeonCyan)
-                    )
                 }
 
                 Text("Màu nhấn", color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)

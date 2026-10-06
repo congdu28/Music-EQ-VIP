@@ -42,9 +42,9 @@ fun SyncedLyricsScreen(
     playerState: PlayerUiState,
     modifier: Modifier = Modifier
 ) {
-    // Back gesture returns to Library
+    // Back gesture returns to the player, where lyrics can be opened again from the quick tools.
     BackHandler {
-        viewModel.setTab(MainTab.LIBRARY)
+        viewModel.setTab(MainTab.NOW_PLAYING)
     }
 
     val song = playerState.currentSong
@@ -62,13 +62,44 @@ fun SyncedLyricsScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = 8.dp)
         ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { viewModel.setTab(MainTab.NOW_PLAYING) }) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại trình phát", tint = TextPrimary)
+                }
+                Text(
+                    "Lời bài hát",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 19.sp,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                IconButton(
+                    onClick = { song?.let(viewModel::searchLyricsWithGemini) },
+                    enabled = song != null && !uiState.isSearchingLyrics
+                ) {
+                    if (uiState.isSearchingLyrics) {
+                        CircularProgressIndicator(color = NeonViolet, strokeWidth = 2.dp, modifier = Modifier.size(19.dp))
+                    } else {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = "Tìm lời bằng Gemini", tint = NeonViolet)
+                    }
+                }
+                IconButton(onClick = { viewModel.setTab(MainTab.SETTINGS) }) {
+                    Icon(Icons.Default.Settings, contentDescription = "Cài đặt", tint = TextSecondary)
+                }
+            }
+
             // Responsive title and actions: controls move to their own row on every width.
             Column(
                 modifier = Modifier

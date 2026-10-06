@@ -36,6 +36,17 @@ class MusicRepository(private val context: Context) {
 
     fun isDarkThemeEnabled(): Boolean = prefs.getBoolean("appearance_dark_theme", false)
 
+    fun getAppearanceMode(): String = prefs.getString("appearance_mode", null)
+        ?: if (isDarkThemeEnabled()) "DARK" else "LIGHT"
+
+    fun setAppearanceMode(mode: String) {
+        val normalized = mode.takeIf { it in setOf("LIGHT", "DARK", "SYSTEM") } ?: "LIGHT"
+        prefs.edit()
+            .putString("appearance_mode", normalized)
+            .putBoolean("appearance_dark_theme", normalized == "DARK")
+            .apply()
+    }
+
     fun setDarkThemeEnabled(enabled: Boolean) {
         prefs.edit().putBoolean("appearance_dark_theme", enabled).apply()
     }

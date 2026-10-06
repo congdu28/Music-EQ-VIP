@@ -20,6 +20,7 @@ fun MyApplicationTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
+            AppThemeColors.update(darkTheme, accentColor)
             val window = (view.context as? Activity)?.window
             window?.let {
                 it.statusBarColor = DarkBackground.toArgb()

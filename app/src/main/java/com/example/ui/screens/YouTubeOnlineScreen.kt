@@ -63,69 +63,9 @@ fun YouTubeOnlineScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
             .padding(horizontal = 14.dp, vertical = 6.dp)
     ) {
-        // TOP HEADER BAR: YouTube Brand & Title
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = RoundedCornerShape(8.dp),
-                color = YouTubeRed,
-                modifier = Modifier.size(32.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "YOUTUBE MUSIC",
-                        color = TextPrimary,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = YouTubeRed.copy(alpha = 0.2f),
-                        border = androidx.compose.foundation.BorderStroke(0.6.dp, YouTubeRed)
-                    ) {
-                        Text(
-                            text = "ONLINE STREAM",
-                            color = YouTubeRedLight,
-                            fontSize = 8.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                        )
-                    }
-                }
-                Text(
-                    text = "Kho nhạc trực tuyến • Tự động áp dụng Bộ EQ & Bass Boost",
-                    color = TextSecondary,
-                    fontSize = 11.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
         // DEDICATED SEARCH BAR
         Surface(
             shape = RoundedCornerShape(14.dp),

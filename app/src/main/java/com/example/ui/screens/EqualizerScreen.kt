@@ -24,6 +24,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -62,11 +65,26 @@ fun EqualizerScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
             .verticalScroll(scrollState)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = {
+                viewModel.setTab(if (playerState.currentSong != null) com.example.ui.MainTab.NOW_PLAYING else com.example.ui.MainTab.SETTINGS)
+            }) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại", tint = TextPrimary)
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Bộ chỉnh âm (EQ)", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 19.sp)
+                Text("Tạo chất âm theo sở thích", color = TextSecondary, fontSize = 11.sp)
+            }
+        }
+
         // Master Equalizer Switch Card
         Surface(
             shape = RoundedCornerShape(20.dp),
@@ -104,7 +122,7 @@ fun EqualizerScreen(
                         Spacer(modifier = Modifier.width(14.dp))
                         Column {
                             Text(
-                                "Bộ Chỉnh Âm (Equalizer)",
+                                "Trạng thái bộ chỉnh âm",
                                 color = TextPrimary,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 16.sp
@@ -327,6 +345,80 @@ fun EqualizerScreen(
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(168.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(DarkSurfaceVariant)
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxHeight().width(34.dp),
+                        verticalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("+12dB", color = TextSecondary, fontSize = 9.sp, maxLines = 1)
+                        Text("0dB", color = TextSecondary, fontSize = 9.sp, maxLines = 1)
+                        Text("-12dB", color = TextSecondary, fontSize = 9.sp, maxLines = 1)
+                    }
+                    androidx.compose.foundation.Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                        val bands = equalizerState.bands
+                        if (bands.isNotEmpty()) {
+                            val left = 4.dp.toPx()
+                            val right = size.width - 4.dp.toPx()
+                            val top = 8.dp.toPx()
+                            val bottom = size.height - 8.dp.toPx()
+                            val zeroY = (top + bottom) / 2f
+                            val points = bands.mapIndexed { index, band ->
+                                val x = left + (right - left) * index / (bands.size - 1).coerceAtLeast(1)
+                                val gain = band.levelDb.coerceIn(-12f, 12f)
+                                Offset(x, zeroY - (gain / 12f) * ((bottom - top) / 2f))
+                            }
+                            listOf(top, zeroY, bottom).forEach { y ->
+                                drawLine(DarkBorder, Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                            }
+                            points.forEach { point ->
+                                drawLine(DarkBorder.copy(alpha = 0.55f), Offset(point.x, top), Offset(point.x, bottom), strokeWidth = 1.dp.toPx())
+                            }
+                            val curve = Path().apply {
+                                moveTo(points.first().x, points.first().y)
+                                for (index in 0 until points.lastIndex) {
+                                    val current = points[index]
+                                    val next = points[index + 1]
+                                    val midX = (current.x + next.x) / 2f
+                                    cubicTo(midX, current.y, midX, next.y, next.x, next.y)
+                                }
+                            }
+                            val fill = Path().apply {
+                                addPath(curve)
+                                lineTo(points.last().x, zeroY)
+                                lineTo(points.first().x, zeroY)
+                                close()
+                            }
+                            drawPath(
+                                fill,
+                                brush = Brush.verticalGradient(
+                                    listOf(NeonViolet.copy(alpha = if (equalizerState.isEnabled) 0.36f else 0.12f), NeonCyan.copy(alpha = 0.03f)),
+                                    startY = top,
+                                    endY = bottom
+                                )
+                            )
+                            drawPath(
+                                curve,
+                                brush = Brush.horizontalGradient(listOf(NeonCyan, NeonViolet, NeonPink)),
+                                style = Stroke(width = 3.dp.toPx())
+                            )
+                            points.forEach { point ->
+                                drawCircle(Color.White, radius = 4.dp.toPx(), center = point)
+                                drawCircle(NeonViolet, radius = 2.1.dp.toPx(), center = point)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
 
                 // Keep each fader wide enough to drag comfortably on a phone.
                 val bandScrollState = rememberScrollState()

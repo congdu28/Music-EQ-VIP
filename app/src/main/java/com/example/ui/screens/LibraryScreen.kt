@@ -61,7 +61,7 @@ fun LibraryScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
     ) {
         // Compact Unified Search & Quick Action Header (Saves vertical space)
         Row(
@@ -264,6 +264,43 @@ fun LibraryScreen(
             }
         }
 
+        if (uiState.librarySubTab == LibrarySubTab.ALL_SONGS) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val shortcuts = listOf(
+                    Triple(Icons.Default.Favorite, "Yêu thích", uiState.favoriteSongs.size) to LibrarySubTab.FAVORITES,
+                    Triple(Icons.Default.FolderOpen, "Thư mục", musicFolders.size) to LibrarySubTab.FOLDERS,
+                    Triple(Icons.Default.HighQuality, "Hi-Res", uiState.songs.count { it.isHiRes }) to LibrarySubTab.HI_RES
+                )
+                shortcuts.forEach { (shortcut, target) ->
+                    val (icon, title, count) = shortcut
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(70.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { viewModel.setLibrarySubTab(target) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = DarkSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 8.dp),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Icon(icon, contentDescription = null, tint = if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan, modifier = Modifier.size(19.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(title, color = TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                Text(count.toString(), color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(4.dp))
 
         // Content Area: Folders, Playlists, or Song List
@@ -331,6 +368,26 @@ fun LibraryScreen(
                         }
                     }
                 } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            when (uiState.librarySubTab) {
+                                LibrarySubTab.FAVORITES -> "Bài hát yêu thích"
+                                LibrarySubTab.HI_RES -> "Thư viện Hi-Res"
+                                else -> "Tất cả bài hát"
+                            },
+                            color = TextPrimary,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text("${filteredSongs.size} bài", color = TextSecondary, fontSize = 11.sp)
+                    }
+
                     // Keep both frequent library actions together with a comfortable touch target.
                     Row(
                         modifier = Modifier

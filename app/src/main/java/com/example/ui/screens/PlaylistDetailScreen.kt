@@ -45,7 +45,7 @@ fun PlaylistDetailScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
     ) {
         // Header Banner with Playlist Gradient & Status Bar Insets
         Box(

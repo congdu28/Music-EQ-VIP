@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
@@ -78,7 +79,7 @@ fun NowPlayingScreen(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .background(DarkBackground)
+                .musicScreenBackground()
                 .padding(horizontal = 28.dp, vertical = 24.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -161,7 +162,7 @@ fun NowPlayingScreen(
         Box(
             modifier = modifier
                 .fillMaxSize()
-                .background(DarkBackground),
+                .musicScreenBackground(),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -229,6 +230,7 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
+    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.30f).coerceIn(190.dp, 260.dp)
 
     // Dynamic Color Palette extracted from current album art / song
     val dynamicPalette = remember(song.id, song.title) {
@@ -258,7 +260,7 @@ fun NowPlayingScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .musicScreenBackground()
     ) {
         // Atmospheric Top Radial Glow with Dynamic Album Art Tint
         Box(
@@ -422,10 +424,10 @@ fun NowPlayingScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Proportionate Vinyl Disc Cover (150.dp: fits perfectly on all screens!)
+                        // Adaptive cover size gives artwork the visual priority shown in the reference.
                         Box(
                             modifier = Modifier
-                                .size(150.dp)
+                                .size(artworkSize)
                                 .padding(2.dp),
                             contentAlignment = Alignment.Center
                         ) {

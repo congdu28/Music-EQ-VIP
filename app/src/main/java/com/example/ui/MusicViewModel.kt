@@ -84,6 +84,7 @@ data class MusicAppUiState(
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.7-flash",
     val isDarkTheme: Boolean = false,
+    val appearanceMode: String = "LIGHT",
     val accentColor: Int = 0xFF3399FF.toInt(),
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
@@ -110,7 +111,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     init {
         val savedKey = repository.getGeminiApiKey()
         val savedModel = repository.getGeminiModel()
-        val savedDarkTheme = repository.isDarkThemeEnabled()
+        val savedAppearanceMode = repository.getAppearanceMode()
+        val systemDarkTheme = (application.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val savedDarkTheme = when (savedAppearanceMode) {
+            "DARK" -> true
+            "SYSTEM" -> systemDarkTheme
+            else -> false
+        }
         val savedAccentColor = repository.getAccentColor()
         AppThemeColors.update(savedDarkTheme, Color(savedAccentColor))
         _appUiState.update {
@@ -118,6 +125,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 geminiApiKey = savedKey,
                 geminiModel = savedModel,
                 isDarkTheme = savedDarkTheme,
+                appearanceMode = savedAppearanceMode,
                 accentColor = savedAccentColor,
                 showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan(),
                 hasCompletedLibraryScan = repository.hasCompletedLibraryScan()
@@ -802,9 +810,25 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setDarkTheme(enabled: Boolean) {
-        repository.setDarkThemeEnabled(enabled)
-        AppThemeColors.update(dark = enabled)
-        _appUiState.update { it.copy(isDarkTheme = enabled) }
+        setAppearanceMode(if (enabled) "DARK" else "LIGHT")
+    }
+
+    fun setAppearanceMode(mode: String) {
+        val normalized = mode.takeIf { it in setOf("LIGHT", "DARK", "SYSTEM") } ?: "LIGHT"
+        val systemDarkTheme = (getApplication<Application>().resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val dark = when (normalized) {
+            "DARK" -> true
+            "SYSTEM" -> systemDarkTheme
+            else -> false
+        }
+        repository.setAppearanceMode(normalized)
+        AppThemeColors.update(dark = dark)
+        _appUiState.update { it.copy(appearanceMode = normalized, isDarkTheme = dark) }
+    }
+
+    fun applyResolvedAppearance(dark: Boolean) {
+        AppThemeColors.update(dark = dark)
+        _appUiState.update { state -> if (state.isDarkTheme == dark) state else state.copy(isDarkTheme = dark) }
     }
 
     fun setAccentColor(color: Int) {

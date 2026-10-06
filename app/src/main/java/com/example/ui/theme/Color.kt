@@ -1,6 +1,9 @@
 package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -55,4 +58,18 @@ val CardGradientEnd get() = if (AppThemeColors.isDark) Color(0xFF0E1116) else Co
 
 val PlayButtonBackground get() = if (AppThemeColors.isDark) Color(0xFFE2E2E6) else Color(0xFF20242B)
 val PlayButtonContent get() = if (AppThemeColors.isDark) Color(0xFF0E1116) else Color(0xFFFFFFFF)
+
+/** Quiet page gradient used by the redesigned screens; keeps both appearance modes legible. */
+val ScreenBackgroundBrush: Brush
+    get() = if (AppThemeColors.isDark) {
+        Brush.verticalGradient(
+            colors = listOf(Color(0xFF111827), Color(0xFF0E1116), Color(0xFF0B0D12))
+        )
+    } else {
+        Brush.verticalGradient(
+            colors = listOf(Color(0xFFF8FAFD), Color(0xFFF0F4F9), Color(0xFFF4F6FA))
+        )
+    }
+
+fun Modifier.musicScreenBackground(): Modifier = background(ScreenBackgroundBrush)
 

@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,8 +49,17 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val appearance by viewModel.appUiState.collectAsState()
+            val systemDarkTheme = isSystemInDarkTheme()
+            val resolvedDarkTheme = when (appearance.appearanceMode) {
+                "DARK" -> true
+                "SYSTEM" -> systemDarkTheme
+                else -> false
+            }
+            LaunchedEffect(resolvedDarkTheme, appearance.appearanceMode) {
+                viewModel.applyResolvedAppearance(resolvedDarkTheme)
+            }
             MyApplicationTheme(
-                darkTheme = appearance.isDarkTheme,
+                darkTheme = resolvedDarkTheme,
                 accentColor = Color(appearance.accentColor)
             ) {
                 MainAppScreen(viewModel = viewModel)
@@ -186,7 +196,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     Scaffold(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground),
+            .background(ScreenBackgroundBrush),
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
@@ -198,31 +208,44 @@ fun MainAppScreen(viewModel: MusicViewModel) {
             }
         },
         topBar = {
-            if (uiState.currentTab != MainTab.NOW_PLAYING && uiState.selectedPlaylist == null) {
+            if (uiState.currentTab in setOf(MainTab.LIBRARY, MainTab.YOUTUBE, MainTab.SETTINGS) && uiState.selectedPlaylist == null) {
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Surface(
                                 shape = RoundedCornerShape(10.dp),
-                                color = NeonViolet.copy(alpha = 0.25f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.8f)),
+                                color = if (uiState.currentTab == MainTab.YOUTUBE) Color(0xFFFF0033) else NeonViolet.copy(alpha = 0.25f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.currentTab == MainTab.YOUTUBE) Color(0xFFFF6278) else NeonCyan.copy(alpha = 0.8f)),
                                 modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(imageVector = Icons.Default.Headphones, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                                    Icon(
+                                        imageVector = if (uiState.currentTab == MainTab.YOUTUBE) Icons.Default.PlayArrow else Icons.Default.Headphones,
+                                        contentDescription = null,
+                                        tint = if (uiState.currentTab == MainTab.YOUTUBE) Color.White else NeonCyan,
+                                        modifier = Modifier.size(20.dp)
+                                    )
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
                                 Text(
-                                    text = "Music EQ",
+                                    text = when (uiState.currentTab) {
+                                        MainTab.YOUTUBE -> "YouTube"
+                                        MainTab.SETTINGS -> "Cài đặt"
+                                        else -> "Music EQ"
+                                    },
                                     fontWeight = FontWeight.Black,
                                     fontSize = 17.sp,
                                     color = TextPrimary,
                                     maxLines = 1
                                 )
                                 Text(
-                                    text = "Hi-Res Audio & Equalizer",
+                                    text = when (uiState.currentTab) {
+                                        MainTab.YOUTUBE -> "Khám phá nhạc trực tuyến"
+                                        MainTab.SETTINGS -> "Tùy chỉnh trải nghiệm nghe nhạc"
+                                        else -> "Thư viện nhạc của bạn"
+                                    },
                                     fontSize = 10.sp,
                                     color = TextHighlight,
                                     fontWeight = FontWeight.Medium,
@@ -273,7 +296,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = DarkBackground,
+                        containerColor = Color.Transparent,
                         titleContentColor = TextPrimary
                     )
                 )
@@ -323,7 +346,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 }
 
                 // Bottom Navigation Bar with responsive typography & compact paddings
-                NavigationBar(
+                if (uiState.currentTab != MainTab.NOW_PLAYING) NavigationBar(
                     containerColor = DarkSurface,
                     contentColor = TextPrimary,
                     tonalElevation = 8.dp,
@@ -332,8 +355,6 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                     val tabs = listOf(
                         Triple(MainTab.LIBRARY, Icons.Default.LibraryMusic, "Thư viện"),
                         Triple(MainTab.YOUTUBE, Icons.Default.Subscriptions, "YouTube"),
-                        Triple(MainTab.NOW_PLAYING, Icons.Default.PlayCircleFilled, "Đang phát"),
-                        Triple(MainTab.LYRICS, Icons.Default.Lyrics, "Lời nhạc"),
                         Triple(MainTab.SETTINGS, Icons.Default.Settings, "Cài đặt")
                     )
 
@@ -379,7 +400,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 }
             }
         },
-        containerColor = DarkBackground
+        containerColor = Color.Transparent
     ) { innerPadding ->
         Box(
             modifier = Modifier
