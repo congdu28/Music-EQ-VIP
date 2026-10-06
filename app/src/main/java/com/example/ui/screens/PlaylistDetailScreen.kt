@@ -113,7 +113,7 @@ fun PlaylistDetailScreen(
             Button(
                 onClick = {
                     if (songs.isNotEmpty()) {
-                        viewModel.playQueue(songs, 0)
+                        viewModel.playPlaylistQueue(songs, 0)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
@@ -128,7 +128,7 @@ fun PlaylistDetailScreen(
             OutlinedButton(
                 onClick = {
                     if (songs.isNotEmpty()) {
-                        viewModel.playQueue(songs.shuffled(), 0)
+                        viewModel.playPlaylistQueue(songs.shuffled(), 0)
                     }
                 },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonPurple),
@@ -165,18 +165,18 @@ fun PlaylistDetailScreen(
                         song = song,
                         isPlaying = isCurrent && playerState.isPlaying,
                         isCurrentSong = isCurrent,
-                        onClick = { viewModel.playSong(song) },
+                        onClick = { viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0)) },
                         onFavoriteClick = { viewModel.toggleFavorite(song) },
                         onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                         onEditLyrics = {
-                            viewModel.playSong(song)
+                            viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0))
                             viewModel.setShowEditLyrics(true)
                         },
                         onEditMetadata = {
                             viewModel.setShowEditMetadata(song)
                         },
                         onViewSpecs = {
-                            viewModel.playSong(song)
+                            viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0))
                             viewModel.setShowAudioSpecs(true)
                         }
                     )

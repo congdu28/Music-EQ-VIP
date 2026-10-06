@@ -41,7 +41,8 @@ enum class LibrarySubTab(val title: String) {
     HI_RES("Hi-Res FLAC/WAV"),
     FAVORITES("Yêu thích"),
     PLAYLISTS("Danh sách phát"),
-    ARTISTS("Nghệ sĩ")
+    ARTISTS("Nghệ sĩ"),
+    RECENT("Gần đây")
 }
 
 enum class LibrarySortOrder(val label: String) {
@@ -67,6 +68,7 @@ data class MusicAppUiState(
     val searchQuery: String = "",
     val songs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
+    val recentlyPlayedSongs: List<Song> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
     val selectedPlaylist: Playlist? = null,
     val selectedPlaylistSongs: List<Song> = emptyList(),
@@ -135,7 +137,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 appearanceMode = savedAppearanceMode,
                 accentColor = savedAccentColor,
                 showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan(),
-                hasCompletedLibraryScan = repository.hasCompletedLibraryScan()
+                hasCompletedLibraryScan = repository.hasCompletedLibraryScan(),
+                recentlyPlayedSongs = repository.getRecentlyPlayedSongs()
             )
         }
 
@@ -196,11 +199,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         // playback starts. Use the stable song ID so that transition cannot
         // trigger a second automatic lookup or clear a just-fetched lyric.
         val autoSearchedSongKeys = mutableSetOf<String>()
+        var lastRecordedTrackId: Long? = null
 
         viewModelScope.launch {
             playerState.collect { pState ->
                 val song = pState.currentSong
                 if (song != null) {
+                    if (pState.isPlaying && !pState.isLoadingOnlineStream && lastRecordedTrackId != song.id) {
+                        lastRecordedTrackId = song.id
+                        val recentSongs = repository.recordRecentlyPlayed(song.asReusableHistoryEntry())
+                        _appUiState.update { it.copy(recentlyPlayedSongs = recentSongs) }
+                    }
                     val songChanged = song.filePath != lastObservedSongPath ||
                             song.lyrics != lastObservedLyrics ||
                             song.lrcOffsetMs != lastObservedOffset
@@ -422,6 +431,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val isFavorite = repository.toggleFavorite(song)
             playerController.updateFavoriteState(song.id, isFavorite)
+            val recentSongs = _appUiState.value.recentlyPlayedSongs.map { recent ->
+                if (recent.id == song.id) recent.copy(isFavorite = isFavorite) else recent
+            }
+            repository.replaceRecentlyPlayedSongs(recentSongs)
+            _appUiState.update { it.copy(recentlyPlayedSongs = recentSongs) }
         }
     }
 
@@ -442,6 +456,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (songs.isEmpty()) return
         clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
+        playerController.playQueue(songs, startIndex)
+    }
+
+    /** Keep the playlist detail visible so playback can use the persistent mini-player. */
+    fun playPlaylistQueue(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
+        clearPendingOnlineSelection()
+        _appUiState.update { it.copy(currentTab = MainTab.LIBRARY) }
         playerController.playQueue(songs, startIndex)
     }
 
@@ -939,6 +961,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             LibrarySubTab.FOLDERS -> _appUiState.value.songs
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }
+            LibrarySubTab.RECENT -> _appUiState.value.recentlyPlayedSongs
             LibrarySubTab.ARTISTS, LibrarySubTab.PLAYLISTS -> _appUiState.value.songs
         }
         if (query.isEmpty()) return all
@@ -948,6 +971,16 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             it.album.lowercase().contains(query) ||
             it.format.lowercase().contains(query)
         }
+    }
+
+    private fun Song.asReusableHistoryEntry(): Song {
+        if (!format.contains("YouTube", ignoreCase = true) || filePath.startsWith("yt://")) return this
+        val videoId = albumArtUri
+            ?.substringAfter("/vi/", "")
+            ?.substringBefore('/')
+            ?.takeIf { it.isNotBlank() }
+            ?: return this
+        return copy(filePath = "yt://$videoId")
     }
 
     override fun onCleared() {

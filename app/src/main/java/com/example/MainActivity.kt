@@ -338,7 +338,10 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 if (uiState.currentTab !in setOf(MainTab.NOW_PLAYING, MainTab.EQUALIZER) && playerState.currentSong != null) {
                     MiniPlayerBar(
                         playerState = playerState,
-                        onBarClick = { viewModel.setTab(MainTab.NOW_PLAYING) },
+                        onBarClick = {
+                            if (uiState.selectedPlaylist != null) viewModel.closePlaylist()
+                            viewModel.setTab(MainTab.NOW_PLAYING)
+                        },
                         onPlayPauseClick = { viewModel.togglePlayPause() },
                         onNextClick = { viewModel.playNext() },
                         onFavoriteClick = { viewModel.toggleFavorite(it) }

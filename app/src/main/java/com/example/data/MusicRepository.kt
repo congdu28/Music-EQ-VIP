@@ -9,6 +9,8 @@ import android.media.MediaMetadataRetriever
 import android.provider.DocumentsContract
 import android.provider.MediaStore
 import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.room.Room
 import com.example.equalizer.EqualizerManager
 import com.example.model.EqualizerPreset
@@ -98,6 +100,75 @@ class MusicRepository(private val context: Context) {
 
     fun markLibraryScanCompleted() {
         prefs.edit().putBoolean("has_completed_library_scan", true).apply()
+    }
+
+    fun getRecentlyPlayedSongs(): List<Song> {
+        val saved = prefs.getString("recently_played_songs_v1", null) ?: return emptyList()
+        return runCatching {
+            val items = JSONArray(saved)
+            buildList {
+                for (index in 0 until items.length()) {
+                    val item = items.optJSONObject(index) ?: continue
+                    val filePath = item.optString("filePath").takeIf(String::isNotBlank) ?: continue
+                    add(
+                        Song(
+                            id = item.optLong("id"),
+                            title = item.optString("title", "Bài hát không tên"),
+                            artist = item.optString("artist", "Không rõ nghệ sĩ"),
+                            album = item.optString("album", ""),
+                            durationMs = item.optLong("durationMs"),
+                            filePath = filePath,
+                            albumArtUri = item.optString("albumArtUri").takeIf(String::isNotBlank),
+                            format = item.optString("format", "FLAC"),
+                            bitrateKbps = item.optInt("bitrateKbps", 320),
+                            sampleRateHz = item.optInt("sampleRateHz", 44100),
+                            bitDepth = item.optInt("bitDepth", 16),
+                            isHiRes = item.optBoolean("isHiRes"),
+                            isFavorite = item.optBoolean("isFavorite"),
+                            lyrics = item.optString("lyrics").takeIf(String::isNotBlank),
+                            lrcOffsetMs = item.optLong("lrcOffsetMs"),
+                            playCount = item.optInt("playCount"),
+                            addedTimestamp = item.optLong("addedTimestamp", System.currentTimeMillis())
+                        )
+                    )
+                }
+            }.take(15)
+        }.getOrDefault(emptyList())
+    }
+
+    fun recordRecentlyPlayed(song: Song): List<Song> {
+        val updated = (listOf(song) + getRecentlyPlayedSongs())
+            .distinctBy { if (it.id != 0L) it.id else it.filePath }
+            .take(15)
+        replaceRecentlyPlayedSongs(updated)
+        return updated
+    }
+
+    fun replaceRecentlyPlayedSongs(songs: List<Song>) {
+        val items = JSONArray()
+        songs.take(15).forEach { item ->
+            items.put(
+                JSONObject()
+                    .put("id", item.id)
+                    .put("title", item.title)
+                    .put("artist", item.artist)
+                    .put("album", item.album)
+                    .put("durationMs", item.durationMs)
+                    .put("filePath", item.filePath)
+                    .put("albumArtUri", item.albumArtUri)
+                    .put("format", item.format)
+                    .put("bitrateKbps", item.bitrateKbps)
+                    .put("sampleRateHz", item.sampleRateHz)
+                    .put("bitDepth", item.bitDepth)
+                    .put("isHiRes", item.isHiRes)
+                    .put("isFavorite", item.isFavorite)
+                    .put("lyrics", item.lyrics)
+                    .put("lrcOffsetMs", item.lrcOffsetMs)
+                    .put("playCount", item.playCount)
+                    .put("addedTimestamp", item.addedTimestamp)
+            )
+        }
+        prefs.edit().putString("recently_played_songs_v1", items.toString()).apply()
     }
 
     val allSongs: Flow<List<Song>> = db.songDao().getAllSongs()

@@ -64,8 +64,8 @@ fun LibraryScreen(
     modifier: Modifier = Modifier
 ) {
     val matchingSongs = viewModel.getFilteredSongs()
-    val filteredSongs = remember(matchingSongs, uiState.librarySortOrder) {
-        when (uiState.librarySortOrder) {
+    val filteredSongs = remember(matchingSongs, uiState.librarySortOrder, uiState.librarySubTab) {
+        if (uiState.librarySubTab == LibrarySubTab.RECENT) matchingSongs else when (uiState.librarySortOrder) {
             LibrarySortOrder.TITLE_ASC -> matchingSongs.sortedBy { it.title.lowercase() }
             LibrarySortOrder.NEWEST -> matchingSongs.sortedByDescending { it.addedTimestamp }
             LibrarySortOrder.OLDEST -> matchingSongs.sortedBy { it.addedTimestamp }
@@ -78,7 +78,8 @@ fun LibraryScreen(
     val canCollapseLibraryChrome = filteredSongs.isNotEmpty() && uiState.librarySubTab in setOf(
         LibrarySubTab.ALL_SONGS,
         LibrarySubTab.FAVORITES,
-        LibrarySubTab.HI_RES
+        LibrarySubTab.HI_RES,
+        LibrarySubTab.RECENT
     )
     val collapseThresholdPx = with(LocalDensity.current) { 28.dp.roundToPx() }
 
@@ -281,8 +282,6 @@ fun LibraryScreen(
         // Match the reference: keep every library category in one horizontally scrollable row.
         val libraryTabs = listOf(
             LibrarySubTab.ALL_SONGS,
-            LibrarySubTab.FOLDERS,
-            LibrarySubTab.HI_RES,
             LibrarySubTab.FAVORITES,
             LibrarySubTab.PLAYLISTS,
             LibrarySubTab.ARTISTS
@@ -296,12 +295,13 @@ fun LibraryScreen(
             items(libraryTabs) { tab ->
                 val isSelected = uiState.librarySubTab == tab
                 val label = when (tab) {
-                    LibrarySubTab.ALL_SONGS -> "Bài hát"
+                    LibrarySubTab.ALL_SONGS -> "Tất cả"
                     LibrarySubTab.FOLDERS -> "Thư mục"
                     LibrarySubTab.HI_RES -> "Hi-Res"
                     LibrarySubTab.FAVORITES -> "Yêu thích"
                     LibrarySubTab.PLAYLISTS -> "Playlist"
                     LibrarySubTab.ARTISTS -> "Nghệ sĩ"
+                    LibrarySubTab.RECENT -> "Gần đây"
                 }
                 Surface(
                     shape = RoundedCornerShape(20.dp),
@@ -335,8 +335,8 @@ fun LibraryScreen(
             ) {
                 val shortcuts = listOf(
                     Triple(Icons.Default.Favorite, "Yêu thích", uiState.favoriteSongs.size) to LibrarySubTab.FAVORITES,
-                    Triple(Icons.Default.FolderOpen, "Thư mục", musicFolders.size) to LibrarySubTab.FOLDERS,
-                    Triple(Icons.Default.HighQuality, "Hi-Res", uiState.songs.count { it.isHiRes }) to LibrarySubTab.HI_RES
+                    Triple(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", uiState.playlists.size) to LibrarySubTab.PLAYLISTS,
+                    Triple(Icons.Default.History, "Gần đây", uiState.recentlyPlayedSongs.size.coerceAtMost(15)) to LibrarySubTab.RECENT
                 )
                 shortcuts.forEach { (shortcut, target) ->
                     val (icon, title, count) = shortcut
@@ -356,15 +356,39 @@ fun LibraryScreen(
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = (if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan).copy(alpha = 0.14f),
+                                color = (when (target) {
+                                    LibrarySubTab.FAVORITES -> NeonPink
+                                    LibrarySubTab.PLAYLISTS -> NeonPurple
+                                    else -> NeonCyan
+                                }).copy(alpha = 0.14f),
                                 modifier = Modifier.size(34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(icon, contentDescription = null, tint = if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan, modifier = Modifier.size(19.dp))
+                                    Icon(
+                                        icon,
+                                        contentDescription = null,
+                                        tint = when (target) {
+                                            LibrarySubTab.FAVORITES -> NeonPink
+                                            LibrarySubTab.PLAYLISTS -> NeonPurple
+                                            else -> NeonCyan
+                                        },
+                                        modifier = Modifier.size(19.dp)
+                                    )
                                 }
                             }
                             Text(title, color = TextPrimary, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("$count bài hát", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                when (target) {
+                                    LibrarySubTab.PLAYLISTS -> "$count playlist"
+                                    LibrarySubTab.RECENT -> "$count bài đã nghe"
+                                    else -> "$count bài hát"
+                                },
+                                color = TextSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 }
@@ -454,6 +478,7 @@ fun LibraryScreen(
                             text = when (uiState.librarySubTab) {
                                 LibrarySubTab.FAVORITES -> "Bài hát yêu thích"
                                 LibrarySubTab.HI_RES -> "Thư viện Hi-Res"
+                                LibrarySubTab.RECENT -> "Gần đây"
                                 else -> "Tất cả bài hát"
                             } + " (${filteredSongs.size})",
                             color = TextPrimary,
