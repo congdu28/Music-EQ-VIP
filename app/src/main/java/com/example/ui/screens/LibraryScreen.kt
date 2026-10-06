@@ -4,12 +4,16 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -31,6 +35,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,8 +50,10 @@ import com.example.ui.MusicAppUiState
 import com.example.ui.MusicFolder
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.*
+import kotlinx.coroutines.flow.collect
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun LibraryScreen(
     viewModel: MusicViewModel,
     uiState: MusicAppUiState,
@@ -66,12 +73,52 @@ fun LibraryScreen(
     }
     val musicFolders = remember(uiState.songs) { viewModel.getMusicFolders() }
     var showSortMenu by remember { mutableStateOf(false) }
+    val songListState = rememberLazyListState()
+    var showLibraryChrome by remember { mutableStateOf(true) }
+    val canCollapseLibraryChrome = filteredSongs.isNotEmpty() && uiState.librarySubTab in setOf(
+        LibrarySubTab.ALL_SONGS,
+        LibrarySubTab.FAVORITES,
+        LibrarySubTab.HI_RES
+    )
+    val collapseThresholdPx = with(LocalDensity.current) { 28.dp.roundToPx() }
+
+    LaunchedEffect(uiState.librarySubTab) {
+        showLibraryChrome = true
+        songListState.scrollToItem(0)
+    }
+    LaunchedEffect(songListState, canCollapseLibraryChrome, collapseThresholdPx) {
+        if (!canCollapseLibraryChrome) {
+            showLibraryChrome = true
+            return@LaunchedEffect
+        }
+        var previousIndex = songListState.firstVisibleItemIndex
+        var previousOffset = songListState.firstVisibleItemScrollOffset
+        snapshotFlow {
+            songListState.firstVisibleItemIndex to songListState.firstVisibleItemScrollOffset
+        }.collect { (index, offset) ->
+            val movingDown = index > previousIndex || (index == previousIndex && offset > previousOffset)
+            val movingUp = index < previousIndex || (index == previousIndex && offset < previousOffset)
+            if (movingDown && (index > 0 || offset > collapseThresholdPx)) {
+                showLibraryChrome = false
+            } else if (movingUp) {
+                showLibraryChrome = true
+            }
+            previousIndex = index
+            previousOffset = offset
+        }
+    }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .musicScreenBackground()
     ) {
+        AnimatedVisibility(
+            visible = !canCollapseLibraryChrome || showLibraryChrome,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column {
         // Search and scan actions stay in one compact, easy-to-find header.
         Row(
             modifier = Modifier
@@ -311,6 +358,8 @@ fun LibraryScreen(
         }
 
         Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
 
         // Content Area: Folders, Playlists, or Song List
         when (uiState.librarySubTab) {
@@ -377,6 +426,12 @@ fun LibraryScreen(
                         }
                     }
                 } else {
+                    AnimatedVisibility(
+                        visible = !canCollapseLibraryChrome || showLibraryChrome,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                    Column {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 2.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -487,9 +542,12 @@ fun LibraryScreen(
                             }
                         }
                     }
+                    }
+                    }
 
                     // Song List
                     LazyColumn(
+                        state = songListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)

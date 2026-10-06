@@ -636,7 +636,6 @@ object YouTubeMusicService {
         "Tất cả",
         "Music",
         "Remix",
-        "Thịnh hành",
         "Chill",
     )
 
@@ -645,7 +644,6 @@ object YouTubeMusicService {
             "Tất cả" -> "nhac viet nam hay nhat official music video"
             "Music" -> "Vietnamese music official music video"
             "Remix" -> "nhac remix viet nam hot tiktok"
-            "Thịnh hành" -> ""
             "Chill" -> "nhac chill viet nam acoustic"
             else -> category
         }

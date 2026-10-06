@@ -32,9 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import coil.compose.AsyncImage
 import com.example.data.YouTubeMusicService
 import com.example.model.Song
@@ -237,31 +234,6 @@ fun YouTubeOnlineScreen(
                 .weight(1f)
         ) {
             when {
-                // Official YouTube Trending Videos chart, shown in-app.
-                uiState.selectedYouTubeCategory == "Thịnh hành" && uiState.youtubeQuery.isEmpty() -> {
-                    val context = androidx.compose.ui.platform.LocalContext.current
-                    val chartWebView = remember(context) {
-                        WebView(context).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.loadsImagesAutomatically = true
-                            settings.setSupportZoom(false)
-                            webViewClient = WebViewClient()
-                            loadUrl("https://charts.youtube.com/charts/TrendingVideos/vn?hl=vi")
-                        }
-                    }
-                    DisposableEffect(chartWebView) {
-                        onDispose {
-                            chartWebView.stopLoading()
-                            chartWebView.destroy()
-                        }
-                    }
-                    AndroidView(
-                        factory = { chartWebView },
-                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp))
-                    )
-                }
-
                 uiState.isSearchingYouTube -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),

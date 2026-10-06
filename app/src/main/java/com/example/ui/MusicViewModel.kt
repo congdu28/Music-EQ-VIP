@@ -63,7 +63,7 @@ data class MusicAppUiState(
     val currentTab: MainTab = MainTab.LIBRARY,
     val pendingOnlineSong: Song? = null,
     val librarySubTab: LibrarySubTab = LibrarySubTab.ALL_SONGS,
-    val librarySortOrder: LibrarySortOrder = LibrarySortOrder.NEWEST,
+    val librarySortOrder: LibrarySortOrder = LibrarySortOrder.TITLE_ASC,
     val searchQuery: String = "",
     val songs: List<Song> = emptyList(),
     val favoriteSongs: List<Song> = emptyList(),
@@ -322,12 +322,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 selectedYouTubeCategory = category,
                 youtubeQuery = "",
                 youtubeSuggestions = emptyList(),
-                youtubeSongs = if (category == "Thịnh hành") emptyList() else it.youtubeSongs,
+                youtubeSongs = it.youtubeSongs,
                 youtubeErrorMessage = null,
-                isSearchingYouTube = category != "Thịnh hành"
+                isSearchingYouTube = true
             )
         }
-        if (category == "Thịnh hành") return
         viewModelScope.launch {
             try {
                 _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }

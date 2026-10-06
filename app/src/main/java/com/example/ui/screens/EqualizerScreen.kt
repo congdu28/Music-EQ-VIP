@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -12,6 +13,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import com.example.equalizer.EqualizerBand
 import com.example.equalizer.EqualizerState
 import com.example.model.EqualizerPreset
@@ -53,6 +57,7 @@ import com.example.ui.theme.*
 import kotlin.math.roundToInt
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun EqualizerScreen(
     viewModel: MusicViewModel,
     uiState: MusicAppUiState,
@@ -62,6 +67,13 @@ fun EqualizerScreen(
 ) {
     val scrollState = rememberScrollState()
     var showSoundEffects by remember { mutableStateOf(false) }
+    val soundEffectsRevealRequester = remember { BringIntoViewRequester() }
+    LaunchedEffect(showSoundEffects, soundEffectsRevealRequester) {
+        if (showSoundEffects) {
+            delay(260)
+            soundEffectsRevealRequester.bringIntoView()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -420,7 +432,10 @@ fun EqualizerScreen(
             }
         }
 
-        AnimatedVisibility(visible = showSoundEffects) {
+        AnimatedVisibility(
+            visible = showSoundEffects,
+            modifier = Modifier.bringIntoViewRequester(soundEffectsRevealRequester)
+        ) {
         // Sound Enhancements: Bass Boost & 3D Virtualizer
         Surface(
             shape = RoundedCornerShape(20.dp),
