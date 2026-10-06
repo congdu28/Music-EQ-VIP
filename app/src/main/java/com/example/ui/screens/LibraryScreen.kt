@@ -119,40 +119,39 @@ fun LibraryScreen(
             exit = shrinkVertically() + fadeOut()
         ) {
             Column {
-        // Search and scan actions stay in one compact, easy-to-find header.
+        // Keep search flexible while leaving the folder and scan actions easy to reach.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            // Streamlined Search Bar
             Surface(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = DarkSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.searchQuery.isNotEmpty()) NeonCyan else DarkBorder),
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
+                    .height(48.dp)
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 10.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = null,
                         tint = if (uiState.searchQuery.isNotEmpty()) NeonCyan else TextSecondary,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(20.dp)
                     )
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                         if (uiState.searchQuery.isEmpty()) {
                             Text(
                                 "Tìm bài hát, album, nghệ sĩ...",
                                 color = TextMuted,
-                                fontSize = 12.sp,
+                                fontSize = 13.sp,
                                 maxLines = 1
                             )
                         }
@@ -161,7 +160,7 @@ fun LibraryScreen(
                             onValueChange = { viewModel.setSearchQuery(it) },
                             textStyle = TextStyle(
                                 color = TextPrimary,
-                                fontSize = 13.sp,
+                                fontSize = 14.sp,
                                 fontFamily = GoogleSansFontFamily
                             ),
                             cursorBrush = SolidColor(NeonCyan),
@@ -183,14 +182,14 @@ fun LibraryScreen(
             }
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(
                     onClick = onPickAudioFolder,
                     modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(14.dp))
                         .background(DarkSurfaceVariant)
                         .testTag("choose_music_folder_button")
                 ) {
@@ -204,14 +203,14 @@ fun LibraryScreen(
 
                 Button(
                     onClick = onRequestScan,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
-                    contentPadding = PaddingValues(horizontal = 8.dp),
-                    modifier = Modifier.height(40.dp).testTag("scan_library_button")
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    modifier = Modifier.height(42.dp).testTag("scan_library_button")
                 ) {
-                    Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Quét nhạc", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                    Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(modifier = Modifier.width(5.dp))
+                    Text("Quét", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
                 }
             }
 
@@ -279,42 +278,58 @@ fun LibraryScreen(
             }
         }
 
-        // Horizontal library categories, styled as clear touch-friendly chips.
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        // Six categories adapt to the available width instead of clipping in a horizontal strip.
+        val libraryTabs = listOf(
+            LibrarySubTab.ALL_SONGS,
+            LibrarySubTab.FOLDERS,
+            LibrarySubTab.HI_RES,
+            LibrarySubTab.FAVORITES,
+            LibrarySubTab.PLAYLISTS,
+            LibrarySubTab.ARTISTS
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(LibrarySubTab.values()) { tab ->
-                val isSelected = uiState.librarySubTab == tab
-                val countLabel = when (tab) {
-                    LibrarySubTab.ALL_SONGS -> " (${uiState.songs.count { !it.isFavorite }})"
-                    LibrarySubTab.FOLDERS -> " (${musicFolders.size})"
-                    LibrarySubTab.HI_RES -> " (${uiState.songs.count { it.isHiRes }})"
-                    LibrarySubTab.FAVORITES -> " (${uiState.favoriteSongs.size})"
-                    LibrarySubTab.PLAYLISTS -> " (${uiState.playlists.size})"
-                    LibrarySubTab.ARTISTS -> " (${uiState.songs.map { it.artist }.distinct().size})"
-                }
-
-
-                Surface(
-                    shape = RoundedCornerShape(18.dp),
-                    color = if (isSelected) NeonCyan else DarkSurface,
-                    border = androidx.compose.foundation.BorderStroke(0.8.dp, if (isSelected) NeonCyan else DarkBorder),
-                    modifier = Modifier
-                        .height(34.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .clickable { viewModel.setLibrarySubTab(tab) }
+            libraryTabs.chunked(3).forEach { rowTabs ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 12.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "${tab.title}$countLabel",
-                            color = if (isSelected) AccentContent else TextPrimary,
-                            fontSize = 11.5.sp,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                        )
+                    rowTabs.forEach { tab ->
+                        val isSelected = uiState.librarySubTab == tab
+                        val label = when (tab) {
+                            LibrarySubTab.ALL_SONGS -> "Bài hát"
+                            LibrarySubTab.FOLDERS -> "Thư mục"
+                            LibrarySubTab.HI_RES -> "Hi-Res"
+                            LibrarySubTab.FAVORITES -> "Yêu thích"
+                            LibrarySubTab.PLAYLISTS -> "Playlist"
+                            LibrarySubTab.ARTISTS -> "Nghệ sĩ"
+                        }
+                        Surface(
+                            shape = RoundedCornerShape(18.dp),
+                            color = if (isSelected) NeonCyan else DarkSurface,
+                            border = androidx.compose.foundation.BorderStroke(1.dp, if (isSelected) NeonCyan else DarkBorder),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(18.dp))
+                                .clickable { viewModel.setLibrarySubTab(tab) }
+                        ) {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 5.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    color = if (isSelected) AccentContent else TextPrimary,
+                                    fontSize = 11.5.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -335,22 +350,28 @@ fun LibraryScreen(
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(86.dp)
-                            .clip(RoundedCornerShape(18.dp))
+                            .height(104.dp)
+                            .clip(RoundedCornerShape(16.dp))
                             .clickable { viewModel.setLibrarySubTab(target) },
-                        shape = RoundedCornerShape(18.dp),
+                        shape = RoundedCornerShape(16.dp),
                         color = DarkSurfaceElevated,
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 9.dp),
+                            verticalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
-                            Icon(icon, contentDescription = null, tint = if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan, modifier = Modifier.size(24.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(title, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                Text(count.toString(), color = TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Surface(
+                                shape = CircleShape,
+                                color = (if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan).copy(alpha = 0.14f),
+                                modifier = Modifier.size(34.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(icon, contentDescription = null, tint = if (target == LibrarySubTab.FAVORITES) NeonPink else NeonCyan, modifier = Modifier.size(19.dp))
+                                }
                             }
+                            Text(title, color = TextPrimary, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("$count bài hát", color = TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

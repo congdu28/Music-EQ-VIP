@@ -212,61 +212,71 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 TopAppBar(
                     title = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            val isLibraryTab = uiState.currentTab == MainTab.LIBRARY
+                            val headerIcon = when (uiState.currentTab) {
+                                MainTab.YOUTUBE -> Icons.Default.PlayArrow
+                                MainTab.SETTINGS -> Icons.Default.Settings
+                                else -> Icons.Default.MusicNote
+                            }
                             Surface(
-                                shape = RoundedCornerShape(10.dp),
+                                shape = RoundedCornerShape(11.dp),
                                 color = if (uiState.currentTab == MainTab.YOUTUBE) Color(0xFFFF0033) else NeonViolet.copy(alpha = 0.25f),
                                 border = androidx.compose.foundation.BorderStroke(1.dp, if (uiState.currentTab == MainTab.YOUTUBE) Color(0xFFFF6278) else NeonCyan.copy(alpha = 0.8f)),
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(if (isLibraryTab) 38.dp else 34.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
-                                        imageVector = if (uiState.currentTab == MainTab.YOUTUBE) Icons.Default.PlayArrow else Icons.Default.Headphones,
+                                        imageVector = headerIcon,
                                         contentDescription = null,
                                         tint = if (uiState.currentTab == MainTab.YOUTUBE) Color.White else NeonCyan,
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(if (isLibraryTab) 23.dp else 20.dp)
                                     )
                                 }
                             }
                             Spacer(modifier = Modifier.width(10.dp))
-                            Column {
+                            if (isLibraryTab) {
                                 Text(
-                                    text = when (uiState.currentTab) {
-                                        MainTab.YOUTUBE -> "YouTube"
-                                        MainTab.SETTINGS -> "Cài đặt"
-                                        else -> "Music EQ"
-                                    },
+                                    text = "Music EQ",
                                     fontWeight = FontWeight.Black,
-                                    fontSize = 17.sp,
+                                    fontSize = 20.sp,
                                     color = TextPrimary,
                                     maxLines = 1
                                 )
-                                Text(
-                                    text = when (uiState.currentTab) {
-                                        MainTab.YOUTUBE -> "Khám phá nhạc trực tuyến"
-                                        MainTab.SETTINGS -> "Tùy chỉnh trải nghiệm nghe nhạc"
-                                        else -> "Thư viện nhạc của bạn"
-                                    },
-                                    fontSize = 10.sp,
-                                    color = TextHighlight,
-                                    fontWeight = FontWeight.Medium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                            } else {
+                                Column {
+                                    Text(
+                                        text = if (uiState.currentTab == MainTab.YOUTUBE) "YouTube" else "Cài đặt",
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 17.sp,
+                                        color = TextPrimary,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = if (uiState.currentTab == MainTab.YOUTUBE) "Khám phá nhạc trực tuyến" else "Tùy chỉnh trải nghiệm nghe nhạc",
+                                        fontSize = 10.sp,
+                                        color = TextHighlight,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         }
                     },
                     actions = {
-                        // Prominent Equalizer (Bộ EQ) Button in Top Bar
+                        // Keep the equalizer one tap away with the compact control shown in the library mockup.
                         val isEqActive = uiState.currentTab == MainTab.EQUALIZER || equalizerState.isEnabled
                         Surface(
-                            shape = RoundedCornerShape(8.dp),
+                            shape = RoundedCornerShape(14.dp),
                             color = if (isEqActive) NeonCyan.copy(alpha = 0.2f) else DarkSurfaceVariant,
                             border = androidx.compose.foundation.BorderStroke(
                                 1.dp,
                                 if (isEqActive) NeonCyan else DarkBorder
                             ),
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .padding(end = 8.dp)
+                                .size(42.dp)
+                                .clip(RoundedCornerShape(14.dp))
                                 .clickable {
                                     if (uiState.selectedPlaylist != null) {
                                         viewModel.closePlaylist()
@@ -275,22 +285,12 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                                 }
                                 .testTag("top_app_bar_eq_button")
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Tune,
                                     contentDescription = "Bộ EQ",
                                     tint = if (isEqActive) NeonCyan else TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Bộ EQ",
-                                    color = if (isEqActive) NeonCyan else TextPrimary,
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold
+                                    modifier = Modifier.size(22.dp)
                                 )
                             }
                         }
