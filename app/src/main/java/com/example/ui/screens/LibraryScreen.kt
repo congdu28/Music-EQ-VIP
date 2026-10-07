@@ -846,10 +846,14 @@ fun CompactSongItem(
 
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = if (isCurrentSong) NeonCyan.copy(alpha = 0.08f) else Color.Transparent,
-        border = if (isCurrentSong) androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.42f)) else null,
+        color = if (isCurrentSong) NeonCyan.copy(alpha = 0.08f) else DarkSurface.copy(alpha = 0.42f),
+        border = androidx.compose.foundation.BorderStroke(
+            if (isCurrentSong) 1.dp else 0.7.dp,
+            if (isCurrentSong) NeonCyan.copy(alpha = 0.42f) else DarkBorder.copy(alpha = 0.55f)
+        ),
         modifier = Modifier
             .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 1.dp)
             .clip(RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .testTag("song_item_${song.id}")
