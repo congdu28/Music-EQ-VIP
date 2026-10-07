@@ -97,6 +97,7 @@ data class MusicAppUiState(
     val showAudioSpecsDialog: Boolean = false,
     val visualizerStyle: VisualizerStyle = VisualizerStyle.WAVE,
     val isSearchingLyrics: Boolean = false,
+    val geminiLyricsSuggestionSongId: Long? = null,
     val isAligningLyrics: Boolean = false,
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.8-flash",
@@ -847,7 +848,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun searchLyricsOnline(song: Song, isAuto: Boolean = false, useGemini: Boolean = false) {
         viewModelScope.launch {
-            _appUiState.update { it.copy(isSearchingLyrics = true) }
+            _appUiState.update {
+                it.copy(
+                    isSearchingLyrics = true,
+                    geminiLyricsSuggestionSongId = if (useGemini) null else it.geminiLyricsSuggestionSongId
+                )
+            }
             val currentAppState = _appUiState.value
             val result = try {
                 com.example.lyrics.OnlineLyricsService.fetchLyrics(
@@ -856,7 +862,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     durationMs = song.durationMs,
                     apiKey = currentAppState.geminiApiKey,
                     preferredModel = currentAppState.geminiModel,
-                    useGemini = useGemini
+                    useGemini = useGemini,
+                    youtubeVideoId = if (useGemini) {
+                        Regex("(?:/vi/|/v/|[?&]v=|yt://)([A-Za-z0-9_-]{11})")
+                            .find("${song.filePath} ${song.albumArtUri.orEmpty()}")?.groupValues?.getOrNull(1)
+                    } else null
                 )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -893,12 +903,19 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val formatType = if (!result.syncedLyrics.isNullOrBlank()) "Karaoke LRC đồng bộ" else "lời văn bản chưa có mốc thời gian"
                 val prefix = if (isAuto) "Tự động tải lời" else "Đã tìm thấy lời"
-                val sourceLabel = if (result.sourceName == "Gemini AI") "Gemini AI · có nguồn tra cứu" else "LRCLIB"
-                _appUiState.update { it.copy(scanResultMessage = "$prefix $formatType từ $sourceLabel cho: ${song.title}") }
-            } else if (!isAuto) {
+                val sourceLabel = if (result.sourceName == "Gemini AI") {
+                    if (result.sourceUrls.isEmpty()) "Gemini AI · lời tham khảo" else "Gemini AI · có nguồn tra cứu"
+                } else "LRCLIB"
+                _appUiState.update { it.copy(scanResultMessage = "$prefix $formatType từ $sourceLabel cho: ${song.title}", geminiLyricsSuggestionSongId = null) }
+            } else if (!useGemini) {
                 _appUiState.update {
-                    it.copy(scanResultMessage = if (useGemini) "Gemini chưa tìm được lời có nguồn khớp cho: ${song.title}" else "Không tìm thấy lời khớp trên LRCLIB cho: ${song.title}")
+                    it.copy(
+                        geminiLyricsSuggestionSongId = if (playerState.value.currentSong?.id == song.id) song.id else it.geminiLyricsSuggestionSongId,
+                        scanResultMessage = if (isAuto) it.scanResultMessage else "Không tìm thấy lời khớp trên LRCLIB. Bạn có thể thử Gemini AI cho: ${song.title}"
+                    )
                 }
+            } else if (!isAuto) {
+                _appUiState.update { it.copy(scanResultMessage = "Gemini chưa tạo được lời cho: ${song.title}") }
             }
         }
     }

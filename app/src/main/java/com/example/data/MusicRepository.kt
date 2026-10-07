@@ -138,21 +138,21 @@ class MusicRepository(private val context: Context) {
                         )
                     )
                 }
-            }.take(20)
+            }.take(30)
         }.getOrDefault(emptyList())
     }
 
     fun recordRecentlyPlayed(song: Song): List<Song> {
         val updated = (listOf(song) + getRecentlyPlayedSongs())
             .distinctBy { if (it.id != 0L) it.id else it.filePath }
-            .take(20)
+            .take(30)
         replaceRecentlyPlayedSongs(updated)
         return updated
     }
 
     fun replaceRecentlyPlayedSongs(songs: List<Song>) {
         val items = JSONArray()
-        songs.take(20).forEach { item ->
+        songs.take(30).forEach { item ->
             items.put(
                 JSONObject()
                     .put("id", item.id)

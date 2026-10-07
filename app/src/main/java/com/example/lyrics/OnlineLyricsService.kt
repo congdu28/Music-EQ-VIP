@@ -99,7 +99,8 @@ object OnlineLyricsService {
         durationMs: Long = 0,
         apiKey: String = "",
         preferredModel: String? = null,
-        useGemini: Boolean = false
+        useGemini: Boolean = false,
+        youtubeVideoId: String? = null
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
@@ -118,12 +119,14 @@ object OnlineLyricsService {
 
         if (useGemini) {
             val resolvedApiKey = apiKey.ifBlank { getDefaultGeminiApiKey() }
-            return@withContext if (resolvedApiKey.isBlank()) null else fetchGroundedGeminiLyrics(
-                title = cleanTitle,
-                artist = cleanArtist,
-                durationMs = durationMs,
-                apiKey = resolvedApiKey,
-                preferredModel = preferredModel
+            if (resolvedApiKey.isBlank()) return@withContext null
+            return@withContext fetchGroundedGeminiLyrics(
+                title = cleanTitle, artist = cleanArtist, durationMs = durationMs,
+                apiKey = resolvedApiKey, preferredModel = preferredModel
+            ) ?: createGeminiLyrics(
+                title = cleanTitle, artist = cleanArtist, durationMs = durationMs,
+                apiKey = resolvedApiKey, preferredModel = preferredModel,
+                youtubeVideoId = youtubeVideoId
             )
         }
 
@@ -308,6 +311,72 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
                 throw cancelled
             } catch (error: Throwable) {
                 Log.w(TAG, "Grounded Gemini lyrics lookup failed ($model): ${error.message}")
+            }
+        }
+        return null
+    }
+
+    /** The user explicitly opted in to AI lyrics; these are never presented as verified. */
+    private fun createGeminiLyrics(
+        title: String,
+        artist: String,
+        durationMs: Long,
+        apiKey: String,
+        preferredModel: String?,
+        youtubeVideoId: String?
+    ): OnlineLyricsResult? {
+        val videoId = youtubeVideoId?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{11}")) }
+        val durationSec = (durationMs / 1000).coerceAtLeast(0)
+        // The public YouTube URL input is a Gemini preview feature. If it is
+        // unavailable for this track/key, fall back to clearly marked original text.
+        for (includeVideo in listOf(videoId != null, false).distinct()) {
+            val prompt = if (includeVideo) {
+                """Nghe phần âm thanh của video này cho bài "$title" - "$artist". Hãy ghi lại lời bạn nghe được và ước tính mốc thời gian LRC theo âm thanh. Nếu không nghe rõ, chỉ viết phần chắc chắn; không khẳng định đây là lời chính thức. Thời lượng tham khảo: $durationSec giây. Trả về JSON duy nhất: {"lyrics":"các dòng lời","synced_lrc":"[mm:ss.xx] từng dòng hoặc rỗng"}."""
+            } else {
+                """Không có âm thanh của bài "$title" - "$artist" để nghe. Hãy SÁNG TÁC lời tham khảo mới theo cảm hứng từ tên bài, không giả vờ là lời gốc hoặc đã nghe giai điệu. Thời lượng tham khảo: $durationSec giây. Trả về JSON duy nhất: {"lyrics":"các dòng lời mới","synced_lrc":""}."""
+            }
+            for (model in geminiModels(preferredModel)) {
+                try {
+                    val parts = JSONArray()
+                    if (includeVideo && videoId != null) {
+                        parts.put(JSONObject().put("file_data", JSONObject().put("file_uri", "https://www.youtube.com/watch?v=$videoId")))
+                    }
+                    parts.put(JSONObject().put("text", prompt))
+                    val payload = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", parts)))
+                    val request = Request.Builder()
+                        .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+                        .header("x-goog-api-key", apiKey)
+                        .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .build()
+                    geminiClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            Log.w(TAG, "Creative Gemini lyrics returned HTTP ${response.code} for $model")
+                            return@use
+                        }
+                        val candidate = JSONObject(response.body?.string().orEmpty())
+                            .optJSONArray("candidates")?.optJSONObject(0) ?: return@use
+                        val responseParts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: return@use
+                        val raw = (0 until responseParts.length())
+                            .joinToString("\n") { responseParts.optJSONObject(it)?.optString("text").orEmpty() }
+                            .trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+                        val json = runCatching { JSONObject(raw) }.getOrNull() ?: return@use
+                        val lyrics = json.optString("lyrics").trim()
+                        if (lyrics.length < 30) return@use
+                        val lrc = if (includeVideo) json.optString("synced_lrc").trim()
+                            .takeIf { it.isNotBlank() }?.let { validateAlignedLyrics(lyrics, it, durationMs) }
+                            else null
+                        return OnlineLyricsResult(
+                            title = title, artist = artist,
+                            syncedLyrics = lrc, plainLyrics = lyrics,
+                            sourceName = "Gemini AI",
+                            timingSource = if (lrc != null) "Gemini AI (ước tính)" else null
+                        )
+                    }
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    Log.w(TAG, "Creative Gemini lyrics failed ($model): ${error.message}")
+                }
             }
         }
         return null

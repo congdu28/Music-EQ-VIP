@@ -4,7 +4,10 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,8 +24,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
@@ -59,9 +64,6 @@ fun SettingsScreen(
     var showEqualizerOptions by remember { mutableStateOf(false) }
     var showLyricsAiOptions by remember { mutableStateOf(false) }
     var showAppInfo by remember { mutableStateOf(false) }
-    var customRed by remember { mutableFloatStateOf(0.2f) }
-    var customGreen by remember { mutableFloatStateOf(0.6f) }
-    var customBlue by remember { mutableFloatStateOf(1f) }
 
     // Back gesture returns to Library
     BackHandler {
@@ -189,10 +191,6 @@ fun SettingsScreen(
                         modifier = Modifier
                             .size(42.dp)
                             .selectable(selected = customSelected, role = Role.RadioButton) {
-                                val currentColor = Color(uiState.accentColor)
-                                customRed = currentColor.red
-                                customGreen = currentColor.green
-                                customBlue = currentColor.blue
                                 showCustomAccentDialog = true
                             },
                         contentAlignment = Alignment.Center
@@ -226,7 +224,7 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Text("Chạm màu phổ biến hoặc chọn vòng màu để tùy chỉnh.", color = TextMuted, fontSize = 10.sp)
+                Text("Chạm màu phổ biến hoặc mở Color Picker để chọn màu bất kỳ.", color = TextMuted, fontSize = 10.sp)
                 HorizontalDivider(color = DarkBorder)
                 Text("Nền ambient trình phát", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -257,7 +255,7 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Text("Ảnh bìa lấy màu trung bình; Aurora và RGB chuyển màu động; Màu nhấn dùng bảng màu bạn đã chọn.", color = TextMuted, fontSize = 10.sp)
+                Text("Màu ambient được hòa trộn từ ảnh bìa, RGB hoặc màu nhấn bạn chọn.", color = TextMuted, fontSize = 10.sp)
             }
         }
 
@@ -760,36 +758,114 @@ fun SettingsScreen(
     }
 
     if (showCustomAccentDialog) {
-        val previewColor = Color(customRed, customGreen, customBlue)
-        AlertDialog(
-            onDismissRequest = { showCustomAccentDialog = false },
-            title = { Text("Tùy chỉnh màu nhấn") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = previewColor,
-                        modifier = Modifier.fillMaxWidth().height(42.dp)
-                    ) {}
-                    Text("Đỏ · ${(customRed * 255).toInt()}", fontSize = 11.sp)
-                    Slider(value = customRed, onValueChange = { customRed = it }, valueRange = 0f..1f)
-                    Text("Lục · ${(customGreen * 255).toInt()}", fontSize = 11.sp)
-                    Slider(value = customGreen, onValueChange = { customGreen = it }, valueRange = 0f..1f)
-                    Text("Lam · ${(customBlue * 255).toInt()}", fontSize = 11.sp)
-                    Slider(value = customBlue, onValueChange = { customBlue = it }, valueRange = 0f..1f)
-                }
+        AccentColorPickerDialog(
+            initialColor = uiState.accentColor,
+            onApply = { color ->
+                viewModel.setAccentColor(color)
+                showCustomAccentDialog = false
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.setAccentColor(previewColor.toArgb())
-                    showCustomAccentDialog = false
-                }) { Text("Áp dụng") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCustomAccentDialog = false }) { Text("Hủy") }
-            }
+            onDismiss = { showCustomAccentDialog = false }
         )
     }
+}
+
+@Composable
+private fun AccentColorPickerDialog(initialColor: Int, onApply: (Int) -> Unit, onDismiss: () -> Unit) {
+    val initialHsv = remember(initialColor) {
+        FloatArray(3).also { android.graphics.Color.colorToHSV(initialColor, it) }
+    }
+    var hue by remember(initialColor) { mutableFloatStateOf(initialHsv[0]) }
+    var saturation by remember(initialColor) { mutableFloatStateOf(initialHsv[1]) }
+    var brightness by remember(initialColor) { mutableFloatStateOf(initialHsv[2]) }
+    val hueColor = Color(android.graphics.Color.HSVToColor(floatArrayOf(hue, 1f, 1f)))
+    val selectedColor = android.graphics.Color.HSVToColor(floatArrayOf(hue, saturation, brightness))
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Color Picker · Màu giao diện") },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 390.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text("Kéo trong bảng để chọn độ đậm và sáng", color = TextSecondary, fontSize = 12.sp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(190.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Brush.horizontalGradient(listOf(Color.White, hueColor)))
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black)))
+                        .pointerInput(hue) {
+                            detectTapGestures { point ->
+                                saturation = (point.x / size.width).coerceIn(0f, 1f)
+                                brightness = (1f - point.y / size.height).coerceIn(0f, 1f)
+                            }
+                        }
+                        .pointerInput(hue) {
+                            detectDragGestures(
+                                onDragStart = { point ->
+                                    saturation = (point.x / size.width).coerceIn(0f, 1f)
+                                    brightness = (1f - point.y / size.height).coerceIn(0f, 1f)
+                                },
+                                onDrag = { change, _ ->
+                                    saturation = (change.position.x / size.width).coerceIn(0f, 1f)
+                                    brightness = (1f - change.position.y / size.height).coerceIn(0f, 1f)
+                                    change.consume()
+                                }
+                            )
+                        }
+                ) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = Color.White,
+                            radius = 10.dp.toPx(),
+                            center = androidx.compose.ui.geometry.Offset(saturation * size.width, (1f - brightness) * size.height),
+                            style = Stroke(width = 3.dp.toPx())
+                        )
+                    }
+                }
+                Text("Sắc màu", color = TextSecondary, fontSize = 12.sp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(Brush.horizontalGradient(listOf(
+                            Color.Red, Color.Yellow, Color.Green, Color.Cyan,
+                            Color.Blue, Color.Magenta, Color.Red
+                        )))
+                        .pointerInput(Unit) {
+                            detectTapGestures { point -> hue = (point.x / size.width).coerceIn(0f, 1f) * 360f }
+                        }
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = { point -> hue = (point.x / size.width).coerceIn(0f, 1f) * 360f },
+                                onDrag = { change, _ ->
+                                    hue = (change.position.x / size.width).coerceIn(0f, 1f) * 360f
+                                    change.consume()
+                                }
+                            )
+                        }
+                ) {
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawCircle(
+                            color = Color.White,
+                            radius = 13.dp.toPx(),
+                            center = androidx.compose.ui.geometry.Offset(hue / 360f * size.width, size.height / 2f),
+                            style = Stroke(width = 3.dp.toPx())
+                        )
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.size(36.dp).clip(CircleShape).background(Color(selectedColor)))
+                    Text("#%06X".format(selectedColor and 0xFFFFFF), color = TextPrimary, fontWeight = FontWeight.Bold)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onApply(selectedColor) }) { Text("Áp dụng") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Hủy") } }
+    )
 }
 
 @Composable

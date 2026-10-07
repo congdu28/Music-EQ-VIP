@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.toArgb
 import android.content.Intent
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
@@ -61,6 +62,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 enum class NowPlayingDisplayMode {
     ALBUM_ART,
     FULL_LYRICS
+}
+
+private fun rotatedAmbientColor(base: Color, hueShift: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(base.toArgb(), hsv)
+    hsv[0] = (hsv[0] + hueShift) % 360f
+    hsv[1] = hsv[1].coerceAtLeast(0.62f)
+    hsv[2] = hsv[2].coerceAtLeast(0.82f)
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 @Composable
@@ -310,12 +320,14 @@ fun NowPlayingScreen(
     val ambientSecondary = when (uiState.playerAmbientMode) {
         PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 110f) % 360f, 0.70f, 0.90f)))
         PlayerAmbientMode.AURORA -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 115f) % 360f, 0.82f, 0.94f)))
-        PlayerAmbientMode.ACCENT -> secondaryAccent
+        PlayerAmbientMode.ALBUM -> rotatedAmbientColor(ambientColor, 48f)
+        PlayerAmbientMode.ACCENT -> rotatedAmbientColor(selectedAccent, 45f)
         else -> lerp(ambientColor, selectedAccent, 0.35f)
     }
     val ambientTertiary = when (uiState.playerAmbientMode) {
         PlayerAmbientMode.AURORA -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 235f) % 360f, 0.82f, 0.95f)))
         PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 225f) % 360f, 0.70f, 0.90f)))
+        PlayerAmbientMode.ALBUM, PlayerAmbientMode.ACCENT -> rotatedAmbientColor(ambientColor, 205f)
         else -> lerp(ambientColor, ambientSecondary, 0.55f)
     }
     val animatedAmbient by animateColorAsState(
@@ -334,30 +346,37 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .matchParentSize()
                     .drawBehind {
-                        val baseAlpha = if (uiState.isDarkTheme) 0.25f else 0.14f
-                        val glowAlpha = if (uiState.isDarkTheme) 0.42f else 0.25f
-                        val radius = size.maxDimension * 0.92f
+                        val baseAlpha = if (uiState.isDarkTheme) 0.35f else 0.19f
+                        val glowAlpha = if (uiState.isDarkTheme) 0.62f else 0.34f
+                        val radius = size.maxDimension * 0.95f
                         drawRect(
                             Brush.linearGradient(
                                 listOf(
                                     animatedAmbient.copy(alpha = baseAlpha),
-                                    ambientSecondary.copy(alpha = baseAlpha * 0.72f),
-                                    ambientTertiary.copy(alpha = baseAlpha * 0.82f)
+                                    ambientSecondary.copy(alpha = baseAlpha * 0.92f),
+                                    ambientTertiary.copy(alpha = baseAlpha)
                                 )
                             )
                         )
                         drawRect(
                             Brush.radialGradient(
                                 colors = listOf(animatedAmbient.copy(alpha = glowAlpha), Color.Transparent),
-                                center = Offset(size.width * 0.48f, size.height * 0.27f),
+                                center = Offset(size.width * 0.20f, size.height * 0.22f),
                                 radius = radius
                             )
                         )
                         drawRect(
                             Brush.radialGradient(
-                                colors = listOf(ambientSecondary.copy(alpha = glowAlpha * 0.86f), Color.Transparent),
-                                center = Offset(size.width * 0.82f, size.height * 0.78f),
-                                radius = radius * 0.72f
+                                colors = listOf(ambientSecondary.copy(alpha = glowAlpha * 0.92f), Color.Transparent),
+                                center = Offset(size.width * 0.85f, size.height * 0.52f),
+                                radius = radius * 0.9f
+                            )
+                        )
+                        drawRect(
+                            Brush.radialGradient(
+                                colors = listOf(ambientTertiary.copy(alpha = glowAlpha * 0.74f), Color.Transparent),
+                                center = Offset(size.width * 0.35f, size.height * 0.95f),
+                                radius = radius * 0.8f
                             )
                         )
                     }
@@ -837,6 +856,15 @@ fun NowPlayingScreen(
                                         Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text("Tìm lời trên mạng", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    if (uiState.geminiLyricsSuggestionSongId == song.id && !uiState.isSearchingLyrics) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text("Chưa có lời khớp. Gemini có thể tạo lời tham khảo; nội dung có thể sai.", color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
+                                        TextButton(onClick = { viewModel.searchLyricsOnline(song, useGemini = true) }) {
+                                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(15.dp))
+                                            Spacer(modifier = Modifier.width(5.dp))
+                                            Text("Thử Gemini AI", fontSize = 12.sp)
+                                        }
                                     }
                                 }
                             }

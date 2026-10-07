@@ -342,14 +342,14 @@ fun LibraryScreen(
                 val shortcuts = listOf(
                     Triple(Icons.Default.Favorite, "Yêu thích", uiState.favoriteSongs.size) to LibrarySubTab.FAVORITES,
                     Triple(Icons.AutoMirrored.Filled.QueueMusic, "Playlist", uiState.playlists.size) to LibrarySubTab.PLAYLISTS,
-                    Triple(Icons.Default.History, "Gần đây", uiState.recentlyPlayedSongs.size.coerceAtMost(20)) to LibrarySubTab.RECENT
+                    Triple(Icons.Default.History, "Gần đây", uiState.recentlyPlayedSongs.size.coerceAtMost(30)) to LibrarySubTab.RECENT
                 )
                 shortcuts.forEach { (shortcut, target) ->
                     val (icon, title, count) = shortcut
                     Surface(
                         modifier = Modifier
                             .weight(1f)
-                            .height(104.dp)
+                            .height(88.dp)
                             .clip(RoundedCornerShape(16.dp))
                             .clickable { viewModel.setLibrarySubTab(target) },
                         shape = RoundedCornerShape(16.dp),
@@ -357,8 +357,8 @@ fun LibraryScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder)
                     ) {
                         Column(
-                            modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 9.dp),
-                            verticalArrangement = Arrangement.spacedBy(3.dp)
+                            modifier = Modifier.fillMaxSize().padding(horizontal = 9.dp, vertical = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
@@ -367,7 +367,7 @@ fun LibraryScreen(
                                     LibrarySubTab.PLAYLISTS -> NeonPurple
                                     else -> NeonCyan
                                 }).copy(alpha = 0.14f),
-                                modifier = Modifier.size(34.dp)
+                                modifier = Modifier.size(27.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
@@ -378,7 +378,7 @@ fun LibraryScreen(
                                             LibrarySubTab.PLAYLISTS -> NeonPurple
                                             else -> NeonCyan
                                         },
-                                        modifier = Modifier.size(19.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
@@ -913,7 +913,7 @@ fun CompactSongItem(
                     color = if (isCurrentSong) NeonCyan else TextPrimary,
                     fontSize = 14.sp,
                     fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 

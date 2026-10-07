@@ -387,6 +387,17 @@ fun SyncedLyricsScreen(
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text("Tìm lời online", fontWeight = FontWeight.Bold, fontSize = 12.5.sp)
                                 }
+                                if (uiState.geminiLyricsSuggestionSongId == song.id && !uiState.isSearchingLyrics) {
+                                    Text("Không có lời khớp. Gemini có thể tạo lời tham khảo và có thể sai.", color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
+                                    OutlinedButton(
+                                        onClick = { viewModel.searchLyricsOnline(song, useGemini = true) },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("Thử Gemini AI", fontSize = 12.sp)
+                                    }
+                                }
                             }
                             OutlinedButton(
                                 onClick = { viewModel.setShowEditLyrics(true) },
