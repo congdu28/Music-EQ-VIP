@@ -54,7 +54,9 @@ enum class LibrarySortOrder(val label: String) {
 enum class PlayerAmbientMode(val label: String) {
     OFF("Tắt"),
     ALBUM("Ảnh bìa"),
-    RGB("RGB")
+    RGB("RGB"),
+    AURORA("Aurora"),
+    ACCENT("Màu nhấn")
 }
 
 data class MusicFolder(
@@ -107,6 +109,9 @@ data class MusicAppUiState(
     val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
     val youtubeSongs: List<Song> = emptyList(),
     val isSearchingYouTube: Boolean = false,
+    val isLoadingMoreYouTube: Boolean = false,
+    val youtubeContinuation: String? = null,
+    val youtubePaginationError: String? = null,
     val youtubeErrorMessage: String? = null
 )
 
@@ -123,6 +128,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val playerState: StateFlow<PlayerUiState> = playerController.uiState
     val equalizerState: StateFlow<EqualizerState> = equalizerManager.state
     private var youtubeSuggestionJob: Job? = null
+    private var youtubeSearchJob: Job? = null
+    private var youtubeLoadMoreJob: Job? = null
 
     init {
         val savedKey = repository.getGeminiApiKey()
@@ -307,27 +314,52 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return
         youtubeSuggestionJob?.cancel()
-        _appUiState.update { it.copy(youtubeSuggestions = emptyList()) }
-        viewModelScope.launch {
+        youtubeSearchJob?.cancel()
+        youtubeLoadMoreJob?.cancel()
+        val category = _appUiState.value.selectedYouTubeCategory
+        _appUiState.update {
+            it.copy(
+                youtubeSuggestions = emptyList(),
+                isSearchingYouTube = true,
+                isLoadingMoreYouTube = false,
+                youtubeContinuation = null,
+                youtubePaginationError = null,
+                youtubeErrorMessage = null,
+                youtubeSongs = emptyList(),
+                youtubeQuery = trimmed
+            )
+        }
+        youtubeSearchJob = viewModelScope.launch {
             try {
-                _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null, youtubeQuery = trimmed) }
-                val results = try {
-                    com.example.data.YouTubeMusicService.searchSongs(trimmed)
+                val page = try {
+                    com.example.data.YouTubeMusicService.searchSongsPage(trimmed)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (t: Throwable) {
                     android.util.Log.e("MusicViewModel", "Error searching YouTube: ${t.message}", t)
-                    emptyList()
+                    com.example.data.YouTubeSearchPage(emptyList(), null)
                 }
-                _appUiState.update {
-                    it.copy(
-                        isSearchingYouTube = false,
-                        youtubeSongs = results,
-                        youtubeErrorMessage = if (results.isEmpty()) "Không tìm thấy bài hát nào trên YouTube cho '$trimmed'" else null
-                    )
+                _appUiState.update { current ->
+                    if (current.youtubeQuery != trimmed || current.selectedYouTubeCategory != category) current
+                    else current.copy(
+                            isSearchingYouTube = false,
+                            youtubeSongs = page.songs,
+                            youtubeContinuation = page.continuation,
+                            youtubeErrorMessage = if (page.songs.isEmpty()) "Không tìm thấy bài hát nào trên YouTube cho '$trimmed'" else null
+                        )
                 }
+                if (_appUiState.value.youtubeQuery == trimmed &&
+                    _appUiState.value.selectedYouTubeCategory == category
+                ) {
+                    prewarmFirstYouTubeResult(page.songs)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (t: Throwable) {
                 android.util.Log.e("MusicViewModel", "Error in searchYouTube: ${t.message}", t)
-                _appUiState.update {
-                    it.copy(
+                _appUiState.update { current ->
+                    if (current.youtubeQuery != trimmed || current.selectedYouTubeCategory != category) current
+                    else current.copy(
                         isSearchingYouTube = false,
                         youtubeErrorMessage = "Lỗi tìm kiếm YouTube: ${t.message}"
                     )
@@ -338,37 +370,51 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectYouTubeCategory(category: String) {
         youtubeSuggestionJob?.cancel()
+        youtubeSearchJob?.cancel()
+        youtubeLoadMoreJob?.cancel()
         _appUiState.update {
             it.copy(
                 selectedYouTubeCategory = category,
                 youtubeQuery = "",
                 youtubeSuggestions = emptyList(),
-                youtubeSongs = it.youtubeSongs,
+                youtubeSongs = emptyList(),
+                youtubeContinuation = null,
+                youtubePaginationError = null,
+                isLoadingMoreYouTube = false,
                 youtubeErrorMessage = null,
                 isSearchingYouTube = true
             )
         }
-        viewModelScope.launch {
+        val query = com.example.data.YouTubeMusicService.getCategoryQuery(category)
+        youtubeSearchJob = viewModelScope.launch {
             try {
-                _appUiState.update { it.copy(isSearchingYouTube = true, youtubeErrorMessage = null) }
-                val query = com.example.data.YouTubeMusicService.getCategoryQuery(category)
-                val results = try {
-                    com.example.data.YouTubeMusicService.searchSongs(query)
+                val page = try {
+                    com.example.data.YouTubeMusicService.searchSongsPage(query)
+                } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                    throw cancelled
                 } catch (t: Throwable) {
                     android.util.Log.e("MusicViewModel", "Error fetching YouTube category songs: ${t.message}", t)
-                    emptyList()
+                    com.example.data.YouTubeSearchPage(emptyList(), null)
                 }
-                _appUiState.update {
-                    it.copy(
+                _appUiState.update { current ->
+                    if (current.selectedYouTubeCategory != category || current.youtubeQuery.isNotBlank()) current
+                    else current.copy(
                         isSearchingYouTube = false,
-                        youtubeSongs = results,
-                        youtubeErrorMessage = if (results.isEmpty()) "Không thể tải danh mục '$category' từ YouTube. Vui lòng thử lại." else null
+                        youtubeSongs = page.songs,
+                        youtubeContinuation = page.continuation,
+                        youtubeErrorMessage = if (page.songs.isEmpty()) "Không thể tải danh mục '$category' từ YouTube. Vui lòng thử lại." else null
                     )
                 }
+                if (_appUiState.value.selectedYouTubeCategory == category && _appUiState.value.youtubeQuery.isBlank()) {
+                    prewarmFirstYouTubeResult(page.songs)
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
             } catch (t: Throwable) {
                 android.util.Log.e("MusicViewModel", "Error in selectYouTubeCategory: ${t.message}", t)
-                _appUiState.update {
-                    it.copy(
+                _appUiState.update { current ->
+                    if (current.selectedYouTubeCategory != category || current.youtubeQuery.isNotBlank()) current
+                    else current.copy(
                         isSearchingYouTube = false,
                         youtubeErrorMessage = "Lỗi tải YouTube: ${t.message}"
                     )
@@ -405,6 +451,68 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    /** Resolve the first visible result in the background so the first tap is usually ready sooner. */
+    private fun prewarmFirstYouTubeResult(songs: List<Song>) {
+        val videoId = songs.firstOrNull()?.filePath
+            ?.takeIf { it.startsWith("yt://") }
+            ?.removePrefix("yt://")
+            ?.takeIf(String::isNotBlank)
+            ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                android.util.Log.d("MusicViewModel", "YouTube stream prewarm skipped: ${error.message}")
+            }
+        }
+    }
+
+    fun loadMoreYouTube() {
+        val snapshot = _appUiState.value
+        val continuation = snapshot.youtubeContinuation ?: return
+        if (snapshot.isSearchingYouTube || snapshot.isLoadingMoreYouTube || snapshot.youtubePaginationError != null) return
+        val query = snapshot.youtubeQuery
+        val category = snapshot.selectedYouTubeCategory
+        youtubeLoadMoreJob?.cancel()
+        youtubeLoadMoreJob = viewModelScope.launch {
+            _appUiState.update { it.copy(isLoadingMoreYouTube = true) }
+            try {
+                val page = com.example.data.YouTubeMusicService.loadMoreSongs(continuation)
+                _appUiState.update { current ->
+                    if (current.youtubeContinuation != continuation || current.youtubeQuery != query || current.selectedYouTubeCategory != category) {
+                        current.copy(isLoadingMoreYouTube = false)
+                    } else {
+                        val merged = (current.youtubeSongs + page.songs).distinctBy { it.filePath }
+                        current.copy(
+                            youtubeSongs = merged,
+                            youtubeContinuation = page.continuation,
+                            isLoadingMoreYouTube = false,
+                            youtubePaginationError = if (page.songs.isEmpty() && page.continuation != null) {
+                                "Không tải thêm được. Chạm để thử lại."
+                            } else null
+                        )
+                    }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                android.util.Log.w("MusicViewModel", "Error loading more YouTube results: ${error.message}", error)
+                _appUiState.update { current ->
+                    if (current.youtubeContinuation == continuation) {
+                        current.copy(isLoadingMoreYouTube = false, youtubePaginationError = "Không tải thêm được. Chạm để thử lại.")
+                    } else current.copy(isLoadingMoreYouTube = false)
+                }
+            }
+        }
+    }
+
+    fun retryLoadMoreYouTube() {
+        _appUiState.update { it.copy(youtubePaginationError = null) }
+        loadMoreYouTube()
     }
 
     fun scanAudioFolder(folderUri: Uri) {
@@ -764,15 +872,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun searchLyricsOnline(song: Song, isAuto: Boolean = false) {
         viewModelScope.launch {
             _appUiState.update { it.copy(isSearchingLyrics = true) }
-            val apiKey = _appUiState.value.geminiApiKey
-            val preferredModel = _appUiState.value.geminiModel
             val result = try {
                 com.example.lyrics.OnlineLyricsService.fetchLyrics(
                     rawTitle = song.title,
                     rawArtist = song.artist,
-                    durationMs = song.durationMs,
-                    apiKey = apiKey,
-                    preferredModel = preferredModel
+                    durationMs = song.durationMs
                 )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -783,11 +887,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _appUiState.update { it.copy(isSearchingLyrics = false) }
 
             if (result != null && result.bestLyrics != null) {
-                val lyricsText = result.syncedLyrics?.takeIf { it.isNotBlank() }
-                    ?: result.plainLyrics?.let {
-                        LrcParser.convertPlainTextToSyncedLrc(it, song.durationMs)
-                    }
-                    ?: result.bestLyrics!!
+                val lyricsText = result.bestLyrics!!
                 repository.updateSongLyrics(song.id, lyricsText, 0)
                 // If this is the currently playing song, update currentSong in player
                 val current = playerState.value.currentSong
@@ -805,60 +905,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
-                val formatType = if (!result.syncedLyrics.isNullOrBlank()) {
-                    "Karaoke LRC đồng bộ"
-                } else {
-                    "lời căn thời gian ước tính"
-                }
+                val formatType = if (!result.syncedLyrics.isNullOrBlank()) "Karaoke LRC đồng bộ" else "lời văn bản chưa có mốc thời gian"
                 val prefix = if (isAuto) "Tự động tải lời" else "Đã tìm thấy lời"
-                _appUiState.update {
-                    it.copy(scanResultMessage = "$prefix $formatType từ internet cho: ${song.title}")
-                }
+                _appUiState.update { it.copy(scanResultMessage = "$prefix $formatType từ LRCLIB cho: ${song.title}") }
             } else if (!isAuto) {
                 _appUiState.update {
                     it.copy(scanResultMessage = "Không tìm thấy lời trên mạng cho: ${song.title}")
-                }
-            }
-        }
-    }
-
-    fun searchLyricsWithGemini(song: Song) {
-        viewModelScope.launch {
-            _appUiState.update { it.copy(isSearchingLyrics = true) }
-            val apiKey = _appUiState.value.geminiApiKey
-            val preferredModel = _appUiState.value.geminiModel
-            val result = com.example.lyrics.OnlineLyricsService.fetchLyricsWithGemini(
-                cleanTitle = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(song.title),
-                cleanArtist = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(song.artist),
-                durationMs = song.durationMs,
-                apiKey = apiKey,
-                preferredModel = preferredModel
-            )
-            _appUiState.update { it.copy(isSearchingLyrics = false) }
-
-            if (result != null && !result.syncedLyrics.isNullOrBlank()) {
-                val lyricsText = result.syncedLyrics
-                repository.updateSongLyrics(song.id, lyricsText, 0)
-                val current = playerState.value.currentSong
-                if (current != null && isSameLyricsTrack(current, song)) {
-                    playerController.updateQueue(playerState.value.queue.map {
-                        if (isSameLyricsTrack(it, song)) it.copy(lyrics = lyricsText, lrcOffsetMs = 0) else it
-                    })
-                    val parsed = LrcParser.parse(lyricsText, 0)
-                    val activeIdx = LrcParser.findActiveLineIndex(parsed.lines, playerState.value.currentPositionMs)
-                    _appUiState.update {
-                        it.copy(
-                            parsedLyrics = parsed,
-                            activeLyricIndex = activeIdx
-                        )
-                    }
-                }
-                _appUiState.update {
-                    it.copy(scanResultMessage = "Gemini AI (${preferredModel}) đã tạo lời Karaoke LRC thành công cho: ${song.title}")
-                }
-            } else {
-                _appUiState.update {
-                    it.copy(scanResultMessage = "Gemini AI chưa thể tạo lời cho bài này, vui lòng thử lại hoặc chọn mô hình khác")
                 }
             }
         }
@@ -905,23 +957,35 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun alignLyricsWithGemini(rawLyrics: String, onComplete: ((String?) -> Unit)? = null) {
         val currentSong = playerState.value.currentSong ?: return
+        if (rawLyrics.isBlank()) {
+            _appUiState.update { it.copy(scanResultMessage = "Hãy tải hoặc nhập lời gốc trước khi căn mốc thời gian") }
+            onComplete?.invoke(null)
+            return
+        }
         viewModelScope.launch {
             _appUiState.update { it.copy(isAligningLyrics = true) }
             val apiKey = _appUiState.value.geminiApiKey
             val preferredModel = _appUiState.value.geminiModel
-            val alignedLrc = com.example.lyrics.OnlineLyricsService.alignLyricsWithGemini(
-                plainLyrics = rawLyrics,
-                cleanTitle = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(currentSong.title),
-                cleanArtist = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(currentSong.artist),
-                durationMs = currentSong.durationMs,
-                apiKey = apiKey,
-                preferredModel = preferredModel
-            )
+            val alignedLrc = try {
+                com.example.lyrics.OnlineLyricsService.alignLyricsWithGemini(
+                    plainLyrics = rawLyrics,
+                    cleanTitle = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(currentSong.title),
+                    cleanArtist = com.example.lyrics.OnlineLyricsService.cleanSearchTerm(currentSong.artist),
+                    durationMs = currentSong.durationMs,
+                    apiKey = apiKey,
+                    preferredModel = preferredModel
+                )
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                android.util.Log.w("MusicViewModel", "Lyric alignment failed: ${error.message}", error)
+                null
+            }
             _appUiState.update { it.copy(isAligningLyrics = false) }
             if (!alignedLrc.isNullOrBlank()) {
                 updateLyrics(currentSong.id, alignedLrc, 0)
                 _appUiState.update {
-                    it.copy(scanResultMessage = "Gemini AI (${preferredModel}) đã căn chỉnh mốc thời gian bài hát chuẩn xác!")
+                    it.copy(scanResultMessage = "Đã giữ nguyên lời và gắn mốc thời gian AI ước tính. Có thể chỉnh độ lệch nếu cần.")
                 }
                 onComplete?.invoke(alignedLrc)
             } else {

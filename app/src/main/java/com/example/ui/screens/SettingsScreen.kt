@@ -229,30 +229,35 @@ fun SettingsScreen(
                 Text("Chạm màu phổ biến hoặc chọn vòng màu để tùy chỉnh.", color = TextMuted, fontSize = 10.sp)
                 HorizontalDivider(color = DarkBorder)
                 Text("Nền ambient trình phát", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    PlayerAmbientMode.entries.forEach { mode ->
-                        val selected = uiState.playerAmbientMode == mode
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = if (selected) NeonCyan.copy(alpha = 0.16f) else DarkSurfaceVariant,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonCyan else DarkBorder),
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(44.dp)
-                                .selectable(selected = selected, role = Role.RadioButton) {
-                                    viewModel.setPlayerAmbientMode(mode)
-                                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PlayerAmbientMode.entries.chunked(3).forEach { rowModes ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(mode.label, color = if (selected) NeonCyan else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                            rowModes.forEach { mode ->
+                                val selected = uiState.playerAmbientMode == mode
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (selected) NeonCyan.copy(alpha = 0.16f) else DarkSurfaceVariant,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonCyan else DarkBorder),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(44.dp)
+                                        .selectable(selected = selected, role = Role.RadioButton) {
+                                            viewModel.setPlayerAmbientMode(mode)
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(mode.label, color = if (selected) NeonCyan else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                    }
+                                }
                             }
+                            repeat(3 - rowModes.size) { Spacer(modifier = Modifier.weight(1f)) }
                         }
                     }
                 }
-                Text("Ảnh bìa lấy màu từ hình bài hát; RGB chuyển màu nhẹ khi phát nhạc.", color = TextMuted, fontSize = 10.sp)
+                Text("Ảnh bìa lấy màu trung bình; Aurora và RGB chuyển màu động; Màu nhấn dùng bảng màu bạn đã chọn.", color = TextMuted, fontSize = 10.sp)
             }
         }
 

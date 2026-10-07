@@ -16,6 +16,11 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
 
+data class YouTubeSearchPage(
+    val songs: List<Song>,
+    val continuation: String?
+)
+
 object YouTubeMusicService {
     private const val TAG = "YouTubeMusicService"
 
@@ -51,6 +56,7 @@ object YouTubeMusicService {
     private val visitorDataMutex = Mutex()
     private data class CachedStream(val url: String, val expiresAtMs: Long)
     private val streamCache = ConcurrentHashMap<String, CachedStream>()
+    private val streamResolutionGates = ConcurrentHashMap<String, Mutex>()
     private val suggestionCache = ConcurrentHashMap<String, List<String>>()
 
     /** Returns YouTube-scoped autocomplete terms for the search field. */
@@ -137,6 +143,8 @@ object YouTubeMusicService {
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Throwable) {
                 Log.w(TAG, "Error fetching visitorData: ${e.message}")
             }
@@ -150,28 +158,32 @@ object YouTubeMusicService {
     suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
         if (videoId.isBlank()) return@withContext null
 
-        val startedAt = System.nanoTime()
-        val cached = streamCache[videoId]
-        if (cached != null && cached.expiresAtMs > System.currentTimeMillis()) {
-            Log.d(TAG, "Using cached stream URL for $videoId")
-            return@withContext cached.url
-        }
-        if (cached != null) streamCache.remove(videoId, cached)
+        val gate = streamResolutionGates.computeIfAbsent(videoId) { Mutex() }
+        gate.withLock {
+            // Another prefetch or tap may have resolved this video while we waited.
+            streamCache[videoId]?.takeIf { it.expiresAtMs > System.currentTimeMillis() }?.let {
+                Log.d(TAG, "Using cached stream URL for $videoId")
+                return@withLock it.url
+            }
 
-        fun logResolved(source: String, url: String): String {
-            Log.d(TAG, "Resolved $videoId via $source in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
-            return url
-        }
+            val startedAt = System.nanoTime()
+            val cached = streamCache[videoId]
+            if (cached != null) streamCache.remove(videoId, cached)
 
-        // Fast path: use visitorData warmed while the YouTube tab/search was loading.
-        var streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = false)
-        if (streamUrl != null) {
-            return@withContext logResolved("VISIONOS", streamUrl)
-        }
+            fun logResolved(source: String, url: String): String {
+                Log.d(TAG, "Resolved $videoId via $source in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
+                return url
+            }
+
+            // Fast path: use visitorData warmed while the YouTube tab/search was loading.
+            var streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = false)
+            if (streamUrl != null) {
+                return@withLock logResolved("VISIONOS", streamUrl)
+            }
 
         // Try the second supported client with the same token before making another
         // visitor-token request. This avoids an unnecessary round trip on fallback.
-        try {
+            try {
             val visitorData = getVisitorData(forceRefresh = false)
             val vrPayload = JSONObject().apply {
                 put("context", JSONObject().apply {
@@ -205,23 +217,26 @@ object YouTubeMusicService {
                     if (url != null) {
                         cacheStreamUrl(videoId, url, json)
                         Log.d(TAG, "Resolved stream via ANDROID_VR fallback for $videoId")
-                        return@withContext logResolved("ANDROID_VR", url)
+                        return@withLock logResolved("ANDROID_VR", url)
                     }
                 }
             }
-        } catch (e: Throwable) {
-            Log.w(TAG, "ANDROID_VR fallback stream resolution failed for $videoId: ${e.message}")
-        }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Log.w(TAG, "ANDROID_VR fallback stream resolution failed for $videoId: ${e.message}")
+            }
 
         // Refresh the token only after both clients have failed with the cached token.
-        Log.d(TAG, "Both playback clients failed for $videoId; refreshing visitorData once")
-        streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true)
-        if (streamUrl != null) {
-            return@withContext logResolved("VISIONOS refreshed session", streamUrl)
-        }
+            Log.d(TAG, "Both playback clients failed for $videoId; refreshing visitorData once")
+            streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true)
+            if (streamUrl != null) {
+                return@withLock logResolved("VISIONOS refreshed session", streamUrl)
+            }
 
-        Log.e(TAG, "All stream resolution passes failed for $videoId in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
-        return@withContext null
+            Log.e(TAG, "All stream resolution passes failed for $videoId in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
+            null
+        }
     }
 
     fun invalidateStreamUrl(url: String) {
@@ -281,6 +296,8 @@ object YouTubeMusicService {
                     }
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Throwable) {
             Log.w(TAG, "VISIONOS query error for $videoId: ${e.message}")
         }
@@ -339,76 +356,109 @@ object YouTubeMusicService {
      * Searches YouTube Music using the official InnerTube WEB_REMIX client.
      * Returns rich Song objects with thumbnails, artist, title, and duration.
      */
-    suspend fun searchSongs(query: String): List<Song> = withContext(Dispatchers.IO) {
+    suspend fun searchSongs(query: String): List<Song> = searchSongsPage(query).songs
+
+    suspend fun searchSongsPage(query: String): YouTubeSearchPage = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
-        if (trimmed.isBlank()) return@withContext emptyList()
+        if (trimmed.isBlank()) return@withContext YouTubeSearchPage(emptyList(), null)
 
         try {
-            // Include song filter param (EgWKAQIIAWoKEAkQChAFEAMQBA%3D%3D) for targeted song results
-            val payload = JSONObject().apply {
-                put("context", JSONObject().apply {
-                    put("client", JSONObject().apply {
-                        put("clientName", "WEB_REMIX")
-                        put("clientVersion", "1.20231215.01.00")
-                        put("hl", "vi")
-                        put("gl", "VN")
-                    })
-                })
-                put("query", trimmed)
-                put("params", "EgWKAQIIAWoKEAkQChAFEAMQBA%3D%3D")
-            }
-
-            val request = Request.Builder()
-                .url("https://music.youtube.com/youtubei/v1/search")
-                .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .header("Referer", "https://music.youtube.com/")
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val bodyStr = response.body?.string() ?: return@withContext emptyList()
-                val root = JSONObject(bodyStr)
-                val results = parseSearchResults(root)
-                if (results.isNotEmpty()) {
-                    return@withContext results
-                }
-            }
+            val page = requestSearchPage(searchPayload(query = trimmed, songFilter = true))
+            if (page.songs.isNotEmpty() || page.continuation != null) return@withContext page
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Throwable) {
             Log.e(TAG, "Targeted song search failed for '$query': ${e.message}")
         }
 
-        // Fallback: search without filter param if targeted search gave no results
+        // Fallback: search without the song filter if targeted search gave no results.
         try {
-            val fallbackPayload = JSONObject().apply {
-                put("context", JSONObject().apply {
-                    put("client", JSONObject().apply {
-                        put("clientName", "WEB_REMIX")
-                        put("clientVersion", "1.20231215.01.00")
-                        put("hl", "vi")
-                        put("gl", "VN")
-                    })
-                })
-                put("query", trimmed)
-            }
-
-            val fallbackRequest = Request.Builder()
-                .url("https://music.youtube.com/youtubei/v1/search")
-                .post(fallbackPayload.toString().toRequestBody(JSON_MEDIA_TYPE))
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .header("Referer", "https://music.youtube.com/")
-                .build()
-
-            client.newCall(fallbackRequest).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val bodyStr = response.body?.string() ?: return@withContext emptyList()
-                val root = JSONObject(bodyStr)
-                return@withContext parseSearchResults(root)
-            }
+            requestSearchPage(searchPayload(query = trimmed, songFilter = false))
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Throwable) {
             Log.e(TAG, "Fallback search failed for '$query': ${e.message}")
-            return@withContext emptyList()
+            YouTubeSearchPage(emptyList(), null)
         }
+    }
+
+    suspend fun loadMoreSongs(continuation: String): YouTubeSearchPage = withContext(Dispatchers.IO) {
+        if (continuation.isBlank()) return@withContext YouTubeSearchPage(emptyList(), null)
+        try {
+            requestSearchPage(searchPayload(continuation = continuation))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            Log.w(TAG, "YouTube continuation request failed: ${e.message}")
+            YouTubeSearchPage(emptyList(), continuation)
+        }
+    }
+
+    private fun searchPayload(
+        query: String? = null,
+        continuation: String? = null,
+        songFilter: Boolean = false
+    ): JSONObject = JSONObject().apply {
+        put("context", JSONObject().apply {
+            put("client", JSONObject().apply {
+                put("clientName", "WEB_REMIX")
+                put("clientVersion", "1.20231215.01.00")
+                put("hl", "vi")
+                put("gl", "VN")
+            })
+            cachedVisitorData?.takeIf { System.currentTimeMillis() < visitorDataExpiryTimestamp }
+                ?.let { put("visitorData", it) }
+        })
+        if (query != null) put("query", query)
+        if (continuation != null) put("continuation", continuation)
+        if (songFilter) put("params", "EgWKAQIIAWoKEAkQChAFEAMQBA%3D%3D")
+    }
+
+    private fun requestSearchPage(payload: JSONObject): YouTubeSearchPage {
+        val request = Request.Builder()
+            .url("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
+            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Referer", "https://music.youtube.com/")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return YouTubeSearchPage(emptyList(), null)
+            val body = response.body?.string().orEmpty()
+            if (body.isBlank()) return YouTubeSearchPage(emptyList(), null)
+            val root = JSONObject(body)
+            cacheVisitorDataFromResponse(root)
+            return YouTubeSearchPage(parseSearchResults(root), extractContinuation(root))
+        }
+    }
+
+    private fun cacheVisitorDataFromResponse(root: JSONObject) {
+        val visitorData = root.optJSONObject("responseContext")?.optString("visitorData")
+        if (!visitorData.isNullOrBlank()) {
+            cachedVisitorData = visitorData
+            visitorDataExpiryTimestamp = System.currentTimeMillis() + (2 * 3600 * 1000)
+        }
+    }
+
+    private fun extractContinuation(value: Any?): String? {
+        when (value) {
+            is JSONObject -> {
+                value.optJSONObject("nextContinuationData")?.optString("continuation")
+                    ?.takeIf { it.isNotBlank() }?.let { return it }
+                value.optJSONObject("continuationCommand")?.optString("token")
+                    ?.takeIf { it.isNotBlank() }?.let { return it }
+                val keys = value.keys()
+                while (keys.hasNext()) {
+                    extractContinuation(value.opt(keys.next()))?.let { return it }
+                }
+            }
+            is JSONArray -> {
+                for (index in 0 until value.length()) {
+                    extractContinuation(value.opt(index))?.let { return it }
+                }
+            }
+        }
+        return null
     }
 
     private fun parseSearchResults(root: JSONObject): List<Song> {
@@ -419,16 +469,14 @@ object YouTubeMusicService {
             val tabs = root.optJSONObject("contents")
                 ?.optJSONObject("tabbedSearchResultsRenderer")
                 ?.optJSONArray("tabs")
-                ?: return emptyList()
 
-            val contents = tabs.optJSONObject(0)
+            val contents = tabs?.optJSONObject(0)
                 ?.optJSONObject("tabRenderer")
                 ?.optJSONObject("content")
                 ?.optJSONObject("sectionListRenderer")
                 ?.optJSONArray("contents")
-                ?: return emptyList()
 
-            for (cIdx in 0 until contents.length()) {
+            if (contents != null) for (cIdx in 0 until contents.length()) {
                 val section = contents.optJSONObject(cIdx) ?: continue
 
                 // Check musicShelfRenderer
@@ -496,7 +544,36 @@ object YouTubeMusicService {
             Log.w(TAG, "Error traversing search results: ${e.message}")
         }
 
+        // Subsequent InnerTube pages wrap results in continuationContents or an
+        // appendContinuationItemsAction instead of the initial tab/shelf layout.
+        collectContinuationSongs(root.opt("continuationContents"), results, seenVideoIds)
+        collectContinuationSongs(root.opt("onResponseReceivedCommands"), results, seenVideoIds)
+        collectContinuationSongs(root.opt("onResponseReceivedActions"), results, seenVideoIds)
+
         return results
+    }
+
+    private fun collectContinuationSongs(value: Any?, results: MutableList<Song>, seenVideoIds: MutableSet<String>) {
+        when (value) {
+            is JSONObject -> {
+                val renderer = value.optJSONObject("musicResponsiveListItemRenderer")
+                    ?: value.optJSONObject("compactVideoRenderer")
+                if (renderer != null) {
+                    val song = parseMusicItem(renderer)
+                    if (song != null && seenVideoIds.add(song.filePath)) results.add(song)
+                    return
+                }
+                val keys = value.keys()
+                while (keys.hasNext()) {
+                    collectContinuationSongs(value.opt(keys.next()), results, seenVideoIds)
+                }
+            }
+            is JSONArray -> {
+                for (index in 0 until value.length()) {
+                    collectContinuationSongs(value.opt(index), results, seenVideoIds)
+                }
+            }
+        }
     }
 
     private fun parseMusicItem(item: JSONObject): Song? {

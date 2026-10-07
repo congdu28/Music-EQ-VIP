@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +42,8 @@ import com.example.ui.MainTab
 import com.example.ui.MusicAppUiState
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.*
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collect
 
 private val YouTubeRed = Color(0xFFFF0033)
 private val YouTubeRedLight = Color(0xFFFF4D6D)
@@ -53,6 +57,27 @@ fun YouTubeOnlineScreen(
 ) {
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+    val resultsListState = rememberLazyListState()
+
+    LaunchedEffect(
+        resultsListState,
+        uiState.youtubeSongs.size,
+        uiState.youtubeContinuation,
+        uiState.isSearchingYouTube,
+        uiState.isLoadingMoreYouTube
+    ) {
+        if (uiState.isSearchingYouTube || uiState.isLoadingMoreYouTube ||
+            uiState.youtubeContinuation == null || uiState.youtubeSongs.isEmpty()
+        ) return@LaunchedEffect
+
+        snapshotFlow {
+            val layout = resultsListState.layoutInfo
+            val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisible >= layout.totalItemsCount - 6
+        }.distinctUntilChanged().collect { nearEnd ->
+            if (nearEnd) viewModel.loadMoreYouTube()
+        }
+    }
 
     // Pressing system back returns to Library
     BackHandler {
@@ -321,6 +346,7 @@ fun YouTubeOnlineScreen(
                 // Songs List
                 else -> {
                     LazyColumn(
+                        state = resultsListState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 4.dp),
                         verticalArrangement = Arrangement.spacedBy(3.dp)
@@ -356,6 +382,32 @@ fun YouTubeOnlineScreen(
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                                 onViewSpecs = { viewModel.setShowAudioSpecs(true) }
                             )
+                        }
+                        item(key = "youtube_results_footer") {
+                            when {
+                                uiState.isLoadingMoreYouTube -> Row(
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    CircularProgressIndicator(color = YouTubeRed, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Đang tải thêm bài hát…", color = TextSecondary, fontSize = 12.sp)
+                                }
+                                uiState.youtubePaginationError != null -> TextButton(
+                                    onClick = viewModel::retryLoadMoreYouTube,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                                ) {
+                                    Text(uiState.youtubePaginationError, color = YouTubeRed, fontSize = 12.sp)
+                                }
+                                uiState.youtubeContinuation == null -> Text(
+                                    "Đã tải hết kết quả hiện có",
+                                    color = TextMuted,
+                                    fontSize = 11.sp,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp)
+                                )
+                            }
                         }
                     }
                 }

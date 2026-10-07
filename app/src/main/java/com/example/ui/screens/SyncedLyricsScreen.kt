@@ -86,13 +86,13 @@ fun SyncedLyricsScreen(
                     overflow = TextOverflow.Ellipsis
                 )
                 IconButton(
-                    onClick = { song?.let(viewModel::searchLyricsWithGemini) },
+                    onClick = { song?.let { viewModel.searchLyricsOnline(it) } },
                     enabled = song != null && !uiState.isSearchingLyrics
                 ) {
                     if (uiState.isSearchingLyrics) {
                         CircularProgressIndicator(color = NeonViolet, strokeWidth = 2.dp, modifier = Modifier.size(19.dp))
                     } else {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = "Tìm lời bằng Gemini", tint = NeonViolet)
+                        Icon(Icons.Default.CloudDownload, contentDescription = "Tìm lời có nguồn từ LRCLIB", tint = NeonPink)
                     }
                 }
                 IconButton(onClick = { viewModel.setTab(MainTab.SETTINGS) }) {
@@ -115,8 +115,8 @@ fun SyncedLyricsScreen(
                             border = androidx.compose.foundation.BorderStroke(1.dp, NeonPink)
                         ) {
                             Text(
-                                text = "KARAOKE LRC",
-                                color = NeonPink,
+                                text = if (parsedLyrics.lines.any { it.timeMs >= 0 }) "ĐỒNG BỘ LRC" else "LỜI VĂN BẢN",
+                                color = if (parsedLyrics.lines.any { it.timeMs >= 0 }) NeonPink else TextSecondary,
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
@@ -135,7 +135,7 @@ fun SyncedLyricsScreen(
                     }
 
                     Text(
-                        text = if (song != null) "${song.artist} • Lời đồng bộ thời gian thực" else "Chọn bài hát để phát",
+                        text = if (song != null && parsedLyrics.lines.any { it.timeMs >= 0 }) "${song.artist} • Lời chạy theo mốc thời gian" else if (song != null) "${song.artist} • Chưa có mốc thời gian đồng bộ" else "Chọn bài hát để phát",
                         color = TextSecondary,
                         fontSize = 12.sp,
                         maxLines = 1,
@@ -180,27 +180,27 @@ fun SyncedLyricsScreen(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(18.dp))
+                                                    Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Tạo LRC bằng Gemini AI", color = TextPrimary, fontSize = 13.sp)
-                                        }
-                                    },
-                                    onClick = {
-                                        showSearchOptions = false
-                                        viewModel.searchLyricsWithGemini(song)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(18.dp))
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Tìm LRCLIB & Tự động AI", color = TextPrimary, fontSize = 13.sp)
+                                            Text("Tìm lời có nguồn từ LRCLIB", color = TextPrimary, fontSize = 13.sp)
                                         }
                                     },
                                     onClick = {
                                         showSearchOptions = false
                                         viewModel.searchLyricsOnline(song)
+                                    }
+                                )
+                                if (!song.lyrics.isNullOrBlank()) DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("AI ước tính mốc từ lời hiện có", color = TextPrimary, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showSearchOptions = false
+                                        viewModel.alignLyricsWithGemini(song.lyrics.orEmpty())
                                     }
                                 )
                                 DropdownMenuItem(
@@ -237,7 +237,7 @@ fun SyncedLyricsScreen(
                     ) {
                         Icon(imageVector = Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Sửa LRC", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Sửa lời", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

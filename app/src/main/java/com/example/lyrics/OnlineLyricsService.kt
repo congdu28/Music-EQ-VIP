@@ -80,19 +80,12 @@ object OnlineLyricsService {
         }
     }
 
-    /**
-     * Attempts to fetch lyrics from LRCLIB.
-     * Queries /get endpoint and /search with multiple queries (both accented and non-accented),
-     * and automatically falls back to Gemini AI if lyrics are not found or unsynced.
-     */
+    /** Finds a close title/artist/duration match in LRCLIB; never invents missing lyrics. */
     suspend fun fetchLyrics(
         rawTitle: String,
         rawArtist: String,
-        durationMs: Long = 0,
-        apiKey: String? = null,
-        preferredModel: String? = null
+        durationMs: Long = 0
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
-        val effectiveApiKey = if (apiKey.isNullOrBlank()) getDefaultGeminiApiKey() else apiKey
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
 
@@ -108,7 +101,7 @@ object OnlineLyricsService {
         val durationSec = (durationMs / 1000).toInt()
         Log.d(TAG, "Searching online lyrics for '$cleanTitle' by '$cleanArtist'")
 
-        // 1. Try exact get endpoint if artist is known
+        // The direct endpoint is fast, but still verify its metadata before accepting it.
         if (!isGenericArtist(cleanArtist)) {
             try {
                 val encodedTitle = URLEncoder.encode(cleanTitle, "UTF-8")
@@ -128,25 +121,21 @@ object OnlineLyricsService {
                         val body = response.body?.string()
                         if (!body.isNullOrBlank()) {
                             val json = JSONObject(body)
-                            val synced = json.optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" }
-                            val plain = json.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
-                            if (synced != null || plain != null) {
-                                return@withContext OnlineLyricsResult(
-                                    title = json.optString("trackName", cleanTitle),
-                                    artist = json.optString("artistName", cleanArtist),
-                                    syncedLyrics = synced,
-                                    plainLyrics = plain
-                                )
-                            }
+                            candidateLyrics(json, cleanTitle, cleanArtist, durationMs)?.let { return@withContext it }
                         }
+                    } else if (response.code == 404) {
+                        Log.d(TAG, "No exact LRCLIB match; trying ranked search")
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Direct /get lyrics lookup error: ${e.message}")
             }
         }
 
-        // 2. Fallback to /search endpoint with comprehensive query variations:
+        // Search a few focused variants and rank every candidate instead of taking
+        // the first result, which can be a cover, remix, or similarly named song.
         val rawNoAccentTitle = removeVietnameseDiacritics(cleanTitle)
         val rawNoAccentArtist = removeVietnameseDiacritics(cleanArtist)
 
@@ -163,6 +152,7 @@ object OnlineLyricsService {
             queriesToTry.add(rawNoAccentTitle)
         }
 
+        var bestCandidate: Pair<Double, OnlineLyricsResult>? = null
         for (q in queriesToTry.distinct()) {
             try {
                 val encodedQuery = URLEncoder.encode(q, "UTF-8")
@@ -178,157 +168,86 @@ object OnlineLyricsService {
                         val body = response.body?.string()
                         if (!body.isNullOrBlank()) {
                             val array = JSONArray(body)
-                            // Prioritize synchronized lyrics first
                             for (i in 0 until array.length()) {
-                                val item = array.getJSONObject(i)
-                                val synced = item.optString("syncedLyrics").takeIf { it.isNotBlank() && it != "null" }
-                                if (synced != null) {
-                                    return@withContext OnlineLyricsResult(
-                                        title = item.optString("trackName", cleanTitle),
-                                        artist = item.optString("artistName", cleanArtist),
-                                        syncedLyrics = synced,
-                                        plainLyrics = item.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
-                                    )
-                                }
-                            }
-                            // If no synced found, check plain lyrics
-                            for (i in 0 until array.length()) {
-                                val item = array.getJSONObject(i)
-                                val plain = item.optString("plainLyrics").takeIf { it.isNotBlank() && it != "null" }
-                                if (plain != null) {
-                                    return@withContext OnlineLyricsResult(
-                                        title = item.optString("trackName", cleanTitle),
-                                        artist = item.optString("artistName", cleanArtist),
-                                        syncedLyrics = null,
-                                        plainLyrics = plain
-                                    )
+                                val item = array.optJSONObject(i) ?: continue
+                                val quality = candidateQuality(item, cleanTitle, cleanArtist, durationMs) ?: continue
+                                val result = candidateLyrics(item, cleanTitle, cleanArtist, durationMs) ?: continue
+                                val rankedQuality = quality + if (!result.syncedLyrics.isNullOrBlank()) 0.08 else 0.0
+                                if (bestCandidate == null || rankedQuality > bestCandidate.first) {
+                                    bestCandidate = rankedQuality to result
                                 }
                             }
                         }
                     }
                 }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "Search /search lyrics error for query '$q': ${e.message}")
             }
         }
-
-        // 3. High-Intelligence Fallback: Gemini AI
-        if (!effectiveApiKey.isNullOrBlank()) {
-            val geminiResult = fetchLyricsWithGemini(cleanTitle, cleanArtist, durationMs, effectiveApiKey, preferredModel)
-            if (geminiResult != null) {
-                return@withContext geminiResult
-            }
-        }
-
-        null
+        bestCandidate?.second
     }
 
-    /**
-     * Uses Google Gemini AI to generate accurate synchronized Karaoke LRC lyrics.
-     * Respects user's preferred model (e.g. gemini-3.6-flash, gemini-3.7-flash, gemini-3.8-flash)
-     * and seamlessly falls back if a specific model encounters capacity limits.
-     */
-    suspend fun fetchLyricsWithGemini(
-        cleanTitle: String,
-        cleanArtist: String,
-        durationMs: Long,
-        apiKey: String,
-        preferredModel: String? = null
-    ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
-        if (apiKey.isBlank()) return@withContext null
-
-        val durationSec = if (durationMs > 10000) (durationMs / 1000).toInt() else 210
-        val prompt = """
-Bạn là chuyên gia âm nhạc hàng đầu. Hãy tạo toàn bộ lời bài hát chính xác và đồng bộ file Karaoke LRC cho bài hát:
-Ca khúc: "$cleanTitle"
-Nghệ sĩ: "$cleanArtist"
-
-Yêu cầu bắt buộc:
-1. Định dạng chuẩn Karaoke LRC có mốc thời gian [mm:ss.xx] ở đầu mỗi dòng (ví dụ: [00:15.50] Lời câu hát).
-2. Phân bổ các mốc thời gian thật khớp với giai điệu và cấu trúc bài hát trong tổng thời lượng $durationSec giây.
-3. Chỉ xuất ra nội dung file LRC thuần túy (các dòng bắt đầu bằng [mm:ss.xx]).
-4. TUYỆT ĐỐI KHÔNG thêm lời giải thích, chào hỏi, hoặc bọc trong code block (như ```lrc).
-""".trimIndent()
-
-        val allModels = listOf(
-            "gemini-3.6-flash",
-            "gemini-3.7-flash",
-            "gemini-3.8-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite",
-            "gemini-flash-lite-latest",
-            "gemini-flash-latest"
+    private fun candidateLyrics(
+        item: JSONObject,
+        expectedTitle: String,
+        expectedArtist: String,
+        expectedDurationMs: Long
+    ): OnlineLyricsResult? {
+        if (candidateQuality(item, expectedTitle, expectedArtist, expectedDurationMs) == null) return null
+        val synced = item.optString("syncedLyrics").takeUnless { it.isBlank() || it == "null" }
+        val plain = item.optString("plainLyrics").takeUnless { it.isBlank() || it == "null" }
+        if (synced == null && plain == null) return null
+        return OnlineLyricsResult(
+            title = item.optString("trackName", expectedTitle),
+            artist = item.optString("artistName", expectedArtist),
+            syncedLyrics = synced,
+            plainLyrics = plain
         )
+    }
 
-        // Prioritize preferred model first
-        val modelsToTry = if (!preferredModel.isNullOrBlank()) {
-            listOf(preferredModel) + allModels.filter { it != preferredModel }
-        } else {
-            allModels
+    private fun candidateQuality(
+        item: JSONObject,
+        expectedTitle: String,
+        expectedArtist: String,
+        expectedDurationMs: Long
+    ): Double? {
+        val actualTitle = item.optString("trackName").takeIf { it.isNotBlank() } ?: return null
+        val titleScore = metadataSimilarity(expectedTitle, actualTitle)
+        if (titleScore < 0.72) return null
+
+        val actualArtist = item.optString("artistName")
+        val artistScore = if (isGenericArtist(expectedArtist)) 0.65 else metadataSimilarity(expectedArtist, actualArtist)
+        if (!isGenericArtist(expectedArtist) && artistScore < 0.48) return null
+
+        var durationScore = 0.65
+        val actualDurationMs = (item.optDouble("duration", 0.0) * 1000).toLong()
+        if (expectedDurationMs > 10_000 && actualDurationMs > 10_000) {
+            val difference = kotlin.math.abs(expectedDurationMs - actualDurationMs)
+            val toleranceMs = maxOf(12_000L, (expectedDurationMs * 0.10).toLong())
+            if (difference > toleranceMs) return null
+            durationScore = 1.0 - (difference.toDouble() / toleranceMs).coerceIn(0.0, 1.0)
         }
+        return titleScore * 0.65 + artistScore * 0.25 + durationScore * 0.10
+    }
 
-        for (model in modelsToTry) {
-            try {
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
-                val jsonPayload = JSONObject().apply {
-                    val contentsArray = JSONArray().apply {
-                        val partObj = JSONObject().apply {
-                            put("text", prompt)
-                        }
-                        val contentObj = JSONObject().apply {
-                            put("parts", JSONArray().apply { put(partObj) })
-                        }
-                        put(contentObj)
-                    }
-                    put("contents", contentsArray)
-                }
+    private fun metadataSimilarity(expected: String, actual: String): Double {
+        fun tokens(value: String): Set<String> = removeVietnameseDiacritics(cleanSearchTerm(value).lowercase())
+            .replace(Regex("[^a-z0-9]+"), " ")
+            .trim()
+            .split(Regex("\\s+"))
+            .filter { it.length > 1 }
+            .toSet()
 
-                val mediaType = "application/json; charset=utf-8".toMediaType()
-                val body = jsonPayload.toString().toRequestBody(mediaType)
-
-                val request = Request.Builder()
-                    .url(url)
-                    .post(body)
-                    .header("User-Agent", "NhipDieuHiResPlayer/1.0 (Android; Audiophile)")
-                    .build()
-
-                client.newCall(request).execute().use { response ->
-                    if (response.isSuccessful) {
-                        val respBody = response.body?.string()
-                        if (!respBody.isNullOrBlank()) {
-                            val respJson = JSONObject(respBody)
-                            val candidates = respJson.optJSONArray("candidates")
-                            if (candidates != null && candidates.length() > 0) {
-                                val firstCand = candidates.getJSONObject(0)
-                                val content = firstCand.optJSONObject("content")
-                                val parts = content?.optJSONArray("parts")
-                                if (parts != null && parts.length() > 0) {
-                                    var text = parts.getJSONObject(0).optString("text", "")
-                                    text = text.replace(Regex("^```(?:lrc)?\\s*", RegexOption.IGNORE_CASE), "")
-                                        .replace(Regex("```\\s*$", RegexOption.IGNORE_CASE), "")
-                                        .trim()
-
-                                    if (text.isNotBlank() && (text.contains("[0") || text.contains("[1") || text.lines().size >= 4)) {
-                                        Log.d(TAG, "Successfully generated LRC lyrics via Gemini ($model) for '$cleanTitle'")
-                                        return@withContext OnlineLyricsResult(
-                                            title = cleanTitle,
-                                            artist = cleanArtist,
-                                            syncedLyrics = text,
-                                            plainLyrics = null
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    } else {
-                        Log.w(TAG, "Gemini $model returned error HTTP ${response.code}: ${response.message}")
-                    }
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Gemini API error ($model): ${e.message}")
-            }
-        }
-        null
+        val first = tokens(expected)
+        val second = tokens(actual)
+        if (first.isEmpty() || second.isEmpty()) return 0.0
+        if (first == second) return 1.0
+        val overlap = first.intersect(second).size.toDouble()
+        val dice = 2.0 * overlap / (first.size + second.size)
+        val containment = overlap / minOf(first.size, second.size)
+        return maxOf(dice, containment * 0.88)
     }
 
     /**
@@ -414,9 +333,12 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
                                         .replace(Regex("```\\s*$", RegexOption.IGNORE_CASE), "")
                                         .trim()
 
-                                    if (text.isNotBlank() && (text.contains("[0") || text.contains("[1") || text.lines().size >= 3)) {
+                                    val validatedLrc = validateAlignedLyrics(plainLyrics, text, durationMs)
+                                    if (validatedLrc != null) {
                                         Log.d(TAG, "Successfully aligned LRC lyrics via Gemini ($model) for '$cleanTitle'")
-                                        return@withContext text
+                                        return@withContext validatedLrc
+                                    } else {
+                                        Log.w(TAG, "Rejected Gemini alignment because it changed lyrics or returned invalid timestamps")
                                     }
                                 }
                             }
@@ -430,5 +352,55 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
             }
         }
         null
+    }
+
+    private fun validateAlignedLyrics(sourceLyrics: String, candidate: String, durationMs: Long): String? {
+        val cleaned = candidate
+            .replace(Regex("^```(?:lrc)?\\s*", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("```\\s*$", RegexOption.IGNORE_CASE), "")
+            .trim()
+        if (cleaned.isBlank()) return null
+
+        val timestampRegex = Regex("""\[(\d{1,2}):([0-5]\d)(?:[.:](\d{1,3}))?\]""")
+        val sourceWords = lyricWords(sourceLyrics, timestampRegex)
+        val outputWords = lyricWords(cleaned, timestampRegex)
+        if (sourceWords.isEmpty() || sourceWords != outputWords) return null
+
+        var lastTimestampMs = -1L
+        var lyricRows = 0
+        for (line in cleaned.lines().filter { it.isNotBlank() }) {
+            val timestamps = timestampRegex.findAll(line).toList()
+            if (timestamps.isEmpty()) return null
+            val lyricText = timestampRegex.replace(line, "").trim()
+            if (lyricText.isBlank()) return null
+            lyricRows++
+            for (match in timestamps) {
+                val minutes = match.groupValues[1].toLongOrNull() ?: return null
+                val seconds = match.groupValues[2].toLongOrNull() ?: return null
+                val fractionText = match.groupValues[3]
+                val fractionMs = when (fractionText.length) {
+                    1 -> (fractionText.toLongOrNull() ?: return null) * 100
+                    2 -> (fractionText.toLongOrNull() ?: return null) * 10
+                    3 -> fractionText.toLongOrNull() ?: return null
+                    else -> 0L
+                }
+                val timestampMs = minutes * 60_000L + seconds * 1_000L + fractionMs
+                if (timestampMs < lastTimestampMs) return null
+                if (durationMs > 0 && timestampMs > durationMs + 3_000L) return null
+                lastTimestampMs = timestampMs
+            }
+        }
+        if (lyricRows < 3) return null
+        return cleaned
+    }
+
+    private fun lyricWords(text: String, timestampRegex: Regex): List<String> {
+        val withoutTimestamps = timestampRegex.replace(text, "")
+            .replace(Regex("(?im)^\\[(ti|ar|al|by|offset):[^\\]]*]\\s*", RegexOption.IGNORE_CASE), "")
+        return java.text.Normalizer.normalize(withoutTimestamps.lowercase(), java.text.Normalizer.Form.NFC)
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+            .trim()
+            .split(Regex("\\s+"))
+            .filter(String::isNotBlank)
     }
 }

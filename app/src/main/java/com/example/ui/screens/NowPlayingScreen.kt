@@ -22,8 +22,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -237,6 +239,7 @@ fun NowPlayingScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
+    val hasSyncedLyrics = parsedLyrics.lines.any { it.timeMs >= 0 }
     val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.27f).coerceIn(165.dp, 220.dp)
 
     // Use the accent selected in Settings throughout the player.
@@ -281,11 +284,13 @@ fun NowPlayingScreen(
             }
         }
     }
-    val rgbHue = if (uiState.playerAmbientMode == PlayerAmbientMode.RGB) {
+    val rgbHue = if (uiState.playerAmbientMode == PlayerAmbientMode.RGB || uiState.playerAmbientMode == PlayerAmbientMode.AURORA) {
         val hue by infiniteTransition.animateFloat(
             initialValue = 0f,
             targetValue = 360f,
-            animationSpec = infiniteRepeatable(tween(24_000, easing = LinearEasing)),
+            animationSpec = infiniteRepeatable(
+                tween(if (uiState.playerAmbientMode == PlayerAmbientMode.AURORA) 16_000 else 24_000, easing = LinearEasing)
+            ),
             label = "ambient_rgb_hue"
         )
         hue
@@ -294,10 +299,19 @@ fun NowPlayingScreen(
         PlayerAmbientMode.OFF -> Color.Transparent
         PlayerAmbientMode.ALBUM -> albumAmbientColor ?: selectedAccent
         PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf(rgbHue, 0.70f, 0.90f)))
+        PlayerAmbientMode.AURORA -> Color(android.graphics.Color.HSVToColor(floatArrayOf(rgbHue, 0.84f, 0.96f)))
+        PlayerAmbientMode.ACCENT -> selectedAccent
     }
     val ambientSecondary = when (uiState.playerAmbientMode) {
         PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 110f) % 360f, 0.70f, 0.90f)))
+        PlayerAmbientMode.AURORA -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 115f) % 360f, 0.82f, 0.94f)))
+        PlayerAmbientMode.ACCENT -> secondaryAccent
         else -> lerp(ambientColor, selectedAccent, 0.35f)
+    }
+    val ambientTertiary = when (uiState.playerAmbientMode) {
+        PlayerAmbientMode.AURORA -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 235f) % 360f, 0.82f, 0.95f)))
+        PlayerAmbientMode.RGB -> Color(android.graphics.Color.HSVToColor(floatArrayOf((rgbHue + 225f) % 360f, 0.70f, 0.90f)))
+        else -> lerp(ambientColor, ambientSecondary, 0.55f)
     }
     val animatedAmbient by animateColorAsState(
         targetValue = ambientColor,
@@ -311,19 +325,37 @@ fun NowPlayingScreen(
             .musicScreenBackground()
     ) {
         if (uiState.playerAmbientMode != PlayerAmbientMode.OFF) {
-            val ambientAlpha = if (uiState.isDarkTheme) 0.30f else 0.18f
             Box(
                 modifier = Modifier
                     .matchParentSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                animatedAmbient.copy(alpha = ambientAlpha),
-                                ambientSecondary.copy(alpha = ambientAlpha * 0.45f),
-                                animatedAmbient.copy(alpha = ambientAlpha * 0.65f)
+                    .drawBehind {
+                        val baseAlpha = if (uiState.isDarkTheme) 0.25f else 0.14f
+                        val glowAlpha = if (uiState.isDarkTheme) 0.42f else 0.25f
+                        val radius = size.maxDimension * 0.92f
+                        drawRect(
+                            Brush.linearGradient(
+                                listOf(
+                                    animatedAmbient.copy(alpha = baseAlpha),
+                                    ambientSecondary.copy(alpha = baseAlpha * 0.72f),
+                                    ambientTertiary.copy(alpha = baseAlpha * 0.82f)
+                                )
                             )
                         )
-                    )
+                        drawRect(
+                            Brush.radialGradient(
+                                colors = listOf(animatedAmbient.copy(alpha = glowAlpha), Color.Transparent),
+                                center = Offset(size.width * 0.48f, size.height * 0.27f),
+                                radius = radius
+                            )
+                        )
+                        drawRect(
+                            Brush.radialGradient(
+                                colors = listOf(ambientSecondary.copy(alpha = glowAlpha * 0.86f), Color.Transparent),
+                                center = Offset(size.width * 0.82f, size.height * 0.78f),
+                                radius = radius * 0.72f
+                            )
+                        )
+                    }
             )
         }
 
@@ -644,7 +676,7 @@ fun NowPlayingScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Lời Karaoke đồng bộ",
+                                text = if (hasSyncedLyrics) "Lời Karaoke đồng bộ" else "Lời bài hát · chưa đồng bộ",
                                 color = animatedPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
@@ -679,27 +711,27 @@ fun NowPlayingScreen(
                                         DropdownMenuItem(
                                             text = {
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(16.dp))
-                                                    Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Tạo LRC bằng Gemini AI", color = TextPrimary, fontSize = 12.sp)
-                                                }
-                                            },
-                                            onClick = {
-                                                showSearchMenu = false
-                                                viewModel.searchLyricsWithGemini(song)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = {
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Tìm LRCLIB & Tự động AI", color = TextPrimary, fontSize = 12.sp)
+                                                    Text("Tìm lời có nguồn từ LRCLIB", color = TextPrimary, fontSize = 12.sp)
                                                 }
                                             },
                                             onClick = {
                                                 showSearchMenu = false
                                                 viewModel.searchLyricsOnline(song)
+                                            }
+                                        )
+                                        if (!song.lyrics.isNullOrBlank()) DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("AI ước tính mốc từ lời hiện có", color = TextPrimary, fontSize = 12.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showSearchMenu = false
+                                                viewModel.alignLyricsWithGemini(song.lyrics.orEmpty())
                                             }
                                         )
                                         DropdownMenuItem(

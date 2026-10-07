@@ -29,7 +29,6 @@ import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
-import com.example.lyrics.LrcParser
 import com.example.model.Playlist
 import com.example.model.Song
 import com.example.ui.theme.*
@@ -240,13 +239,13 @@ fun EditLyricsDialog(
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 val clip = clipboard?.primaryClip?.getItemAt(0)?.text?.toString()
                                 if (!clip.isNullOrBlank()) {
-                                    val synced = if (clip.contains("[0") || clip.contains("[1")) {
-                                        clip
-                                    } else {
-                                        LrcParser.convertPlainTextToSyncedLrc(clip, song.durationMs)
-                                    }
-                                    lyricsText = synced
-                                    Toast.makeText(context, "Đã dán và tự động đồng bộ mốc thời gian!", Toast.LENGTH_SHORT).show()
+                                    lyricsText = clip
+                                    val hasTimestamps = Regex("\\[\\d{1,2}:\\d{2}(?:[.:]\\d{1,3})?]").containsMatchIn(clip)
+                                    Toast.makeText(
+                                        context,
+                                        if (hasTimestamps) "Đã dán lời LRC có mốc thời gian" else "Đã dán lời dạng văn bản; chưa có mốc thời gian",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
                                 } else {
                                     Toast.makeText(context, "Bộ nhớ tạm rỗng", Toast.LENGTH_SHORT).show()
                                 }
@@ -261,7 +260,7 @@ fun EditLyricsDialog(
                     ) {
                         Icon(imageVector = Icons.Default.ContentPaste, contentDescription = null, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Dán & Mốc cơ bản", fontSize = 11.sp)
+                        Text("Dán lời", fontSize = 11.sp)
                     }
 
                     OutlinedButton(
@@ -288,7 +287,7 @@ fun EditLyricsDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Quick Tools Row 2: AI Căn chỉnh chuẩn nhạc
+                // Quick Tools Row 2: AI can only estimate timing; lyric words are validated unchanged.
                 Button(
                     onClick = {
                         if (lyricsText.isBlank()) {
@@ -307,11 +306,11 @@ fun EditLyricsDialog(
                     if (isAligning) {
                         CircularProgressIndicator(color = NeonViolet, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Gemini AI đang căn chỉnh chuẩn nhạc...", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Gemini AI đang ước tính mốc thời gian...", fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                     } else {
                         Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp), tint = NeonViolet)
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("AI Căn chỉnh chuẩn nhạc (Khớp lời tự động)", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
+                        Text("AI ước tính mốc từ lời đã nhập", fontSize = 11.5.sp, fontWeight = FontWeight.Bold)
                     }
                 }
 
