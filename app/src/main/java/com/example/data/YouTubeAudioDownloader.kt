@@ -225,10 +225,10 @@ object YouTubeAudioDownloader {
                                         partBytes += count
                                         val now = android.os.SystemClock.elapsedRealtime()
                                         if (now - lastReportAt.get() >= 300L) {
-                                            val totalReceived = received.addAndGet(count)
+                                            val totalReceived = received.addAndGet(count.toLong())
                                             onProgress(YouTubeAudioTransferProgress(totalReceived, totalBytes))
                                             lastReportAt.set(now)
-                                        } else received.addAndGet(count)
+                                        } else received.addAndGet(count.toLong())
                                     }
                                 }
                             }
