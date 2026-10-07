@@ -523,7 +523,7 @@ class MusicRepository(private val context: Context) {
         }
     }
 
-    suspend fun addDownloadedYouTubeSong(song: Song, audioFile: File, format: String): Song =
+    suspend fun addDownloadedYouTubeSong(song: Song, audioFile: File, format: String, bitrateKbps: Int): Song =
         withContext(Dispatchers.IO) {
             val path = audioFile.absolutePath
             val existing = db.songDao().getSongByFilePath(path)
@@ -534,6 +534,7 @@ class MusicRepository(private val context: Context) {
                 album = "YouTube Offline",
                 filePath = path,
                 format = format.uppercase(),
+                bitrateKbps = bitrateKbps.takeIf { it > 0 } ?: song.bitrateKbps,
                 isHiRes = false,
                 isFavorite = false,
                 addedTimestamp = System.currentTimeMillis()

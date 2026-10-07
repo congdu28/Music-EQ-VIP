@@ -18,7 +18,7 @@ import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 
-data class DownloadedYouTubeAudio(val file: File, val format: String)
+data class DownloadedYouTubeAudio(val file: File, val format: String, val bitrateKbps: Int)
 data class YouTubeAudioTransferProgress(val downloadedBytes: Long, val totalBytes: Long)
 
 /** Downloads an audio-only stream using the same in-app resolver used by online playback. */
@@ -33,9 +33,11 @@ object YouTubeAudioDownloader {
     suspend fun download(
         context: Context,
         song: Song,
+        videoId: String,
+        preferredBitrateKbps: Int,
         onProgress: (YouTubeAudioTransferProgress) -> Unit
     ): DownloadedYouTubeAudio = withContext(Dispatchers.IO) {
-        val videoId = song.filePath.removePrefix("yt://").takeIf {
+        val resolvedVideoId = videoId.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,20}")) } ?: song.filePath.removePrefix("yt://").takeIf {
             song.filePath.startsWith("yt://") && it.matches(Regex("[A-Za-z0-9_-]{6,20}"))
         } ?: song.albumArtUri
             ?.substringAfter("/vi/", "")
@@ -49,9 +51,9 @@ object YouTubeAudioDownloader {
             throw IllegalStateException("Không tạo được thư mục lưu nhạc.")
         }
 
-        var streamUrl = YouTubeMusicService.resolveStreamUrl(videoId)
+        var streamUrl = YouTubeMusicService.resolveStreamUrl(resolvedVideoId, preferredBitrateKbps)
             ?: throw IllegalStateException("Không lấy được luồng âm thanh cho bài này.")
-        tryDownloadParallelRanges(streamUrl, videoId, downloadDir, onProgress)?.let { return@withContext it }
+        tryDownloadParallelRanges(streamUrl, resolvedVideoId, downloadDir, onProgress)?.let { return@withContext it }
         val attemptedUrls = mutableSetOf<String>()
         var lastError: String? = null
 
@@ -70,7 +72,7 @@ object YouTubeAudioDownloader {
                 try {
                     if (response.code == 403 || response.code == 410) {
                         lastError = "Luồng tải đã hết hạn, đang thử làm mới."
-                        streamUrl = YouTubeMusicService.resolveFreshStreamUrl(streamUrl, videoId)
+                        streamUrl = YouTubeMusicService.resolveFreshStreamUrl(streamUrl, resolvedVideoId)
                             ?: throw IllegalStateException("YouTube đã từ chối luồng tải. Vui lòng thử lại.")
                         return@repeat
                     }
@@ -87,7 +89,7 @@ object YouTubeAudioDownloader {
 
                     if (headerMime.startsWith("video/") || (mime == null && urlMime.startsWith("video/"))) {
                         lastError = "Luồng hiện tại không phải âm thanh riêng, đang thử định dạng khác."
-                        val nextUrl = YouTubeMusicService.resolveFreshStreamUrl(streamUrl, videoId)
+                        val nextUrl = YouTubeMusicService.resolveFreshStreamUrl(streamUrl, resolvedVideoId)
                         if (nextUrl == null || nextUrl == streamUrl) return@repeat
                         streamUrl = nextUrl
                         return@repeat
@@ -102,8 +104,8 @@ object YouTubeAudioDownloader {
                         mime?.contains("mpeg") == true -> "mp3"
                         else -> "m4a"
                     }
-                    val finalFile = File(downloadDir, "$videoId.$extension")
-                    val tempFile = File(downloadDir, "$videoId.$extension.part")
+                    val finalFile = File(downloadDir, "$resolvedVideoId.$extension")
+                    val tempFile = File(downloadDir, "$resolvedVideoId.$extension.part")
                     tempFile.delete()
                     val body = response.body ?: throw IllegalStateException("YouTube không trả về dữ liệu âm thanh.")
                     val totalBytes = body.contentLength()
@@ -139,17 +141,21 @@ object YouTubeAudioDownloader {
                         tempFile.delete()
                     }
                     onProgress(YouTubeAudioTransferProgress(downloadedBytes, totalBytes.takeIf { it > 0 } ?: downloadedBytes))
-                    return@withContext DownloadedYouTubeAudio(finalFile, extension.uppercase())
+                    return@withContext DownloadedYouTubeAudio(
+                        finalFile,
+                        extension.uppercase(),
+                        YouTubeMusicService.bitrateKbpsForStream(streamUrl) ?: preferredBitrateKbps
+                    )
                 } finally {
                     response.close()
                 }
             }
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
-            downloadDir.listFiles()?.filter { it.name.startsWith("$videoId.") && it.name.endsWith(".part") }
+            downloadDir.listFiles()?.filter { it.name.startsWith("$resolvedVideoId.") && it.name.endsWith(".part") }
                 ?.forEach(File::delete)
             throw cancelled
         } catch (error: Throwable) {
-            downloadDir.listFiles()?.filter { it.name.startsWith("$videoId.") && it.name.endsWith(".part") }
+            downloadDir.listFiles()?.filter { it.name.startsWith("$resolvedVideoId.") && it.name.endsWith(".part") }
                 ?.forEach(File::delete)
             throw error
         }
@@ -245,7 +251,7 @@ object YouTubeAudioDownloader {
             if (finalFile.exists()) finalFile.delete()
             if (!tempFile.renameTo(finalFile)) tempFile.copyTo(finalFile, overwrite = true).also { tempFile.delete() }
             onProgress(YouTubeAudioTransferProgress(totalBytes, totalBytes))
-            DownloadedYouTubeAudio(finalFile, extension.uppercase())
+            DownloadedYouTubeAudio(finalFile, extension.uppercase(), YouTubeMusicService.bitrateKbpsForStream(url) ?: 0)
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
         } catch (_: Exception) {

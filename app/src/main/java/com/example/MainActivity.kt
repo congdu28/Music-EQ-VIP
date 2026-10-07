@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.MainTab
 import com.example.ui.MusicViewModel
+import com.example.ui.YouTubeDownloadQuality
 import com.example.model.Song
 import com.example.ui.components.*
 import com.example.ui.screens.*
@@ -77,15 +78,24 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     val equalizerState by viewModel.equalizerState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
-    var pendingYouTubeDownload by remember { mutableStateOf<Song?>(null) }
+    var pendingYouTubeDownload by remember { mutableStateOf<Pair<Song, YouTubeDownloadQuality>?>(null) }
+    var qualityPickerSong by remember { mutableStateOf<Song?>(null) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
-    ) { _ -> pendingYouTubeDownload?.let(viewModel::toggleYouTubeSongDownload); pendingYouTubeDownload = null }
-    val requestYouTubeDownload: (Song) -> Unit = { song ->
+    ) { _ -> pendingYouTubeDownload?.let { (song, quality) -> viewModel.toggleYouTubeSongDownload(song, quality) }; pendingYouTubeDownload = null }
+    val startYouTubeDownload: (Song, YouTubeDownloadQuality) -> Unit = { song, quality ->
         if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            pendingYouTubeDownload = song
+            pendingYouTubeDownload = song to quality
             notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        } else viewModel.toggleYouTubeSongDownload(song)
+        } else viewModel.toggleYouTubeSongDownload(song, quality)
+    }
+    val requestYouTubeDownload: (Song) -> Unit = { song ->
+        val videoId = com.example.data.YouTubeMusicService.videoIdFor(song)
+        if (videoId != null && videoId in uiState.youtubeDownloadProgress) {
+            viewModel.toggleYouTubeSongDownload(song)
+        } else {
+            qualityPickerSong = song
+        }
     }
 
     LaunchedEffect(uiState.scanResultMessage) {
@@ -483,6 +493,28 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 }
             }
         }
+    }
+
+    qualityPickerSong?.let { song ->
+        AlertDialog(
+            onDismissRequest = { qualityPickerSong = null },
+            title = { Text("Chất lượng tải xuống") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Chọn bitrate mục tiêu. Nếu YouTube không có đúng mức này, ứng dụng sẽ chọn luồng gần nhất và không nâng bitrate giả.")
+                    YouTubeDownloadQuality.entries.forEach { quality ->
+                        OutlinedButton(
+                            onClick = {
+                                qualityPickerSong = null
+                                startYouTubeDownload(song, quality)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(quality.label) }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { qualityPickerSong = null }) { Text("Đóng") } }
+        )
     }
 
     // Dialogs

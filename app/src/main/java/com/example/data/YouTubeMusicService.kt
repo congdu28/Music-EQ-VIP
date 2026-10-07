@@ -21,6 +21,8 @@ data class YouTubeSearchPage(
     val continuation: String?
 )
 
+data class YouTubeAudioStream(val url: String, val bitrateKbps: Int, val audioOnly: Boolean)
+
 object YouTubeMusicService {
     private const val TAG = "YouTubeMusicService"
 
@@ -58,14 +60,29 @@ object YouTubeMusicService {
             ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,20}")) }
     }
 
+    fun bitrateKbpsForStream(url: String): Int? = streamCache.values
+        .asSequence()
+        .mapNotNull { cache -> cache.streams.firstOrNull { it.url == url }?.bitrateKbps }
+        .firstOrNull { it > 0 }
+
     @Volatile
     private var cachedVisitorData: String? = null
     @Volatile
     private var visitorDataExpiryTimestamp: Long = 0L
 
     private val visitorDataMutex = Mutex()
-    private data class CachedStream(val urls: List<String>, val activeIndex: Int, val expiresAtMs: Long) {
-        val url: String get() = urls[activeIndex]
+    private data class CachedStream(val streams: List<YouTubeAudioStream>, val activeIndex: Int, val expiresAtMs: Long) {
+        val urls: List<String> get() = streams.map { it.url }
+        val url: String get() = streams[activeIndex].url
+        fun selectedIndex(targetKbps: Int?): Int {
+            if (targetKbps == null) return activeIndex
+            val audioIndices = streams.indices.filter { streams[it].audioOnly && streams[it].bitrateKbps > 0 }
+            if (audioIndices.isEmpty()) return activeIndex
+            return audioIndices.minByOrNull { index ->
+                val bitrate = streams[index].bitrateKbps
+                if (bitrate <= targetKbps) targetKbps - bitrate else 100_000 + bitrate - targetKbps
+            } ?: activeIndex
+        }
     }
     private val streamCache = ConcurrentHashMap<String, CachedStream>()
     private val streamVideoIdsByUrl = ConcurrentHashMap<String, String>()
@@ -176,7 +193,7 @@ object YouTubeMusicService {
     /**
      * Resolves a direct audio stream URL for a given YouTube videoId.
      */
-    suspend fun resolveStreamUrl(videoId: String): String? = withContext(Dispatchers.IO) {
+    suspend fun resolveStreamUrl(videoId: String, preferredBitrateKbps: Int? = null): String? = withContext(Dispatchers.IO) {
         if (videoId.isBlank()) return@withContext null
 
         val gate = streamResolutionGates.computeIfAbsent(videoId) { Mutex() }
@@ -184,7 +201,7 @@ object YouTubeMusicService {
             // Another prefetch or tap may have resolved this video while we waited.
             streamCache[videoId]?.takeIf { it.expiresAtMs > System.currentTimeMillis() }?.let {
                 Log.d(TAG, "Using cached stream URL for $videoId")
-                return@withLock it.url
+                return@withLock it.streams[it.selectedIndex(preferredBitrateKbps)].url
             }
 
             val startedAt = System.nanoTime()
@@ -199,7 +216,7 @@ object YouTubeMusicService {
             }
 
             // Fast path: use visitorData warmed while the YouTube tab/search was loading.
-            var streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = false)
+            var streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = false, preferredBitrateKbps = preferredBitrateKbps)
             if (streamUrl != null) {
                 return@withLock logResolved("VISIONOS", streamUrl)
             }
@@ -236,10 +253,10 @@ object YouTubeMusicService {
                 if (response.isSuccessful) {
                     val bodyStr = response.body?.string() ?: ""
                     val json = JSONObject(bodyStr)
-                    val urls = extractDirectAudioUrls(json)
-                    if (urls.isNotEmpty()) {
-                        val url = urls.first()
-                        cacheStreamUrl(videoId, urls, json)
+                    val streams = extractDirectAudioStreams(json)
+                    if (streams.isNotEmpty()) {
+                        val url = streams[selectStreamIndex(streams, preferredBitrateKbps)].url
+                        cacheStreamUrl(videoId, streams, json)
                         Log.d(TAG, "Resolved stream via ANDROID_VR fallback for $videoId")
                         return@withLock logResolved("ANDROID_VR", url)
                     }
@@ -259,7 +276,7 @@ object YouTubeMusicService {
 
         // Refresh the token only after both clients have failed with the cached token.
             Log.d(TAG, "Both playback clients failed for $videoId; refreshing visitorData once")
-            streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true)
+            streamUrl = queryVisionOsStream(videoId, forceFreshVisitorData = true, preferredBitrateKbps = preferredBitrateKbps)
             if (streamUrl != null) {
                 return@withLock logResolved("VISIONOS refreshed session", streamUrl)
             }
@@ -300,17 +317,17 @@ object YouTubeMusicService {
         return resolveStreamUrl(videoId)
     }
 
-    private fun cacheStreamUrl(videoId: String, urls: List<String>, playerResponse: JSONObject) {
+    private fun cacheStreamUrl(videoId: String, streams: List<YouTubeAudioStream>, playerResponse: JSONObject) {
         val expiresInSeconds = playerResponse.optJSONObject("streamingData")
             ?.optLong("expiresInSeconds", 240L)
             ?: 240L
         val safeLifetimeMs = (expiresInSeconds - 60L).coerceAtLeast(0L) * 1000L
-        urls.forEach { streamVideoIdsByUrl[it] = videoId }
+        streams.forEach { streamVideoIdsByUrl[it.url] = videoId }
         if (safeLifetimeMs == 0L) return
-        streamCache[videoId] = CachedStream(urls, 0, System.currentTimeMillis() + safeLifetimeMs)
+        streamCache[videoId] = CachedStream(streams, 0, System.currentTimeMillis() + safeLifetimeMs)
     }
 
-    private suspend fun queryVisionOsStream(videoId: String, forceFreshVisitorData: Boolean): String? = withContext(Dispatchers.IO) {
+    private suspend fun queryVisionOsStream(videoId: String, forceFreshVisitorData: Boolean, preferredBitrateKbps: Int? = null): String? = withContext(Dispatchers.IO) {
         try {
             // The first playback attempt can work without visitorData. Don't add a separate
             // network round trip before asking for the stream; request a token only on retry.
@@ -348,10 +365,10 @@ object YouTubeMusicService {
                         Log.w(TAG, "VISIONOS returned $playability for $videoId")
                         return@withContext null
                     }
-                    val urls = extractDirectAudioUrls(json)
-                    if (urls.isNotEmpty()) {
-                        val url = urls.first()
-                        cacheStreamUrl(videoId, urls, json)
+                    val streams = extractDirectAudioStreams(json)
+                    if (streams.isNotEmpty()) {
+                        val url = streams[selectStreamIndex(streams, preferredBitrateKbps)].url
+                        cacheStreamUrl(videoId, streams, json)
                         Log.d(TAG, "Successfully resolved VISIONOS audio stream for $videoId")
                         return@withContext url
                     }
@@ -371,20 +388,20 @@ object YouTubeMusicService {
         return@withContext null
     }
 
-    private fun extractDirectAudioUrls(playerResponseJson: JSONObject): List<String> {
+    private fun extractDirectAudioStreams(playerResponseJson: JSONObject): List<YouTubeAudioStream> {
         val streamingData = playerResponseJson.optJSONObject("streamingData") ?: return emptyList()
         val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats")
         val formats = streamingData.optJSONArray("formats")
-        val aac = mutableListOf<Pair<Int, String>>()
-        val alternativeAudio = mutableListOf<Pair<Int, String>>()
-        val muxedMp4 = mutableListOf<Pair<Int, String>>()
+        val aac = mutableListOf<YouTubeAudioStream>()
+        val alternativeAudio = mutableListOf<YouTubeAudioStream>()
+        val muxedMp4 = mutableListOf<YouTubeAudioStream>()
         if (adaptiveFormats != null) {
             for (i in 0 until adaptiveFormats.length()) {
                 val format = adaptiveFormats.optJSONObject(i) ?: continue
                 val mimeType = format.optString("mimeType", "")
                 val url = format.optString("url", "")
                 if (!mimeType.startsWith("audio/") || url.isBlank()) continue
-                val entry = format.optInt("bitrate", 0) to url
+                val entry = YouTubeAudioStream(url, format.optInt("bitrate", 0) / 1000, audioOnly = true)
                 if (mimeType.contains("mp4")) aac += entry else alternativeAudio += entry
             }
         }
@@ -393,15 +410,25 @@ object YouTubeMusicService {
                 val format = formats.optJSONObject(i) ?: continue
                 val url = format.optString("url", "")
                 if (url.isNotBlank() && format.optString("mimeType").startsWith("video/mp4"))
-                    muxedMp4 += format.optInt("bitrate", 0) to url
+                    muxedMp4 += YouTubeAudioStream(url, format.optInt("bitrate", 0) / 1000, audioOnly = false)
             }
         }
         // AAC is most portable. A muxed MP4 is the next distinct decoder path;
         // WebM/Opus is last because support differs across Android devices.
-        return (aac.sortedByDescending { it.first }.take(1) +
-            muxedMp4.sortedBy { it.first }.take(1) +
-            alternativeAudio.sortedByDescending { it.first }.take(1))
-            .map { it.second }.distinct()
+        return (aac.sortedByDescending { it.bitrateKbps } +
+            muxedMp4.sortedBy { it.bitrateKbps }.take(1) +
+            alternativeAudio.sortedByDescending { it.bitrateKbps })
+            .distinctBy { it.url }
+    }
+
+    private fun selectStreamIndex(streams: List<YouTubeAudioStream>, targetKbps: Int?): Int {
+        if (targetKbps == null) return 0
+        val audioIndices = streams.indices.filter { streams[it].audioOnly && streams[it].bitrateKbps > 0 }
+        if (audioIndices.isEmpty()) return 0
+        return audioIndices.minByOrNull { index ->
+            val bitrate = streams[index].bitrateKbps
+            if (bitrate <= targetKbps) targetKbps - bitrate else 100_000 + bitrate - targetKbps
+        } ?: 0
     }
 
     /**

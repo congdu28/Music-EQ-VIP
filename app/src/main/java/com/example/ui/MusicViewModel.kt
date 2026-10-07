@@ -51,6 +51,11 @@ enum class LibrarySortOrder(val label: String) {
     OLDEST("Cũ nhất")
 }
 
+enum class YouTubeDownloadQuality(val bitrateKbps: Int, val label: String) {
+    STANDARD_128(128, "128 kbps · tiết kiệm dung lượng"),
+    HIGH_320(320, "320 kbps · cao nhất có sẵn")
+}
+
 enum class PlayerAmbientMode(val label: String) {
     OFF("Tắt"),
     ALBUM("Ảnh bìa"),
@@ -457,7 +462,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun toggleYouTubeSongDownload(song: Song) {
+    fun toggleYouTubeSongDownload(song: Song, quality: YouTubeDownloadQuality = YouTubeDownloadQuality.HIGH_320) {
         val videoId = com.example.data.YouTubeMusicService.videoIdFor(song)
         if (videoId == null) {
             _appUiState.update { it.copy(scanResultMessage = "Không xác định được bài hát YouTube để tải.") }
@@ -484,7 +489,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val downloaded = com.example.data.YouTubeAudioDownloader.download(
                     getApplication(),
-                    song
+                    song,
+                    videoId,
+                    quality.bitrateKbps
                 ) { progress ->
                     youtubeDownloadNotifier.progress(videoId, song.title, progress.downloadedBytes, progress.totalBytes)
                     _appUiState.update { current ->
@@ -498,7 +505,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
-                repository.addDownloadedYouTubeSong(song, downloaded.file, downloaded.format)
+                repository.addDownloadedYouTubeSong(song, downloaded.file, downloaded.format, downloaded.bitrateKbps)
                 youtubeDownloadNotifier.finished(videoId, song.title)
                 _appUiState.update { current ->
                     current.copy(
