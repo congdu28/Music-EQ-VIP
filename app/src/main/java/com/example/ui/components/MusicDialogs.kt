@@ -340,7 +340,7 @@ fun EditLyricsDialog(
                             onValueChange = { offsetText = it.filter { char -> char.isDigit() || char == '-' } },
                             label = { Text("Độ trễ (ms)", maxLines = 1) },
                             singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberSigned),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedBorderColor = NeonCyan,
                                 unfocusedBorderColor = DarkBorder,
