@@ -59,6 +59,12 @@ object YouTubeMusicService {
     private val streamResolutionGates = ConcurrentHashMap<String, Mutex>()
     private val suggestionCache = ConcurrentHashMap<String, List<String>>()
 
+    /** Returns a still-valid visitor token without waiting for the token endpoint. */
+    private fun peekVisitorData(): String {
+        val token = cachedVisitorData
+        return if (!token.isNullOrBlank() && System.currentTimeMillis() < visitorDataExpiryTimestamp) token else ""
+    }
+
     /** Returns YouTube-scoped autocomplete terms for the search field. */
     suspend fun searchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
@@ -254,7 +260,9 @@ object YouTubeMusicService {
 
     private suspend fun queryVisionOsStream(videoId: String, forceFreshVisitorData: Boolean): String? = withContext(Dispatchers.IO) {
         try {
-            val visitorData = getVisitorData(forceRefresh = forceFreshVisitorData)
+            // The first playback attempt can work without visitorData. Don't add a separate
+            // network round trip before asking for the stream; request a token only on retry.
+            val visitorData = if (forceFreshVisitorData) getVisitorData(forceRefresh = true) else peekVisitorData()
             val payload = JSONObject().apply {
                 put("context", JSONObject().apply {
                     put("client", JSONObject().apply {

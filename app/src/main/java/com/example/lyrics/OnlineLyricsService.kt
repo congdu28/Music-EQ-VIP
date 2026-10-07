@@ -16,7 +16,10 @@ data class OnlineLyricsResult(
     val title: String,
     val artist: String,
     val syncedLyrics: String?,
-    val plainLyrics: String?
+    val plainLyrics: String?,
+    val sourceName: String = "LRCLIB",
+    val sourceUrls: List<String> = emptyList(),
+    val timingSource: String? = null
 ) {
     val bestLyrics: String?
         get() = if (!syncedLyrics.isNullOrBlank()) syncedLyrics else plainLyrics
@@ -29,6 +32,11 @@ object OnlineLyricsService {
     private val client = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
+        .build()
+
+    private val geminiClient = client.newBuilder()
+        .readTimeout(40, TimeUnit.SECONDS)
+        .callTimeout(50, TimeUnit.SECONDS)
         .build()
 
     /**
@@ -80,11 +88,13 @@ object OnlineLyricsService {
         }
     }
 
-    /** Finds a close title/artist/duration match in LRCLIB; never invents missing lyrics. */
+    /** Finds a close LRCLIB match first, then uses grounded Gemini as a clearly marked fallback. */
     suspend fun fetchLyrics(
         rawTitle: String,
         rawArtist: String,
-        durationMs: Long = 0
+        durationMs: Long = 0,
+        apiKey: String = "",
+        preferredModel: String? = null
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
@@ -186,7 +196,115 @@ object OnlineLyricsService {
                 Log.w(TAG, "Search /search lyrics error for query '$q': ${e.message}")
             }
         }
-        bestCandidate?.second
+        bestCandidate?.second?.let { return@withContext it }
+
+        val resolvedApiKey = apiKey.ifBlank { getDefaultGeminiApiKey() }
+        if (resolvedApiKey.isBlank()) return@withContext null
+        fetchGroundedGeminiLyrics(
+            title = cleanTitle,
+            artist = cleanArtist,
+            durationMs = durationMs,
+            apiKey = resolvedApiKey,
+            preferredModel = preferredModel
+        )
+    }
+
+    private suspend fun fetchGroundedGeminiLyrics(
+        title: String,
+        artist: String,
+        durationMs: Long,
+        apiKey: String,
+        preferredModel: String?
+    ): OnlineLyricsResult? {
+        val durationSec = (durationMs / 1000).takeIf { it > 0 } ?: 0
+        val prompt = """
+Tìm lời bài hát chính xác trên web cho ca khúc "$title" của nghệ sĩ "$artist".
+Ưu tiên trang chính thức của nghệ sĩ/nhà phát hành hoặc nguồn lời bài hát có uy tín. Đối chiếu đúng phiên bản, nghệ sĩ và remix/live; không ghép lời từ bài khác. Chỉ chép lời khi kết quả tìm kiếm có trang nguồn phù hợp. Không tự sáng tác, không đoán phần bị thiếu. Nếu không xác minh được lời hoặc đúng bài, hãy trả confidence là "low" và lyrics là chuỗi rỗng.
+
+Trả về DUY NHẤT một JSON object với các trường:
+{"track_title":"...","artist":"...","confidence":"high|medium|low","lyrics":"lời nguyên văn, giữ xuống dòng","synced_lrc":"các dòng [mm:ss.xx] hoặc chuỗi rỗng"}
+
+Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bài và nghệ sĩ. synced_lrc chỉ được dùng cùng câu chữ và đúng thứ tự như lyrics; nếu nguồn không có mốc thời gian thì có thể ước tính mốc theo cấu trúc bài, nhưng không thay đổi bất kỳ từ nào. Thời lượng tham khảo là $durationSec giây. Không đưa markdown hay lời giải thích vào JSON.
+""".trimIndent()
+
+        val models = listOfNotNull(preferredModel?.takeIf(String::isNotBlank), "gemini-3.7-flash", "gemini-2.5-flash")
+            .distinct()
+        for (model in models) {
+            try {
+                val payload = JSONObject().apply {
+                    put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
+                    put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+                    put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
+                }
+                val request = Request.Builder()
+                    .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+                    .header("x-goog-api-key", apiKey)
+                    .header("User-Agent", "NhipDieuHiResPlayer/1.0 (Android; Audiophile)")
+                    .post(payload.toString().toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+
+                geminiClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        Log.w(TAG, "Grounded Gemini lookup returned HTTP ${response.code} for $model")
+                        if (response.code != 404) return null
+                    } else {
+                        val responseBody = response.body?.string().orEmpty()
+                        val responseJson = JSONObject(responseBody)
+                        val candidate = responseJson.optJSONArray("candidates")?.optJSONObject(0) ?: return null
+                        val groundingMetadata = candidate.optJSONObject("groundingMetadata") ?: return null
+                        val chunks = groundingMetadata.optJSONArray("groundingChunks") ?: return null
+                        val sourceUrls = buildList {
+                            for (index in 0 until chunks.length()) {
+                                val uri = chunks.optJSONObject(index)?.optJSONObject("web")?.optString("uri")?.trim().orEmpty()
+                                if (uri.startsWith("https://") && uri !in this) add(uri)
+                                if (size >= 4) break
+                            }
+                        }
+                        if (sourceUrls.isEmpty()) return null
+
+                        val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: return null
+                        val rawText = (0 until parts.length()).joinToString("\n") { parts.optJSONObject(it)?.optString("text").orEmpty() }
+                            .trim()
+                        val jsonText = rawText.removePrefix("```json").removePrefix("```")
+                            .removeSuffix("```").trim()
+                        val resultJson = try {
+                            JSONObject(jsonText)
+                        } catch (_: Exception) {
+                            val start = jsonText.indexOf('{')
+                            val end = jsonText.lastIndexOf('}')
+                            if (start < 0 || end <= start) return null
+                            JSONObject(jsonText.substring(start, end + 1))
+                        }
+
+                        val resultTitle = resultJson.optString("track_title").trim()
+                        val resultArtist = resultJson.optString("artist").trim()
+                        val confidence = resultJson.optString("confidence").lowercase()
+                        val plainLyrics = resultJson.optString("lyrics").trim()
+                        if (confidence != "high" || plainLyrics.length < 30 || resultTitle.isBlank()) return null
+                        if (metadataSimilarity(title, resultTitle) < 0.78) return null
+                        if (!isGenericArtist(artist) && (resultArtist.isBlank() || metadataSimilarity(artist, resultArtist) < 0.58)) return null
+
+                        val proposedLrc = resultJson.optString("synced_lrc").trim().takeUnless { it.isBlank() || it == "null" }
+                        val verifiedLrc = proposedLrc?.let { validateAlignedLyrics(plainLyrics, it, durationMs) }
+                        Log.d(TAG, "Grounded Gemini lyrics accepted for '$resultTitle' using $model; ${sourceUrls.size} sources")
+                        return OnlineLyricsResult(
+                            title = resultTitle,
+                            artist = resultArtist.ifBlank { artist },
+                            syncedLyrics = verifiedLrc,
+                            plainLyrics = plainLyrics,
+                            sourceName = "Gemini AI",
+                            sourceUrls = sourceUrls,
+                            timingSource = if (verifiedLrc != null) "Gemini AI (ước tính)" else null
+                        )
+                    }
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Log.w(TAG, "Grounded Gemini lyrics lookup failed ($model): ${error.message}")
+            }
+        }
+        return null
     }
 
     private fun candidateLyrics(
@@ -286,11 +404,7 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
             "gemini-3.1-flash-lite",
             "gemini-3.5-flash-lite"
         )
-        val modelsToTry = if (!preferredModel.isNullOrBlank()) {
-            listOf(preferredModel) + allModels.filter { it != preferredModel }
-        } else {
-            allModels
-        }
+        val modelsToTry = (listOfNotNull(preferredModel?.takeIf(String::isNotBlank)) + allModels).distinct().take(3)
 
         for (model in modelsToTry) {
             try {
@@ -317,7 +431,7 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
                     .header("User-Agent", "NhipDieuHiResPlayer/1.0 (Android; Audiophile)")
                     .build()
 
-                client.newCall(request).execute().use { response ->
+                geminiClient.newCall(request).execute().use { response ->
                     if (response.isSuccessful) {
                         val respBody = response.body?.string()
                         if (!respBody.isNullOrBlank()) {
@@ -396,7 +510,7 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
 
     private fun lyricWords(text: String, timestampRegex: Regex): List<String> {
         val withoutTimestamps = timestampRegex.replace(text, "")
-            .replace(Regex("(?im)^\\[(ti|ar|al|by|offset):[^\\]]*]\\s*", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("(?im)^\\[(ti|ar|al|by|offset|source|sourceurl|timing):[^\\]]*]\\s*", RegexOption.IGNORE_CASE), "")
         return java.text.Normalizer.normalize(withoutTimestamps.lowercase(), java.text.Normalizer.Form.NFC)
             .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
             .trim()

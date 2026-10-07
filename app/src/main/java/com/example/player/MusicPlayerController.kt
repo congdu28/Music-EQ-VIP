@@ -342,17 +342,25 @@ class MusicPlayerController(
                 delay(48)
                 if (!isActive || currentPlaybackSessionId != sessionId) return@launch
 
+                // Begin stream resolution before tearing down the old MediaPlayer. On some
+                // Android devices stop/reset/release is slow; overlapping the network work
+                // prevents that cleanup time from being added to the YouTube wait.
+                val streamDeferred = async(Dispatchers.IO) {
+                    try {
+                        com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (t: Throwable) {
+                        Log.w(TAG, "YouTube stream resolve failed for $videoId: ${t.message}")
+                        null
+                    }
+                }
+
                 stopAllPlayback(cancelOnlineTransition = false)
                 if (!isActive || currentPlaybackSessionId != sessionId) return@launch
 
                 resolveStreamJob = launch {
-                    val streamUrl = withContext(Dispatchers.IO) {
-                        try {
-                            com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
-                        } catch (t: Throwable) {
-                            null
-                        }
-                    }
+                    val streamUrl = streamDeferred.await()
                     if (isActive && currentPlaybackSessionId == sessionId) {
                         if (streamUrl != null) {
                             // Lyrics or metadata can finish loading while the stream

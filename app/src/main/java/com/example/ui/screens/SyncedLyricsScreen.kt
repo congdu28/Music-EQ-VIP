@@ -51,6 +51,7 @@ fun SyncedLyricsScreen(
     val parsedLyrics = uiState.parsedLyrics
     val activeIndex = uiState.activeLyricIndex
     val listState = rememberLazyListState()
+    val context = LocalContext.current
 
     // Follow the active line continuously, matching the embedded lyrics view in Now Playing.
     LaunchedEffect(activeIndex, song?.id, parsedLyrics.lines.size) {
@@ -92,7 +93,7 @@ fun SyncedLyricsScreen(
                     if (uiState.isSearchingLyrics) {
                         CircularProgressIndicator(color = NeonViolet, strokeWidth = 2.dp, modifier = Modifier.size(19.dp))
                     } else {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Tìm lời có nguồn từ LRCLIB", tint = NeonPink)
+                        Icon(Icons.Default.CloudDownload, contentDescription = "Tìm lời trên LRCLIB và Gemini AI", tint = NeonPink)
                     }
                 }
                 IconButton(onClick = { viewModel.setTab(MainTab.SETTINGS) }) {
@@ -122,6 +123,22 @@ fun SyncedLyricsScreen(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
+                        if (parsedLyrics.sourceName == "Gemini AI") {
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = NeonViolet.copy(alpha = 0.22f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonViolet.copy(alpha = 0.8f))
+                            ) {
+                                Text(
+                                    text = "AI",
+                                    color = NeonViolet,
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
                             text = song?.title ?: "Chưa chọn bài hát",
@@ -141,9 +158,37 @@ fun SyncedLyricsScreen(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (parsedLyrics.sourceName == "Gemini AI") {
+                        Text(
+                            text = if (parsedLyrics.timingSource != null) "Lời do Gemini AI tạo; mốc thời gian AI ước tính — vui lòng đối chiếu." else "Lời do Gemini AI tạo — vui lòng đối chiếu trước khi sử dụng.",
+                            color = NeonViolet,
+                            fontSize = 10.sp,
+                            lineHeight = 13.sp,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (parsedLyrics.sourceUrls.isNotEmpty()) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Nguồn:", color = TextSecondary, fontSize = 10.sp)
+                                parsedLyrics.sourceUrls.take(3).forEachIndexed { index, url ->
+                                    Text(
+                                        text = "${index + 1}",
+                                        color = NeonCyan,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .clickable {
+                                                try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } catch (_: Throwable) { }
+                                            }
+                                            .padding(horizontal = 6.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
-                val context = LocalContext.current
                 var showSearchOptions by remember { mutableStateOf(false) }
 
                 // Actions: Search Online & Edit / Paste Lyrics
@@ -182,7 +227,7 @@ fun SyncedLyricsScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Tìm lời có nguồn từ LRCLIB", color = TextPrimary, fontSize = 13.sp)
+                                            Text("Tìm trên LRCLIB, sau đó Gemini AI có nguồn", color = TextPrimary, fontSize = 13.sp)
                                         }
                                     },
                                     onClick = {

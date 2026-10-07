@@ -23,6 +23,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -130,6 +135,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var youtubeSuggestionJob: Job? = null
     private var youtubeSearchJob: Job? = null
     private var youtubeLoadMoreJob: Job? = null
+    private var youtubePrewarmJob: Job? = null
 
     init {
         val savedKey = repository.getGeminiApiKey()
@@ -316,6 +322,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         youtubeSuggestionJob?.cancel()
         youtubeSearchJob?.cancel()
         youtubeLoadMoreJob?.cancel()
+        youtubePrewarmJob?.cancel()
         val category = _appUiState.value.selectedYouTubeCategory
         _appUiState.update {
             it.copy(
@@ -372,6 +379,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         youtubeSuggestionJob?.cancel()
         youtubeSearchJob?.cancel()
         youtubeLoadMoreJob?.cancel()
+        youtubePrewarmJob?.cancel()
         _appUiState.update {
             it.copy(
                 selectedYouTubeCategory = category,
@@ -453,20 +461,36 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Resolve the first visible result in the background so the first tap is usually ready sooner. */
+    /** Resolve only a small set of visible results, with bounded concurrency, to make taps faster. */
     private fun prewarmFirstYouTubeResult(songs: List<Song>) {
-        val videoId = songs.firstOrNull()?.filePath
-            ?.takeIf { it.startsWith("yt://") }
-            ?.removePrefix("yt://")
-            ?.takeIf(String::isNotBlank)
-            ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
-            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                throw cancelled
-            } catch (error: Throwable) {
-                android.util.Log.d("MusicViewModel", "YouTube stream prewarm skipped: ${error.message}")
+        val videoIds = songs.asSequence()
+            .take(4)
+            .mapNotNull { song ->
+                song.filePath.takeIf { it.startsWith("yt://") }
+                    ?.removePrefix("yt://")
+                    ?.takeIf(String::isNotBlank)
+            }
+            .distinct()
+            .toList()
+        if (videoIds.isEmpty()) return
+
+        youtubePrewarmJob?.cancel()
+        youtubePrewarmJob = viewModelScope.launch(Dispatchers.IO) {
+            val semaphore = Semaphore(2)
+            coroutineScope {
+                videoIds.map { videoId ->
+                    async {
+                        semaphore.withPermit {
+                            try {
+                                com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
+                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                                throw cancelled
+                            } catch (error: Throwable) {
+                                android.util.Log.d("MusicViewModel", "YouTube stream prewarm skipped: ${error.message}")
+                            }
+                        }
+                    }
+                }.awaitAll()
             }
         }
     }
@@ -872,11 +896,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun searchLyricsOnline(song: Song, isAuto: Boolean = false) {
         viewModelScope.launch {
             _appUiState.update { it.copy(isSearchingLyrics = true) }
+            val currentAppState = _appUiState.value
             val result = try {
                 com.example.lyrics.OnlineLyricsService.fetchLyrics(
                     rawTitle = song.title,
                     rawArtist = song.artist,
-                    durationMs = song.durationMs
+                    durationMs = song.durationMs,
+                    apiKey = currentAppState.geminiApiKey,
+                    preferredModel = currentAppState.geminiModel
                 )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -887,7 +914,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             _appUiState.update { it.copy(isSearchingLyrics = false) }
 
             if (result != null && result.bestLyrics != null) {
-                val lyricsText = result.bestLyrics!!
+                val lyricsBody = result.bestLyrics!!
+                val lyricsText = buildList {
+                    add("[source:${result.sourceName}]")
+                    result.sourceUrls.take(4).filter { it.startsWith("https://") }.forEach { add("[sourceurl:${it.replace("]", "")}]" ) }
+                    result.timingSource?.let { add("[timing:$it]") }
+                    add(lyricsBody.trim())
+                }.joinToString("\n")
                 repository.updateSongLyrics(song.id, lyricsText, 0)
                 // If this is the currently playing song, update currentSong in player
                 val current = playerState.value.currentSong
@@ -907,10 +940,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 val formatType = if (!result.syncedLyrics.isNullOrBlank()) "Karaoke LRC đồng bộ" else "lời văn bản chưa có mốc thời gian"
                 val prefix = if (isAuto) "Tự động tải lời" else "Đã tìm thấy lời"
-                _appUiState.update { it.copy(scanResultMessage = "$prefix $formatType từ LRCLIB cho: ${song.title}") }
+                val sourceLabel = if (result.sourceName == "Gemini AI") "Gemini AI · có nguồn tra cứu" else "LRCLIB"
+                _appUiState.update { it.copy(scanResultMessage = "$prefix $formatType từ $sourceLabel cho: ${song.title}") }
             } else if (!isAuto) {
                 _appUiState.update {
-                    it.copy(scanResultMessage = "Không tìm thấy lời trên mạng cho: ${song.title}")
+                    it.copy(scanResultMessage = "Không tìm thấy lời khớp trên LRCLIB hoặc Gemini cho: ${song.title}")
                 }
             }
         }
@@ -983,11 +1017,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             _appUiState.update { it.copy(isAligningLyrics = false) }
             if (!alignedLrc.isNullOrBlank()) {
-                updateLyrics(currentSong.id, alignedLrc, 0)
+                val provenance = rawLyrics.lines().filter {
+                    it.trim().matches(Regex("(?i)^\\[(source|sourceurl):[^\\]]*]$"))
+                }
+                val timedLyrics = (provenance + "[timing:Gemini AI (ước tính)]" + alignedLrc).joinToString("\n")
+                updateLyrics(currentSong.id, timedLyrics, 0)
                 _appUiState.update {
                     it.copy(scanResultMessage = "Đã giữ nguyên lời và gắn mốc thời gian AI ước tính. Có thể chỉnh độ lệch nếu cần.")
                 }
-                onComplete?.invoke(alignedLrc)
+                onComplete?.invoke(timedLyrics)
             } else {
                 _appUiState.update {
                     it.copy(scanResultMessage = "Không thể căn chỉnh bằng AI lúc này, vui lòng thử mô hình khác hoặc kiểm tra mạng")

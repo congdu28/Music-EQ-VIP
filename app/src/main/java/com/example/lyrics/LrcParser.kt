@@ -10,6 +10,9 @@ data class ParsedLyrics(
     val title: String? = null,
     val artist: String? = null,
     val album: String? = null,
+    val sourceName: String? = null,
+    val sourceUrls: List<String> = emptyList(),
+    val timingSource: String? = null,
     val offsetMs: Long = 0,
     val lines: List<LyricLine> = emptyList()
 )
@@ -26,6 +29,9 @@ object LrcParser {
         var title: String? = null
         var artist: String? = null
         var album: String? = null
+        var sourceName: String? = null
+        var timingSource: String? = null
+        val sourceUrls = mutableListOf<String>()
         var lrcTagOffset: Long = 0
         val lines = mutableListOf<LyricLine>()
 
@@ -44,6 +50,9 @@ object LrcParser {
                     "ar" -> artist = tagValue
                     "al" -> album = tagValue
                     "offset" -> lrcTagOffset = tagValue.toLongOrNull() ?: 0
+                    "source" -> sourceName = tagValue
+                    "sourceurl" -> if (tagValue.startsWith("https://") && tagValue !in sourceUrls) sourceUrls.add(tagValue)
+                    "timing" -> timingSource = tagValue
                 }
                 continue
             }
@@ -76,6 +85,9 @@ object LrcParser {
             title = title,
             artist = artist,
             album = album,
+            sourceName = sourceName,
+            sourceUrls = sourceUrls,
+            timingSource = timingSource,
             offsetMs = lrcTagOffset + globalOffsetMs,
             lines = sortedLines
         )

@@ -676,7 +676,12 @@ fun NowPlayingScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = if (hasSyncedLyrics) "Lời Karaoke đồng bộ" else "Lời bài hát · chưa đồng bộ",
+                                text = when {
+                                    parsedLyrics.sourceName == "Gemini AI" && parsedLyrics.timingSource != null -> "Lời Karaoke · AI ước tính"
+                                    parsedLyrics.sourceName == "Gemini AI" -> "Lời bài hát · Gemini AI"
+                                    hasSyncedLyrics -> "Lời Karaoke đồng bộ"
+                                    else -> "Lời bài hát · chưa đồng bộ"
+                                },
                                 color = animatedPrimary,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
@@ -684,6 +689,22 @@ fun NowPlayingScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            if (parsedLyrics.sourceName == "Gemini AI") {
+                                Surface(
+                                    shape = RoundedCornerShape(6.dp),
+                                    color = NeonViolet.copy(alpha = 0.2f),
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonViolet.copy(alpha = 0.65f))
+                                ) {
+                                    Text(
+                                        "AI",
+                                        color = NeonViolet,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                    )
+                                }
+                                Spacer(Modifier.width(4.dp))
+                            }
                             val context = LocalContext.current
                             var showSearchMenu by remember { mutableStateOf(false) }
 
@@ -713,7 +734,7 @@ fun NowPlayingScreen(
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Tìm lời có nguồn từ LRCLIB", color = TextPrimary, fontSize = 12.sp)
+                                                    Text("Tìm trên LRCLIB, sau đó Gemini AI có nguồn", color = TextPrimary, fontSize = 12.sp)
                                                 }
                                             },
                                             onClick = {
