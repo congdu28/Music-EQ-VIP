@@ -450,6 +450,53 @@ fun NowPlayingScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
+                    val youtubeVideoId = com.example.data.YouTubeMusicService.videoIdFor(song)
+                    if (youtubeVideoId != null && (
+                            song.album == "YouTube Online" ||
+                                song.format.contains("YouTube", ignoreCase = true) ||
+                                song.filePath.startsWith("yt://")
+                            )
+                    ) {
+                        val isDownloading = youtubeVideoId in uiState.youtubeDownloadProgress
+                        val isDownloaded = youtubeVideoId in uiState.downloadedYouTubeVideoIds
+                        val downloadProgress = uiState.youtubeDownloadProgress[youtubeVideoId] ?: 0
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isDownloading) NeonPink.copy(alpha = 0.18f) else DarkSurfaceVariant,
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .clickable(enabled = !isDownloaded || isDownloading) {
+                                    viewModel.toggleYouTubeSongDownload(song)
+                                }
+                                .testTag("now_playing_youtube_download_button")
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                when {
+                                    isDownloading -> CircularProgressIndicator(
+                                        progress = { downloadProgress.coerceIn(0, 100) / 100f },
+                                        color = NeonPink,
+                                        trackColor = DarkBorder,
+                                        strokeWidth = 2.dp,
+                                        modifier = Modifier.size(21.dp)
+                                    )
+                                    isDownloaded -> Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = "Đã tải xuống",
+                                        tint = NeonCyan,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    else -> Icon(
+                                        imageVector = Icons.Default.CloudDownload,
+                                        contentDescription = "Tải bài hát YouTube về thiết bị",
+                                        tint = NeonPink,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // Online Lyrics Search Button with Spinner Indicator
                     Surface(
                         shape = CircleShape,

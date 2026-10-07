@@ -113,7 +113,9 @@ data class MusicAppUiState(
     val isLoadingMoreYouTube: Boolean = false,
     val youtubeContinuation: String? = null,
     val youtubePaginationError: String? = null,
-    val youtubeErrorMessage: String? = null
+    val youtubeErrorMessage: String? = null,
+    val youtubeDownloadProgress: Map<String, Int> = emptyMap(),
+    val downloadedYouTubeVideoIds: Set<String> = emptySet()
 )
 
 
@@ -131,6 +133,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var youtubeSuggestionJob: Job? = null
     private var youtubeSearchJob: Job? = null
     private var youtubeLoadMoreJob: Job? = null
+    private val youtubeDownloadJobs = mutableMapOf<String, Job>()
 
     init {
         val savedKey = repository.getGeminiApiKey()
@@ -168,7 +171,13 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             repository.allSongs.collect { songList ->
-                _appUiState.update { it.copy(songs = songList) }
+                val downloadedVideoIds = songList
+                    .filter { it.album == "YouTube Offline" && File(it.filePath).isFile }
+                    .mapNotNull { File(it.filePath).nameWithoutExtension }
+                    .toSet()
+                _appUiState.update {
+                    it.copy(songs = songList, downloadedYouTubeVideoIds = downloadedVideoIds)
+                }
                 // Pre-load queue and first song ready WITHOUT auto-playing
                 if (playerController.uiState.value.currentSong == null && songList.isNotEmpty()) {
                     playerController.loadInitialQueue(songList, 0)
@@ -444,6 +453,61 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
         }
+    }
+
+    fun toggleYouTubeSongDownload(song: Song) {
+        val videoId = com.example.data.YouTubeMusicService.videoIdFor(song)
+        if (videoId == null) {
+            _appUiState.update { it.copy(scanResultMessage = "Không xác định được bài hát YouTube để tải.") }
+            return
+        }
+        youtubeDownloadJobs[videoId]?.let {
+            it.cancel()
+            return
+        }
+        if (videoId in _appUiState.value.downloadedYouTubeVideoIds) {
+            _appUiState.update { it.copy(scanResultMessage = "Bài hát này đã có trong thư viện offline.") }
+            return
+        }
+
+        _appUiState.update { current ->
+            current.copy(youtubeDownloadProgress = current.youtubeDownloadProgress + (videoId to 0))
+        }
+        val job = viewModelScope.launch {
+            try {
+                val downloaded = com.example.data.YouTubeAudioDownloader.download(
+                    getApplication(),
+                    song
+                ) { progress ->
+                    _appUiState.update { current ->
+                        val previous = current.youtubeDownloadProgress[videoId] ?: return@update current
+                        if (progress == 100 || progress != previous) {
+                            current.copy(youtubeDownloadProgress = current.youtubeDownloadProgress + (videoId to progress))
+                        } else current
+                    }
+                }
+                repository.addDownloadedYouTubeSong(song, downloaded.file, downloaded.format)
+                _appUiState.update { current ->
+                    current.copy(
+                        downloadedYouTubeVideoIds = current.downloadedYouTubeVideoIds + videoId,
+                        scanResultMessage = "Đã tải '${song.title}' vào thư viện offline."
+                    )
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                _appUiState.update { it.copy(scanResultMessage = "Đã hủy tải '${song.title}'.") }
+            } catch (error: Throwable) {
+                android.util.Log.e("MusicViewModel", "YouTube download failed for $videoId", error)
+                _appUiState.update {
+                    it.copy(scanResultMessage = "Không tải được '${song.title}': ${error.message ?: "lỗi mạng"}")
+                }
+            } finally {
+                youtubeDownloadJobs.remove(videoId)
+                _appUiState.update { current ->
+                    current.copy(youtubeDownloadProgress = current.youtubeDownloadProgress - videoId)
+                }
+            }
+        }
+        youtubeDownloadJobs[videoId] = job
     }
 
     fun loadMoreYouTube() {

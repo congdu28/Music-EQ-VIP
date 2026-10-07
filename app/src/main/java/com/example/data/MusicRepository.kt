@@ -493,8 +493,12 @@ class MusicRepository(private val context: Context) {
         val updatedRows = dao.toggleFavorite(song.id)
         if (updatedRows == 0) {
             // Online YouTube songs are not part of the local scan. Store them on first favorite
-            // action so the same favorites flow and screen can manage them reliably.
-            dao.insertSong(song.copy(isFavorite = true))
+            // action so the same favorites flow and screen can manage them reliably. Keep the
+            // stable video ID instead of an expiring resolved stream URL.
+            val reusableSong = YouTubeMusicService.videoIdFor(song)
+                ?.let { song.copy(filePath = "yt://$it") }
+                ?: song
+            dao.insertSong(reusableSong.copy(isFavorite = true))
             true
         } else {
             dao.getSongById(song.id)?.isFavorite ?: false
@@ -518,6 +522,25 @@ class MusicRepository(private val context: Context) {
             // ignore filesystem permissions issues on external storage
         }
     }
+
+    suspend fun addDownloadedYouTubeSong(song: Song, audioFile: File, format: String): Song =
+        withContext(Dispatchers.IO) {
+            val path = audioFile.absolutePath
+            val existing = db.songDao().getSongByFilePath(path)
+            if (existing != null) return@withContext existing
+
+            val offlineSong = song.copy(
+                id = 0L,
+                album = "YouTube Offline",
+                filePath = path,
+                format = format.uppercase(),
+                isHiRes = false,
+                isFavorite = false,
+                addedTimestamp = System.currentTimeMillis()
+            )
+            val insertedId = db.songDao().insertSong(offlineSong)
+            offlineSong.copy(id = insertedId)
+        }
 
     suspend fun updateSongMetadata(
         songId: Long,

@@ -48,6 +48,16 @@ object YouTubeMusicService {
     const val AUDIO_USER_AGENT =
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15"
 
+    fun videoIdFor(song: Song): String? {
+        val fromPath = song.filePath.takeIf { it.startsWith("yt://") }?.removePrefix("yt://")
+        val fromResolvedStream = streamVideoIdsByUrl[song.filePath]
+        val fromThumbnail = song.albumArtUri
+            ?.substringAfter("/vi/", "")
+            ?.substringBefore('/')
+        return (fromPath ?: fromResolvedStream ?: fromThumbnail)
+            ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,20}")) }
+    }
+
     @Volatile
     private var cachedVisitorData: String? = null
     @Volatile

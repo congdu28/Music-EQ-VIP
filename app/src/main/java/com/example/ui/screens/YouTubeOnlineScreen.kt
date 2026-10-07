@@ -355,6 +355,7 @@ fun YouTubeOnlineScreen(
                             items = uiState.youtubeSongs,
                             key = { index, song -> "${song.filePath}_$index" }
                         ) { index, song ->
+                            val videoId = YouTubeMusicService.videoIdFor(song).orEmpty()
                             val current = playerState.currentSong
                             val isPlayingOnline = current != null && (
                                 current.album == "YouTube Online" ||
@@ -370,6 +371,9 @@ fun YouTubeOnlineScreen(
                                 isPlaying = isCurrent && playerState.isPlaying,
                                 isLoadingStream = isCurrent && playerState.isLoadingOnlineStream,
                                 isCurrentSong = isCurrent,
+                                isDownloading = videoId in uiState.youtubeDownloadProgress,
+                                downloadProgress = uiState.youtubeDownloadProgress[videoId] ?: 0,
+                                isDownloaded = videoId in uiState.downloadedYouTubeVideoIds,
                                 onClick = {
                                     if (isCurrent && playerState.isPlaying) {
                                         viewModel.pausePlayback()
@@ -379,6 +383,7 @@ fun YouTubeOnlineScreen(
                                         viewModel.playQueue(uiState.youtubeSongs, index)
                                     }
                                 },
+                                onDownload = { viewModel.toggleYouTubeSongDownload(song) },
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                                 onViewSpecs = { viewModel.setShowAudioSpecs(true) }
                             )
@@ -422,7 +427,11 @@ fun YouTubeSongItem(
     isPlaying: Boolean,
     isLoadingStream: Boolean,
     isCurrentSong: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Int,
+    isDownloaded: Boolean,
     onClick: () -> Unit,
+    onDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onViewSpecs: () -> Unit
 ) {
@@ -549,7 +558,28 @@ fun YouTubeSongItem(
                 )
             }
 
-            Box {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                IconButton(
+                    onClick = onDownload,
+                    enabled = !isDownloaded || isDownloading,
+                    modifier = Modifier.size(36.dp).testTag("youtube_download_${song.id}")
+                ) {
+                    when {
+                        isDownloading -> Box(contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(
+                                progress = { downloadProgress.coerceIn(0, 100) / 100f },
+                                color = YouTubeRed,
+                                trackColor = DarkBorder,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Icon(Icons.Default.Close, contentDescription = "Hủy tải", tint = YouTubeRed, modifier = Modifier.size(12.dp))
+                        }
+                        isDownloaded -> Icon(Icons.Default.CheckCircle, contentDescription = "Đã tải", tint = NeonCyan, modifier = Modifier.size(20.dp))
+                        else -> Icon(Icons.Default.CloudDownload, contentDescription = "Tải nhạc về thiết bị", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    }
+                }
+
                 IconButton(
                     onClick = { showMenu = true },
                     modifier = Modifier.size(36.dp)
@@ -567,6 +597,30 @@ fun YouTubeSongItem(
                     onDismissRequest = { showMenu = false },
                     modifier = Modifier.background(DarkSurfaceElevated)
                 ) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                when {
+                                    isDownloaded -> "Đã tải vào thư viện offline"
+                                    isDownloading -> "Đang tải ${downloadProgress.coerceIn(0, 100)}%"
+                                    else -> "Tải nhạc về thiết bị"
+                                },
+                                color = TextPrimary
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isDownloaded) Icons.Default.Check else Icons.Default.CloudDownload,
+                                contentDescription = null,
+                                tint = NeonCyan
+                            )
+                        },
+                        enabled = !isDownloaded && !isDownloading,
+                        onClick = {
+                            showMenu = false
+                            onDownload()
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Thêm vào danh sách phát", color = TextPrimary) },
                         leadingIcon = { Icon(imageVector = Icons.Default.PlaylistAdd, contentDescription = null, tint = NeonCyan) },
