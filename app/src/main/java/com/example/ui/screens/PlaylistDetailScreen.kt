@@ -178,7 +178,9 @@ fun PlaylistDetailScreen(
                         onViewSpecs = {
                             viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0))
                             viewModel.setShowAudioSpecs(true)
-                        }
+                        },
+                        onDelete = { viewModel.setShowDeleteSong(song) },
+                        onRemoveFromPlaylist = { viewModel.setShowRemoveFromPlaylist(song) }
                     )
                 }
             }

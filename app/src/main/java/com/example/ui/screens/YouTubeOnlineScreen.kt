@@ -380,6 +380,12 @@ fun YouTubeOnlineScreen(
                                     }
                                 },
                                 onDownload = { onDownloadSong(song) },
+                                onDeleteDownload = {
+                                    uiState.songs.firstOrNull { local ->
+                                        local.album == "YouTube Offline" &&
+                                            java.io.File(local.filePath).nameWithoutExtension == videoId
+                                    }?.let(viewModel::setShowDeleteSong)
+                                },
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                                 onViewSpecs = { viewModel.setShowAudioSpecs(true) }
                             )
@@ -429,6 +435,7 @@ fun YouTubeSongItem(
     isDownloaded: Boolean,
     onClick: () -> Unit,
     onDownload: () -> Unit,
+    onDeleteDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onViewSpecs: () -> Unit
 ) {
@@ -626,6 +633,16 @@ fun YouTubeSongItem(
                             onAddToPlaylist()
                         }
                     )
+                    if (isDownloaded) {
+                        DropdownMenuItem(
+                            text = { Text("Xóa bản tải về", color = YouTubeRed) },
+                            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = YouTubeRed) },
+                            onClick = {
+                                showMenu = false
+                                onDeleteDownload()
+                            }
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text("Thông số âm thanh (EQ/Bass Boost)", color = TextPrimary) },
                         leadingIcon = { Icon(imageVector = Icons.Default.Equalizer, contentDescription = null, tint = HiResGold) },

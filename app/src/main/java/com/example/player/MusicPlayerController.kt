@@ -214,6 +214,41 @@ class MusicPlayerController(
         }
     }
 
+    /** Drop a deleted library entry without leaving a stale mini-player or queue item. */
+    fun removeSongFromQueue(song: Song) {
+        val state = _uiState.value
+        val matches: (Song) -> Boolean = { candidate ->
+            (song.id > 0L && candidate.id == song.id) || candidate.filePath == song.filePath
+        }
+        val remaining = state.queue.filterNot(matches)
+        if (state.currentSong?.let(matches) == true) {
+            currentPlaybackSessionId = maxOf(System.currentTimeMillis(), currentPlaybackSessionId + 1)
+            stopAllPlayback()
+            MusicPlaybackService.stop(context)
+            _uiState.update {
+                it.copy(
+                    currentSong = null,
+                    isPlaying = false,
+                    isLoadingOnlineStream = false,
+                    currentPositionMs = 0L,
+                    totalDurationMs = 0L,
+                    audioSessionId = 0,
+                    queue = remaining,
+                    currentIndex = -1
+                )
+            }
+        } else if (remaining.size != state.queue.size) {
+            _uiState.update { current ->
+                current.copy(
+                    queue = remaining,
+                    currentIndex = current.currentSong?.let { playing ->
+                        remaining.indexOfFirst { it.id == playing.id && it.filePath == playing.filePath }
+                    } ?: -1
+                )
+            }
+        }
+    }
+
     fun updateFavoriteState(songId: Long, isFavorite: Boolean) {
         _uiState.update { current ->
             val updatedCurrentSong = current.currentSong?.let { song ->

@@ -574,7 +574,8 @@ fun LibraryScreen(
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                                 onEditLyrics = { viewModel.setShowEditLyrics(true) },
                                 onEditMetadata = { viewModel.setShowEditMetadata(song) },
-                                onViewSpecs = { viewModel.setShowAudioSpecs(true) }
+                                onViewSpecs = { viewModel.setShowAudioSpecs(true) },
+                                onDelete = { viewModel.setShowDeleteSong(song) }
                             )
                         }
                     }
@@ -684,7 +685,8 @@ fun FolderBrowserView(
                         onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                         onEditLyrics = { viewModel.setShowEditLyrics(true) },
                         onEditMetadata = { viewModel.setShowEditMetadata(song) },
-                        onViewSpecs = { viewModel.setShowAudioSpecs(true) }
+                        onViewSpecs = { viewModel.setShowAudioSpecs(true) },
+                        onDelete = { viewModel.setShowDeleteSong(song) }
                     )
                 }
             }
@@ -840,7 +842,9 @@ fun CompactSongItem(
     onAddToPlaylist: () -> Unit,
     onEditLyrics: () -> Unit,
     onEditMetadata: () -> Unit,
-    onViewSpecs: () -> Unit
+    onViewSpecs: () -> Unit,
+    onDelete: () -> Unit,
+    onRemoveFromPlaylist: (() -> Unit)? = null
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val durationMinutes = song.durationMs / 60_000L
@@ -1041,6 +1045,24 @@ fun CompactSongItem(
                             onViewSpecs()
                         }
                     )
+                    if (onRemoveFromPlaylist != null) {
+                        DropdownMenuItem(
+                            text = { Text("Xóa khỏi danh sách phát", color = NeonPink) },
+                            leadingIcon = { Icon(Icons.Default.RemoveCircleOutline, contentDescription = null, tint = NeonPink) },
+                            onClick = {
+                                showMenu = false
+                                onRemoveFromPlaylist()
+                            }
+                        )
+                    }
+                    DropdownMenuItem(
+                        text = { Text(if (song.album == "YouTube Offline") "Xóa bản tải về" else "Xóa khỏi thư viện", color = NeonPink) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = NeonPink) },
+                        onClick = {
+                            showMenu = false
+                            onDelete()
+                        }
+                    )
                 }
                     }
                 }
@@ -1059,7 +1081,9 @@ fun SongCardItem(
     onAddToPlaylist: () -> Unit,
     onEditLyrics: () -> Unit,
     onEditMetadata: () -> Unit = {},
-    onViewSpecs: () -> Unit
+    onViewSpecs: () -> Unit,
+    onDelete: () -> Unit,
+    onRemoveFromPlaylist: (() -> Unit)? = null
 ) {
     CompactSongItem(
         song = song,
@@ -1070,7 +1094,9 @@ fun SongCardItem(
         onAddToPlaylist = onAddToPlaylist,
         onEditLyrics = onEditLyrics,
         onEditMetadata = onEditMetadata,
-        onViewSpecs = onViewSpecs
+        onViewSpecs = onViewSpecs,
+        onDelete = onDelete,
+        onRemoveFromPlaylist = onRemoveFromPlaylist
     )
 }
 

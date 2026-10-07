@@ -23,9 +23,27 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 
 class MusicRepository(private val context: Context) {
     private val TAG = "MusicRepository"
+    private val hiddenLibraryPathsKey = "hidden_library_song_paths"
+
+    private fun hiddenLibraryPaths(): Set<String> = prefs.getStringSet(hiddenLibraryPathsKey, emptySet()).orEmpty()
+
+    /** Only files written by this app may be deleted directly. */
+    fun isAppOwnedAudio(song: Song): Boolean {
+        if (song.filePath.startsWith("content://") || song.filePath.startsWith("yt://")) return false
+        return runCatching {
+            val parent = File(song.filePath).canonicalFile.parentFile
+            val external = context.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC)
+                ?.let { File(it, "Music EQ/YouTube").canonicalFile }
+            val internal = File(context.filesDir, "Music/Music EQ/YouTube").canonicalFile
+            val preview = File(context.cacheDir, "music_eq_demo_preview.wav").canonicalFile
+            (external != null && parent == external) || parent == internal ||
+                File(song.filePath).canonicalFile == preview
+        }.getOrDefault(false)
+    }
 
     val db: MusicDatabase by lazy {
         Room.databaseBuilder(
@@ -235,9 +253,11 @@ class MusicRepository(private val context: Context) {
         }
         legacySampleFiles.forEach { it.delete() }
 
-        if (db.songDao().getAllSongs().firstOrNull().isNullOrEmpty()) {
+        if (!prefs.getBoolean("has_seeded_default_preview", false) &&
+            db.songDao().getAllSongs().firstOrNull().isNullOrEmpty()) {
             db.songDao().insertSong(createSampleSong())
         }
+        prefs.edit().putBoolean("has_seeded_default_preview", true).apply()
         if (db.equalizerDao().getAllPresetsList().isEmpty()) {
             val defaultPresets = listOf(
                 EqualizerPreset(name = "Mặc định (Flat)", bandLevelsCsv = "0,0,0,0,0,0,0,0,0,0", bassBoost = 0, virtualizer = 0, reverbPreset = 0),
@@ -367,10 +387,11 @@ class MusicRepository(private val context: Context) {
                     )
                 }
                 val existingPaths = db.songDao().getAllSongPaths().filter { it.isNotEmpty() }.toSet()
+                val hiddenPaths = hiddenLibraryPaths()
                 val uniqueScannedSongs = scannedSongs
                     .filter { it.filePath.isNotEmpty() }
                     .distinctBy { it.filePath }
-                    .filter { !existingPaths.contains(it.filePath) }
+                    .filter { !existingPaths.contains(it.filePath) && it.filePath !in hiddenPaths }
 
                 if (uniqueScannedSongs.isNotEmpty()) {
                     db.songDao().insertSongs(uniqueScannedSongs)
@@ -477,7 +498,9 @@ class MusicRepository(private val context: Context) {
         try {
             scanDirectory(DocumentsContract.getTreeDocumentId(treeUri), 0)
             val existingPaths = db.songDao().getAllSongPaths().toSet()
-            val newSongs = scannedSongs.distinctBy { it.filePath }.filterNot { it.filePath in existingPaths }
+            val hiddenPaths = hiddenLibraryPaths()
+            val newSongs = scannedSongs.distinctBy { it.filePath }
+                .filterNot { it.filePath in existingPaths || it.filePath in hiddenPaths }
             if (newSongs.isNotEmpty()) db.songDao().insertSongs(newSongs)
             newSongs.size
         } catch (e: Exception) {
@@ -605,6 +628,32 @@ class MusicRepository(private val context: Context) {
             offlineSong.copy(id = insertedId)
         }
 
+    /** Remove one library entry and playlist links. Downloaded app files are deleted as well;
+     * files found by a device/folder scan are merely hidden from this app's future scans. */
+    suspend fun deleteSongFromLibrary(song: Song): Boolean = withContext(Dispatchers.IO) {
+        val dao = db.songDao()
+        val stored = song.id.takeIf { it > 0L }?.let { dao.getSongById(it) }
+            ?.takeIf { it.filePath == song.filePath }
+            ?: dao.getSongByFilePath(song.filePath)
+            ?: return@withContext false
+        val ownedFile = isAppOwnedAudio(stored)
+        if (ownedFile) {
+            val audio = File(stored.filePath)
+            if (audio.exists() && !audio.delete()) {
+                throw IOException("Không xóa được tệp âm thanh. Hãy thử lại sau.")
+            }
+            File(audio.parentFile, "${audio.nameWithoutExtension}.lrc").delete()
+        } else if (!stored.filePath.startsWith("yt://") && !stored.filePath.startsWith("http")) {
+            prefs.edit().putStringSet(
+                hiddenLibraryPathsKey,
+                hiddenLibraryPaths() + stored.filePath
+            ).apply()
+        }
+        db.playlistDao().removeSongReferences(listOf(stored.id))
+        dao.deleteSongById(stored.id)
+        ownedFile
+    }
+
     suspend fun updateSongMetadata(
         songId: Long,
         newTitle: String,
@@ -638,6 +687,10 @@ class MusicRepository(private val context: Context) {
 
     suspend fun addSongToPlaylist(playlistId: Long, songId: Long) = withContext(Dispatchers.IO) {
         db.playlistDao().addSongToPlaylist(PlaylistSongCrossRef(playlistId, songId))
+    }
+
+    suspend fun removeSongFromPlaylist(playlistId: Long, songId: Long) = withContext(Dispatchers.IO) {
+        db.playlistDao().removeSongFromPlaylist(playlistId, songId)
     }
 
     suspend fun addSongToPlaylist(playlistId: Long, song: Song): Song = withContext(Dispatchers.IO) {

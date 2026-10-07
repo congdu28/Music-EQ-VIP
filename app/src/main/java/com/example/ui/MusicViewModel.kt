@@ -108,6 +108,8 @@ data class MusicAppUiState(
     val showAddToPlaylistDialog: Song? = null,
     val pendingPlaylistSongForCreation: Song? = null,
     val showEditMetadataDialog: Song? = null,
+    val showDeleteSongDialog: Song? = null,
+    val showRemoveFromPlaylistDialog: Song? = null,
     val showEditLyricsDialog: Boolean = false,
     val showSleepTimerDialog: Boolean = false,
     val showSavePresetDialog: Boolean = false,
@@ -905,6 +907,72 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _appUiState.update { it.copy(showEditMetadataDialog = song) }
     }
 
+    fun setShowDeleteSong(song: Song?) {
+        _appUiState.update { it.copy(showDeleteSongDialog = song) }
+    }
+
+    fun deleteSong(song: Song) {
+        _appUiState.update { it.copy(showDeleteSongDialog = null) }
+        viewModelScope.launch {
+            try {
+                // Close the player before deleting a file it may currently be reading.
+                playerController.removeSongFromQueue(song)
+                val deletedFile = repository.deleteSongFromLibrary(song)
+                val recent = _appUiState.value.recentlyPlayedSongs.filterNot {
+                    (song.id > 0L && it.id == song.id) || it.filePath == song.filePath
+                }
+                repository.replaceRecentlyPlayedSongs(recent)
+                _appUiState.update { state ->
+                    state.copy(
+                        showDeleteSongDialog = null,
+                        recentlyPlayedSongs = recent,
+                        selectedFolder = state.selectedFolder?.let { folder ->
+                            folder.copy(songs = folder.songs.filterNot {
+                                (song.id > 0L && it.id == song.id) || it.filePath == song.filePath
+                            })
+                        },
+                        pendingOnlineSong = state.pendingOnlineSong?.takeUnless { it.filePath == song.filePath },
+                        scanResultMessage = when {
+                            deletedFile -> "Đã xóa tệp '${song.title}' khỏi thiết bị."
+                            song.filePath.startsWith("yt://") -> "Đã xóa '${song.title}' khỏi thư viện."
+                            else -> "Đã gỡ '${song.title}' khỏi thư viện. Tệp gốc vẫn còn trên thiết bị."
+                        }
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                android.util.Log.e("MusicViewModel", "Unable to delete song", error)
+                _appUiState.update {
+                    it.copy(showDeleteSongDialog = null, scanResultMessage =
+                        "Không xóa được '${song.title}': ${error.message ?: "lỗi dữ liệu"}")
+                }
+            }
+        }
+    }
+
+    fun setShowRemoveFromPlaylist(song: Song?) {
+        _appUiState.update { it.copy(showRemoveFromPlaylistDialog = song) }
+    }
+
+    fun removeSongFromPlaylist(playlistId: Long, song: Song) {
+        _appUiState.update { it.copy(showRemoveFromPlaylistDialog = null) }
+        viewModelScope.launch {
+            try {
+                repository.removeSongFromPlaylist(playlistId, song.id)
+                _appUiState.update {
+                    it.copy(showRemoveFromPlaylistDialog = null,
+                        scanResultMessage = "Đã xóa '${song.title}' khỏi danh sách phát.")
+                }
+            } catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                _appUiState.update {
+                    it.copy(showRemoveFromPlaylistDialog = null,
+                        scanResultMessage = "Không xóa được bài hát khỏi danh sách phát.")
+                }
+            }
+        }
+    }
+
     fun saveSongMetadata(songId: Long, title: String, artist: String, album: String, format: String) {
         viewModelScope.launch {
             val updated = repository.updateSongMetadata(songId, title, artist, album, format)
@@ -1244,7 +1312,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun closePlaylist() {
-        _appUiState.update { it.copy(selectedPlaylist = null, selectedPlaylistSongs = emptyList()) }
+        _appUiState.update {
+            it.copy(selectedPlaylist = null, selectedPlaylistSongs = emptyList(), showRemoveFromPlaylistDialog = null)
+        }
     }
 
     fun createPlaylist(name: String, desc: String) {

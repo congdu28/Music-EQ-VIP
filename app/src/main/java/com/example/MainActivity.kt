@@ -585,4 +585,45 @@ fun MainAppScreen(viewModel: MusicViewModel) {
             }
         )
     }
+
+    uiState.showDeleteSongDialog?.let { song ->
+        val isAppFile = viewModel.repository.isAppOwnedAudio(song)
+        val description = when {
+            isAppFile -> "Xóa bản đã tải '${song.title}' cùng tệp âm thanh trên thiết bị? Bản này cũng sẽ bị gỡ khỏi các danh sách phát và lịch sử nghe."
+            song.filePath.startsWith("yt://") -> "Xóa bản online '${song.title}' khỏi thư viện, các danh sách phát và lịch sử nghe? Bản tải về, nếu có, vẫn được giữ."
+            else -> "Gỡ '${song.title}' khỏi thư viện, các danh sách phát và lịch sử nghe? Tệp gốc trên thiết bị vẫn được giữ."
+        }
+        AlertDialog(
+            onDismissRequest = { viewModel.setShowDeleteSong(null) },
+            icon = { Icon(Icons.Default.Delete, contentDescription = null, tint = NeonPink) },
+            title = { Text(if (isAppFile) "Xóa bài hát đã tải?" else "Xóa bài hát khỏi thư viện?") },
+            text = { Text(description) },
+            confirmButton = {
+                TextButton(onClick = { viewModel.deleteSong(song) }) {
+                    Text("Xóa", color = NeonPink)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.setShowDeleteSong(null) }) { Text("Hủy") }
+            }
+        )
+    }
+
+    uiState.showRemoveFromPlaylistDialog?.let { song ->
+        uiState.selectedPlaylist?.let { playlist ->
+            AlertDialog(
+                onDismissRequest = { viewModel.setShowRemoveFromPlaylist(null) },
+                title = { Text("Xóa khỏi danh sách phát?") },
+                text = { Text("Gỡ '${song.title}' khỏi '${playlist.name}'? Bài hát vẫn còn trong thư viện.") },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.removeSongFromPlaylist(playlist.id, song) }) {
+                        Text("Xóa", color = NeonPink)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.setShowRemoveFromPlaylist(null) }) { Text("Hủy") }
+                }
+            )
+        }
+    }
 }
