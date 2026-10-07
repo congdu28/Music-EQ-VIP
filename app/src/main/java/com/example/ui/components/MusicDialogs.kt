@@ -594,7 +594,15 @@ fun AudioSpecsDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(imageVector = Icons.Default.GraphicEq, contentDescription = null, tint = HiResGold)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Thông số kỹ thuật Hi-Res Audio", color = TextPrimary, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    "Thông số kỹ thuật Hi-Res Audio",
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
             }
         },
         text = {
@@ -627,10 +635,27 @@ private fun SpecItem(label: String, value: String) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Text(label, color = TextSecondary, fontSize = 12.sp)
-        Text(value, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        Text(
+            label,
+            color = TextSecondary,
+            fontSize = 12.sp,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.9f)
+        )
+        Text(
+            value,
+            color = TextPrimary,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier.weight(1.1f)
+        )
     }
 }
 

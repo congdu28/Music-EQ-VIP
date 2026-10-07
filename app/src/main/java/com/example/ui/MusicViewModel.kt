@@ -41,7 +41,7 @@ enum class LibrarySubTab(val title: String) {
     HI_RES("Hi-Res FLAC/WAV"),
     FAVORITES("Yêu thích"),
     PLAYLISTS("Danh sách phát"),
-    YOUTUBE_DOWNLOADS("Từ YouTube"),
+    YOUTUBE_DOWNLOADS("Offline Youtube"),
     RECENT("Gần đây")
 }
 

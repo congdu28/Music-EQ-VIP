@@ -501,7 +501,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
             title = { Text("Chất lượng tải xuống") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Chọn bitrate mục tiêu. Nếu YouTube không có đúng mức này, ứng dụng sẽ chọn luồng gần nhất và không nâng bitrate giả.")
+                    Text("Tải nhạc về và nghe offline khi không có internet")
                     YouTubeDownloadQuality.entries.forEach { quality ->
                         OutlinedButton(
                             onClick = {

@@ -197,7 +197,7 @@ fun LibraryScreen(
                 IconButton(
                     onClick = onPickAudioFolder,
                     modifier = Modifier
-                        .size(42.dp)
+                        .size(44.dp)
                         .clip(RoundedCornerShape(14.dp))
                         .background(DarkSurfaceVariant)
                         .testTag("choose_music_folder_button")
@@ -215,7 +215,7 @@ fun LibraryScreen(
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
                     contentPadding = PaddingValues(horizontal = 10.dp),
-                    modifier = Modifier.height(42.dp).testTag("scan_library_button")
+                    modifier = Modifier.height(44.dp).testTag("scan_library_button")
                 ) {
                     Icon(Icons.Default.LibraryMusic, contentDescription = null, modifier = Modifier.size(17.dp))
                     Spacer(modifier = Modifier.width(5.dp))
@@ -297,7 +297,7 @@ fun LibraryScreen(
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 3.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             items(libraryTabs) { tab ->
@@ -308,7 +308,7 @@ fun LibraryScreen(
                     LibrarySubTab.HI_RES -> "Hi-Res"
                     LibrarySubTab.FAVORITES -> "Yêu thích"
                     LibrarySubTab.PLAYLISTS -> "Playlist"
-                    LibrarySubTab.YOUTUBE_DOWNLOADS -> "Từ YouTube"
+                    LibrarySubTab.YOUTUBE_DOWNLOADS -> "Offline Youtube"
                     LibrarySubTab.RECENT -> "Gần đây"
                 }
                 Surface(
@@ -321,7 +321,7 @@ fun LibraryScreen(
                         .clickable { viewModel.setLibrarySubTab(tab) }
                 ) {
                     Box(
-                        modifier = Modifier.padding(horizontal = 16.dp),
+                        modifier = Modifier.padding(horizontal = 13.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(

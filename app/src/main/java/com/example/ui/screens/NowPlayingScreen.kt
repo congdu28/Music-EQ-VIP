@@ -394,7 +394,7 @@ fun NowPlayingScreen(
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // HEADER BAR: Minimize, Title, Online Lyrics Search, Edit Metadata
+            // HEADER BAR: Minimize, source badge, download, and edit metadata
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -422,7 +422,8 @@ fun NowPlayingScreen(
                     }
                 }
 
-                // Center Title
+                // Make the playback source easy to identify without letting long labels
+                // push the action buttons off narrow screens.
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
@@ -436,17 +437,31 @@ fun NowPlayingScreen(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.2.sp
                     )
-                    Text(
-                        text = if (song.album.isNotBlank() && song.album != "Unknown Album") song.album else "Hi-Res Audio Player",
-                        color = TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    val playbackSource = when {
+                        song.album.equals("YouTube Online", ignoreCase = true) -> "YouTube Online"
+                        song.album.equals("YouTube Offline", ignoreCase = true) || song.format.contains("YouTube Offline", ignoreCase = true) -> "YouTube Offline"
+                        song.filePath.startsWith("yt://") -> "YouTube Online"
+                        else -> "Thư viện"
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = animatedPrimary.copy(alpha = 0.18f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary.copy(alpha = 0.65f)),
+                        modifier = Modifier.widthIn(max = 160.dp)
+                    ) {
+                        Text(
+                            text = playbackSource,
+                            color = animatedPrimary,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
+                        )
+                    }
                 }
 
-                // Header Action Buttons: Search Lyrics and Edit Tags
+                // Header Action Buttons: YouTube download and edit tags
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -495,34 +510,6 @@ fun NowPlayingScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
-                            }
-                        }
-                    }
-
-                    // Online Lyrics Search Button with Spinner Indicator
-                    Surface(
-                        shape = CircleShape,
-                        color = if (uiState.isSearchingLyrics) NeonPink.copy(alpha = 0.2f) else DarkSurfaceVariant,
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .clickable(enabled = !uiState.isSearchingLyrics) { viewModel.searchLyricsOnline(song) }
-                            .testTag("now_playing_search_lyrics_button")
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            if (uiState.isSearchingLyrics) {
-                                CircularProgressIndicator(
-                                    color = NeonPink,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.CloudDownload,
-                                    contentDescription = "Tìm lời trên mạng",
-                                    tint = if (hasLyrics) TextSecondary else NeonPink,
-                                    modifier = Modifier.size(18.dp)
-                                )
                             }
                         }
                     }
