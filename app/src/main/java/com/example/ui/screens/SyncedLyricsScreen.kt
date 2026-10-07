@@ -93,7 +93,7 @@ fun SyncedLyricsScreen(
                     if (uiState.isSearchingLyrics) {
                         CircularProgressIndicator(color = NeonViolet, strokeWidth = 2.dp, modifier = Modifier.size(19.dp))
                     } else {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Tìm lời trên LRCLIB và Gemini AI", tint = NeonPink)
+                        Icon(Icons.Default.CloudDownload, contentDescription = "Tìm lời chính xác trên LRCLIB", tint = NeonPink)
                     }
                 }
                 IconButton(onClick = { viewModel.setTab(MainTab.SETTINGS) }) {
@@ -227,12 +227,25 @@ fun SyncedLyricsScreen(
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(18.dp))
                                             Spacer(modifier = Modifier.width(8.dp))
-                                            Text("Tìm trên LRCLIB, sau đó Gemini AI có nguồn", color = TextPrimary, fontSize = 13.sp)
+                                            Text("Tìm lời chính xác · LRCLIB", color = TextPrimary, fontSize = 13.sp)
                                         }
                                     },
                                     onClick = {
                                         showSearchOptions = false
                                         viewModel.searchLyricsOnline(song)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(18.dp))
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text("Tìm/tạo lời bằng Gemini AI", color = TextPrimary, fontSize = 13.sp)
+                                        }
+                                    },
+                                    onClick = {
+                                        showSearchOptions = false
+                                        viewModel.searchLyricsOnline(song, useGemini = true)
                                     }
                                 )
                                 if (!song.lyrics.isNullOrBlank()) DropdownMenuItem(

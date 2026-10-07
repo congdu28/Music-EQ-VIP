@@ -678,8 +678,8 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 val models = listOf(
-                    Triple("gemini-3.7-flash", "Gemini 3.7 Flash", "Khuyên dùng • Chuẩn nhạc & Lời chính xác"),
-                    Triple("gemini-3.8-flash", "Gemini 3.8 Flash", "Mới nhất • Khả năng suy luận cao cấp"),
+                    Triple("gemini-3.8-flash", "Gemini 3.8 Flash", "Mặc định • Ưu tiên tìm lời"),
+                    Triple("gemini-3.7-flash", "Gemini 3.7 Flash", "Dự phòng khi 3.8 gặp lỗi"),
                     Triple("gemini-3.6-flash", "Gemini 3.6 Flash", "Tốc độ cao • Phản hồi nhanh & Ổn định")
                 )
 

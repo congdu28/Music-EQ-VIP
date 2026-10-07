@@ -88,7 +88,7 @@ class MusicRepository(private val context: Context) {
     }
 
     fun getGeminiModel(): String {
-        return prefs.getString("gemini_model", "gemini-3.7-flash") ?: "gemini-3.7-flash"
+        return prefs.getString("gemini_model", "gemini-3.8-flash") ?: "gemini-3.8-flash"
     }
 
     fun setGeminiModel(model: String) {

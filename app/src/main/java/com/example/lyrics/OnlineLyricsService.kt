@@ -29,6 +29,10 @@ object OnlineLyricsService {
     private const val TAG = "OnlineLyricsService"
     private const val BASE_URL = "https://lrclib.net/api"
 
+    private fun geminiModels(preferredModel: String?): List<String> =
+        (listOfNotNull(preferredModel?.takeIf(String::isNotBlank)) +
+            listOf("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash")).distinct()
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(10, TimeUnit.SECONDS)
@@ -88,13 +92,14 @@ object OnlineLyricsService {
         }
     }
 
-    /** Finds a close LRCLIB match first, then uses grounded Gemini as a clearly marked fallback. */
+    /** Searches verified LRCLIB results, or explicitly asks Gemini for grounded lyrics. */
     suspend fun fetchLyrics(
         rawTitle: String,
         rawArtist: String,
         durationMs: Long = 0,
         apiKey: String = "",
-        preferredModel: String? = null
+        preferredModel: String? = null,
+        useGemini: Boolean = false
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
@@ -110,6 +115,17 @@ object OnlineLyricsService {
 
         val durationSec = (durationMs / 1000).toInt()
         Log.d(TAG, "Searching online lyrics for '$cleanTitle' by '$cleanArtist'")
+
+        if (useGemini) {
+            val resolvedApiKey = apiKey.ifBlank { getDefaultGeminiApiKey() }
+            return@withContext if (resolvedApiKey.isBlank()) null else fetchGroundedGeminiLyrics(
+                title = cleanTitle,
+                artist = cleanArtist,
+                durationMs = durationMs,
+                apiKey = resolvedApiKey,
+                preferredModel = preferredModel
+            )
+        }
 
         // The direct endpoint is fast, but still verify its metadata before accepting it.
         if (!isGenericArtist(cleanArtist)) {
@@ -198,15 +214,7 @@ object OnlineLyricsService {
         }
         bestCandidate?.second?.let { return@withContext it }
 
-        val resolvedApiKey = apiKey.ifBlank { getDefaultGeminiApiKey() }
-        if (resolvedApiKey.isBlank()) return@withContext null
-        fetchGroundedGeminiLyrics(
-            title = cleanTitle,
-            artist = cleanArtist,
-            durationMs = durationMs,
-            apiKey = resolvedApiKey,
-            preferredModel = preferredModel
-        )
+        null
     }
 
     private suspend fun fetchGroundedGeminiLyrics(
@@ -227,14 +235,12 @@ Trả về DUY NHẤT một JSON object với các trường:
 Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bài và nghệ sĩ. synced_lrc chỉ được dùng cùng câu chữ và đúng thứ tự như lyrics; nếu nguồn không có mốc thời gian thì có thể ước tính mốc theo cấu trúc bài, nhưng không thay đổi bất kỳ từ nào. Thời lượng tham khảo là $durationSec giây. Không đưa markdown hay lời giải thích vào JSON.
 """.trimIndent()
 
-        val models = listOfNotNull(preferredModel?.takeIf(String::isNotBlank), "gemini-3.7-flash", "gemini-2.5-flash")
-            .distinct()
+        val models = geminiModels(preferredModel)
         for (model in models) {
             try {
                 val payload = JSONObject().apply {
                     put("contents", JSONArray().put(JSONObject().put("parts", JSONArray().put(JSONObject().put("text", prompt)))))
                     put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
-                    put("generationConfig", JSONObject().put("responseMimeType", "application/json"))
                 }
                 val request = Request.Builder()
                     .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
@@ -246,13 +252,13 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
                 geminiClient.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) {
                         Log.w(TAG, "Grounded Gemini lookup returned HTTP ${response.code} for $model")
-                        if (response.code != 404) return null
+                        return@use
                     } else {
                         val responseBody = response.body?.string().orEmpty()
                         val responseJson = JSONObject(responseBody)
-                        val candidate = responseJson.optJSONArray("candidates")?.optJSONObject(0) ?: return null
-                        val groundingMetadata = candidate.optJSONObject("groundingMetadata") ?: return null
-                        val chunks = groundingMetadata.optJSONArray("groundingChunks") ?: return null
+                        val candidate = responseJson.optJSONArray("candidates")?.optJSONObject(0) ?: return@use
+                        val groundingMetadata = candidate.optJSONObject("groundingMetadata") ?: return@use
+                        val chunks = groundingMetadata.optJSONArray("groundingChunks") ?: return@use
                         val sourceUrls = buildList {
                             for (index in 0 until chunks.length()) {
                                 val uri = chunks.optJSONObject(index)?.optJSONObject("web")?.optString("uri")?.trim().orEmpty()
@@ -260,9 +266,9 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
                                 if (size >= 4) break
                             }
                         }
-                        if (sourceUrls.isEmpty()) return null
+                        if (sourceUrls.isEmpty()) return@use
 
-                        val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: return null
+                        val parts = candidate.optJSONObject("content")?.optJSONArray("parts") ?: return@use
                         val rawText = (0 until parts.length()).joinToString("\n") { parts.optJSONObject(it)?.optString("text").orEmpty() }
                             .trim()
                         val jsonText = rawText.removePrefix("```json").removePrefix("```")
@@ -272,7 +278,7 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
                         } catch (_: Exception) {
                             val start = jsonText.indexOf('{')
                             val end = jsonText.lastIndexOf('}')
-                            if (start < 0 || end <= start) return null
+                            if (start < 0 || end <= start) return@use
                             JSONObject(jsonText.substring(start, end + 1))
                         }
 
@@ -280,9 +286,9 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
                         val resultArtist = resultJson.optString("artist").trim()
                         val confidence = resultJson.optString("confidence").lowercase()
                         val plainLyrics = resultJson.optString("lyrics").trim()
-                        if (confidence != "high" || plainLyrics.length < 30 || resultTitle.isBlank()) return null
-                        if (metadataSimilarity(title, resultTitle) < 0.78) return null
-                        if (!isGenericArtist(artist) && (resultArtist.isBlank() || metadataSimilarity(artist, resultArtist) < 0.58)) return null
+                        if (confidence != "high" || plainLyrics.length < 30 || resultTitle.isBlank()) return@use
+                        if (metadataSimilarity(title, resultTitle) < 0.78) return@use
+                        if (!isGenericArtist(artist) && (resultArtist.isBlank() || metadataSimilarity(artist, resultArtist) < 0.58)) return@use
 
                         val proposedLrc = resultJson.optString("synced_lrc").trim().takeUnless { it.isBlank() || it == "null" }
                         val verifiedLrc = proposedLrc?.let { validateAlignedLyrics(plainLyrics, it, durationMs) }
@@ -397,18 +403,11 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
 4. TUYỆT ĐỐI KHÔNG thêm lời giải thích, chào hỏi, hay bọc trong markdown code block (như ```lrc).
 """.trimIndent()
 
-        val allModels = listOf(
-            "gemini-3.6-flash",
-            "gemini-3.7-flash",
-            "gemini-3.8-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-3.5-flash-lite"
-        )
-        val modelsToTry = (listOfNotNull(preferredModel?.takeIf(String::isNotBlank)) + allModels).distinct().take(3)
+        val modelsToTry = geminiModels(preferredModel)
 
         for (model in modelsToTry) {
             try {
-                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent"
                 val jsonPayload = JSONObject().apply {
                     val contentsArray = JSONArray().apply {
                         val partObj = JSONObject().apply {
@@ -428,6 +427,7 @@ Hãy căn chỉnh và gắn mốc thời gian [mm:ss.xx] vào từng dòng trên
                 val request = Request.Builder()
                     .url(url)
                     .post(body)
+                    .header("x-goog-api-key", apiKey)
                     .header("User-Agent", "NhipDieuHiResPlayer/1.0 (Android; Audiophile)")
                     .build()
 

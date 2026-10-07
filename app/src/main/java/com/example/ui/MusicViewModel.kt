@@ -99,7 +99,7 @@ data class MusicAppUiState(
     val isSearchingLyrics: Boolean = false,
     val isAligningLyrics: Boolean = false,
     val geminiApiKey: String = "",
-    val geminiModel: String = "gemini-3.7-flash",
+    val geminiModel: String = "gemini-3.8-flash",
     val isDarkTheme: Boolean = false,
     val appearanceMode: String = "LIGHT",
     val accentColor: Int = 0xFF3399FF.toInt(),
@@ -830,9 +830,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setGeminiApiKey(key: String) {
         val trimmed = key.trim()
         repository.setGeminiApiKey(trimmed)
+        if (trimmed.isBlank()) repository.setGeminiModel("gemini-3.8-flash")
         _appUiState.update {
             it.copy(
                 geminiApiKey = repository.getGeminiApiKey(),
+                geminiModel = if (trimmed.isBlank()) "gemini-3.8-flash" else it.geminiModel,
                 scanResultMessage = if (trimmed.isBlank()) "Đã chuyển sang API Key tích hợp" else "Đã lưu Gemini API Key riêng"
             )
         }
@@ -843,7 +845,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         _appUiState.update { it.copy(geminiModel = model, scanResultMessage = "Đã chọn mô hình: $model") }
     }
 
-    fun searchLyricsOnline(song: Song, isAuto: Boolean = false) {
+    fun searchLyricsOnline(song: Song, isAuto: Boolean = false, useGemini: Boolean = false) {
         viewModelScope.launch {
             _appUiState.update { it.copy(isSearchingLyrics = true) }
             val currentAppState = _appUiState.value
@@ -853,7 +855,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     rawArtist = song.artist,
                     durationMs = song.durationMs,
                     apiKey = currentAppState.geminiApiKey,
-                    preferredModel = currentAppState.geminiModel
+                    preferredModel = currentAppState.geminiModel,
+                    useGemini = useGemini
                 )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -894,7 +897,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 _appUiState.update { it.copy(scanResultMessage = "$prefix $formatType từ $sourceLabel cho: ${song.title}") }
             } else if (!isAuto) {
                 _appUiState.update {
-                    it.copy(scanResultMessage = "Không tìm thấy lời khớp trên LRCLIB hoặc Gemini cho: ${song.title}")
+                    it.copy(scanResultMessage = if (useGemini) "Gemini chưa tìm được lời có nguồn khớp cho: ${song.title}" else "Không tìm thấy lời khớp trên LRCLIB cho: ${song.title}")
                 }
             }
         }

@@ -610,7 +610,7 @@ class MusicPlayerController(
                         mp.release()
                     } catch (t: Throwable) {}
 
-                    val retryScheduled = isYouTubeOnline && youtubeRetryCount == 0 &&
+                    val retryScheduled = isYouTubeOnline && youtubeRetryCount < 2 &&
                         retryYouTubeStream(song, sessionId, playbackRequestedAtNanos, youtubeRetryCount)
                     if (!retryScheduled) {
                         _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
@@ -625,7 +625,7 @@ class MusicPlayerController(
         } catch (e: Exception) {
             Log.e(TAG, "Error playing song: ${e.message}", e)
             preparingPlayer = null
-            val retryScheduled = isYouTubeOnline && youtubeRetryCount == 0 &&
+            val retryScheduled = isYouTubeOnline && youtubeRetryCount < 2 &&
                 retryYouTubeStream(song, sessionId, playbackRequestedAtNanos, youtubeRetryCount)
             if (!retryScheduled) {
                 _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
@@ -639,8 +639,8 @@ class MusicPlayerController(
         playbackRequestedAtNanos: Long,
         retryCount: Int
     ): Boolean {
-        if (retryCount >= 1 || currentPlaybackSessionId != sessionId) return false
-        Log.i(TAG, "Retrying failed YouTube stream with a fresh URL for '${song.title}'")
+        if (retryCount >= 2 || currentPlaybackSessionId != sessionId) return false
+        Log.i(TAG, "Retrying failed YouTube stream with another format for '${song.title}'")
         _uiState.update { it.copy(isLoadingOnlineStream = true, isPlaying = false) }
         resolveStreamJob?.cancel()
         resolveStreamJob = scope.launch {

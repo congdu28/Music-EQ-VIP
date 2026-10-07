@@ -740,12 +740,25 @@ fun NowPlayingScreen(
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(imageVector = Icons.Default.CloudDownload, contentDescription = null, tint = NeonPink, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Tìm trên LRCLIB, sau đó Gemini AI có nguồn", color = TextPrimary, fontSize = 12.sp)
+                                                    Text("Tìm lời chính xác · LRCLIB", color = TextPrimary, fontSize = 12.sp)
                                                 }
                                             },
                                             onClick = {
                                                 showSearchMenu = false
                                                 viewModel.searchLyricsOnline(song)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(16.dp))
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Text("Tìm/tạo lời bằng Gemini AI", color = TextPrimary, fontSize = 12.sp)
+                                                }
+                                            },
+                                            onClick = {
+                                                showSearchMenu = false
+                                                viewModel.searchLyricsOnline(song, useGemini = true)
                                             }
                                         )
                                         if (!song.lyrics.isNullOrBlank()) DropdownMenuItem(

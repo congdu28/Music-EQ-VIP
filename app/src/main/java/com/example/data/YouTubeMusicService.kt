@@ -54,7 +54,9 @@ object YouTubeMusicService {
     private var visitorDataExpiryTimestamp: Long = 0L
 
     private val visitorDataMutex = Mutex()
-    private data class CachedStream(val url: String, val expiresAtMs: Long)
+    private data class CachedStream(val urls: List<String>, val activeIndex: Int, val expiresAtMs: Long) {
+        val url: String get() = urls[activeIndex]
+    }
     private val streamCache = ConcurrentHashMap<String, CachedStream>()
     private val streamVideoIdsByUrl = ConcurrentHashMap<String, String>()
     private val streamResolutionGates = ConcurrentHashMap<String, Mutex>()
@@ -178,7 +180,7 @@ object YouTubeMusicService {
             val startedAt = System.nanoTime()
             val cached = streamCache[videoId]
             if (cached != null && streamCache.remove(videoId, cached)) {
-                streamVideoIdsByUrl.remove(cached.url, videoId)
+                cached.urls.forEach { streamVideoIdsByUrl.remove(it, videoId) }
             }
 
             fun logResolved(source: String, url: String): String {
@@ -224,9 +226,10 @@ object YouTubeMusicService {
                 if (response.isSuccessful) {
                     val bodyStr = response.body?.string() ?: ""
                     val json = JSONObject(bodyStr)
-                    val url = extractDirectAudioUrl(json)
-                    if (url != null) {
-                        cacheStreamUrl(videoId, url, json)
+                    val urls = extractDirectAudioUrls(json)
+                    if (urls.isNotEmpty()) {
+                        val url = urls.first()
+                        cacheStreamUrl(videoId, urls, json)
                         Log.d(TAG, "Resolved stream via ANDROID_VR fallback for $videoId")
                         return@withLock logResolved("ANDROID_VR", url)
                     }
@@ -259,27 +262,42 @@ object YouTubeMusicService {
     fun invalidateStreamUrl(url: String) {
         val videoId = streamVideoIdsByUrl.remove(url)
         if (videoId != null) {
-            streamCache.computeIfPresent(videoId) { _, cached -> if (cached.url == url) null else cached }
+            streamCache.computeIfPresent(videoId) { _, cached -> if (url in cached.urls) null else cached }
         } else {
-            streamCache.entries.removeAll { it.value.url == url }
+            streamCache.entries.removeAll { url in it.value.urls }
         }
     }
 
-    /** Invalidates a failed playback URL and resolves a fresh URL once for the same video. */
+    /** Try another compatible format from the same player response before another network request. */
     suspend fun resolveFreshStreamUrl(failedUrl: String, fallbackVideoId: String? = null): String? {
         val videoId = streamVideoIdsByUrl[failedUrl] ?: fallbackVideoId ?: return null
+        val gate = streamResolutionGates.computeIfAbsent(videoId) { Mutex() }
+        val nextUrl = gate.withLock {
+            val cached = streamCache[videoId] ?: return@withLock null
+            if (cached.expiresAtMs <= System.currentTimeMillis()) return@withLock null
+            val failedIndex = cached.urls.indexOf(failedUrl)
+            if (failedIndex < 0) return@withLock null
+            val nextIndex = failedIndex + 1
+            if (nextIndex >= cached.urls.size) return@withLock null
+            streamCache[videoId] = cached.copy(activeIndex = nextIndex)
+            cached.urls[nextIndex]
+        }
+        if (nextUrl != null) {
+            Log.i(TAG, "Switching $videoId to another stream format")
+            return nextUrl
+        }
         invalidateStreamUrl(failedUrl)
         return resolveStreamUrl(videoId)
     }
 
-    private fun cacheStreamUrl(videoId: String, url: String, playerResponse: JSONObject) {
+    private fun cacheStreamUrl(videoId: String, urls: List<String>, playerResponse: JSONObject) {
         val expiresInSeconds = playerResponse.optJSONObject("streamingData")
             ?.optLong("expiresInSeconds", 240L)
             ?: 240L
         val safeLifetimeMs = (expiresInSeconds - 60L).coerceAtLeast(0L) * 1000L
-        streamVideoIdsByUrl[url] = videoId
+        urls.forEach { streamVideoIdsByUrl[it] = videoId }
         if (safeLifetimeMs == 0L) return
-        streamCache[videoId] = CachedStream(url, System.currentTimeMillis() + safeLifetimeMs)
+        streamCache[videoId] = CachedStream(urls, 0, System.currentTimeMillis() + safeLifetimeMs)
     }
 
     private suspend fun queryVisionOsStream(videoId: String, forceFreshVisitorData: Boolean): String? = withContext(Dispatchers.IO) {
@@ -320,9 +338,10 @@ object YouTubeMusicService {
                         Log.w(TAG, "VISIONOS returned $playability for $videoId")
                         return@withContext null
                     }
-                    val url = extractDirectAudioUrl(json)
-                    if (url != null) {
-                        cacheStreamUrl(videoId, url, json)
+                    val urls = extractDirectAudioUrls(json)
+                    if (urls.isNotEmpty()) {
+                        val url = urls.first()
+                        cacheStreamUrl(videoId, urls, json)
                         Log.d(TAG, "Successfully resolved VISIONOS audio stream for $videoId")
                         return@withContext url
                     }
@@ -342,52 +361,37 @@ object YouTubeMusicService {
         return@withContext null
     }
 
-    private fun extractDirectAudioUrl(playerResponseJson: JSONObject): String? {
-        val streamingData = playerResponseJson.optJSONObject("streamingData") ?: return null
+    private fun extractDirectAudioUrls(playerResponseJson: JSONObject): List<String> {
+        val streamingData = playerResponseJson.optJSONObject("streamingData") ?: return emptyList()
         val adaptiveFormats = streamingData.optJSONArray("adaptiveFormats")
         val formats = streamingData.optJSONArray("formats")
-
-        var bestAacUrl: String? = null
-        var bestAacBitrate = 0
-        var bestAlternativeAudioUrl: String? = null
-        var maxAltBitrate = 0
-
-        // 1. Scan adaptiveFormats (dedicated audio streams)
+        val aac = mutableListOf<Pair<Int, String>>()
+        val alternativeAudio = mutableListOf<Pair<Int, String>>()
+        val muxedMp4 = mutableListOf<Pair<Int, String>>()
         if (adaptiveFormats != null) {
             for (i in 0 until adaptiveFormats.length()) {
                 val format = adaptiveFormats.optJSONObject(i) ?: continue
                 val mimeType = format.optString("mimeType", "")
-                if (mimeType.contains("audio")) {
-                    val url = format.optString("url", "")
-                    if (url.isNotBlank()) {
-                        val itag = format.optInt("itag", 0)
-                        val bitrate = format.optInt("bitrate", 0)
-                        val isAac = mimeType.contains("mp4") || itag == 140 || itag == 139
-                        if (isAac && bitrate >= bestAacBitrate) {
-                            bestAacBitrate = bitrate
-                            bestAacUrl = url
-                        } else if (bitrate > maxAltBitrate) {
-                            maxAltBitrate = bitrate
-                            bestAlternativeAudioUrl = url
-                        }
-                    }
-                }
+                val url = format.optString("url", "")
+                if (!mimeType.startsWith("audio/") || url.isBlank()) continue
+                val entry = format.optInt("bitrate", 0) to url
+                if (mimeType.contains("mp4")) aac += entry else alternativeAudio += entry
             }
         }
-
-        // 2. Scan formats (muxed audio+video streams like itag 18, 22 as fallback)
-        if (bestAacUrl == null && bestAlternativeAudioUrl == null && formats != null) {
+        if (formats != null) {
             for (i in 0 until formats.length()) {
                 val format = formats.optJSONObject(i) ?: continue
                 val url = format.optString("url", "")
-                if (url.isNotBlank()) {
-                    Log.d(TAG, "Using fallback muxed format stream URL")
-                    return url
-                }
+                if (url.isNotBlank() && format.optString("mimeType").startsWith("video/mp4"))
+                    muxedMp4 += format.optInt("bitrate", 0) to url
             }
         }
-
-        return bestAacUrl ?: bestAlternativeAudioUrl
+        // AAC is most portable. A muxed MP4 is the next distinct decoder path;
+        // WebM/Opus is last because support differs across Android devices.
+        return (aac.sortedByDescending { it.first }.take(1) +
+            muxedMp4.sortedBy { it.first }.take(1) +
+            alternativeAudio.sortedByDescending { it.first }.take(1))
+            .map { it.second }.distinct()
     }
 
     /**
