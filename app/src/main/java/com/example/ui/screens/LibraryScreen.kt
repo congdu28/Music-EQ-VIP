@@ -253,6 +253,8 @@ fun LibraryScreen(
                         }
                     }
                 }
+                    }
+                }
             }
         }
 
@@ -906,30 +908,32 @@ fun CompactSongItem(
 
             Spacer(modifier = Modifier.width(11.dp))
 
-            // Title & Artist
+            // Keep the full row width for a two-line title. Actions sit with
+            // secondary metadata, so they never squeeze the song name.
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.title,
                     color = if (isCurrentSong) NeonCyan else TextPrimary,
                     fontSize = 14.sp,
+                    lineHeight = 18.sp,
                     fontWeight = if (isCurrentSong) FontWeight.Bold else FontWeight.Medium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.height(1.dp))
+                Spacer(modifier = Modifier.height(3.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = song.artist,
                         color = TextSecondary,
-                    fontSize = 12.sp,
+                        fontSize = 11.5.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false)
+                        modifier = Modifier.weight(1f)
                     )
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     if (song.isHiRes) {
                         Surface(
@@ -946,40 +950,31 @@ fun CompactSongItem(
                             )
                         }
                     }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(5.dp))
-
-            Text(
-                text = String.format("%d:%02d", durationMinutes, durationSeconds),
-                color = TextSecondary,
-                fontSize = 11.sp,
-                modifier = Modifier.width(42.dp),
-                textAlign = androidx.compose.ui.text.style.TextAlign.End
-            )
-
-            Spacer(modifier = Modifier.width(2.dp))
-
-            // Action Buttons
-            IconToggleButton(
-                checked = song.isFavorite,
-                onCheckedChange = { onFavoriteClick() },
-                modifier = Modifier.size(38.dp).testTag("favorite_button_${song.id}")
-            ) {
-                Icon(
-                    imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
-                    tint = if (song.isFavorite) NeonPink else TextMuted,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
-
-            Box {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = String.format("%d:%02d", durationMinutes, durationSeconds),
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                        modifier = Modifier.width(37.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.End
+                    )
+                    IconToggleButton(
+                        checked = song.isFavorite,
+                        onCheckedChange = { onFavoriteClick() },
+                        modifier = Modifier.size(40.dp).testTag("favorite_button_${song.id}")
+                    ) {
+                        Icon(
+                            imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
+                            tint = if (song.isFavorite) NeonPink else TextMuted,
+                            modifier = Modifier.size(19.dp)
+                        )
+                    }
+                    Box {
                 IconButton(
                     onClick = { showMenu = true },
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(40.dp)
                         .testTag("song_menu_button_${song.id}")
                 ) {
                     Icon(
@@ -1027,6 +1022,8 @@ fun CompactSongItem(
                             onViewSpecs()
                         }
                     )
+                }
+                    }
                 }
             }
         }

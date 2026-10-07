@@ -254,7 +254,7 @@ fun NowPlayingScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val compactWidth = configuration.screenWidthDp < 360
     val lyricsPanelHeight = (screenHeight * 0.45f).coerceIn(250.dp, 430.dp)
-    val artworkSize = (screenHeight * 0.27f).coerceIn(165.dp, 220.dp)
+    val artworkSize = (screenHeight * 0.245f).coerceIn(145.dp, 195.dp)
     val isLyricsMode = displayMode == NowPlayingDisplayMode.FULL_LYRICS
 
     // Use the accent selected in Settings throughout the player.
@@ -501,7 +501,7 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(7.dp))
 
             NowPlayingModeSelector(
                 mode = displayMode,
@@ -509,7 +509,7 @@ fun NowPlayingScreen(
                 onModeChange = { displayMode = it }
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(7.dp))
 
             // MAIN ARTWORK / LYRICS VIEW: Perfectly proportioned to avoid vertical squishing
             AnimatedContent(
@@ -1117,23 +1117,49 @@ fun NowPlayingScreen(
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.width(48.dp),
+                    modifier = Modifier.width(42.dp),
                     textAlign = TextAlign.Start
                 )
 
-                // Format & Audio specs badge in middle (Fixed width/height, does NOT push time labels)
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = DarkSurfaceVariant,
-                    modifier = Modifier.clickable { viewModel.setShowAudioSpecs(true) }
+                IconButton(
+                    onClick = {
+                        viewModel.seekTo((currentPosition - 10_000L).coerceAtLeast(0L))
+                    },
+                    enabled = !playerState.isLoadingOnlineStream && playerState.totalDurationMs > 0L,
+                    modifier = Modifier.size(40.dp).testTag("now_playing_rewind_10_button")
                 ) {
-                    Text(
-                        text = if (song.isHiRes) "Hi-Res ${song.format}" else song.format,
-                        color = HiResGold,
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+                    Icon(Icons.Default.Replay10, contentDescription = "Lùi 10 giây", tint = animatedPrimary, modifier = Modifier.size(23.dp))
+                }
+
+                // The center slot flexes on narrow phones while the badge stays compact.
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = DarkSurfaceVariant,
+                        modifier = Modifier
+                            .widthIn(max = 100.dp)
+                            .clickable { viewModel.setShowAudioSpecs(true) }
+                    ) {
+                        Text(
+                            text = if (song.isHiRes) "Hi-Res ${song.format}" else song.format,
+                            color = HiResGold,
+                            fontSize = 9.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = {
+                        viewModel.seekTo((currentPosition + 10_000L).coerceAtMost(playerState.totalDurationMs))
+                    },
+                    enabled = !playerState.isLoadingOnlineStream && playerState.totalDurationMs > 0L,
+                    modifier = Modifier.size(40.dp).testTag("now_playing_forward_10_button")
+                ) {
+                    Icon(Icons.Default.Forward10, contentDescription = "Tới 10 giây", tint = animatedPrimary, modifier = Modifier.size(23.dp))
                 }
 
                 Text(
@@ -1142,7 +1168,7 @@ fun NowPlayingScreen(
                     fontSize = 11.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.width(48.dp),
+                    modifier = Modifier.width(42.dp),
                     textAlign = TextAlign.End
                 )
             }
