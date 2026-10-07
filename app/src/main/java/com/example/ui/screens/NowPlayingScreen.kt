@@ -772,7 +772,10 @@ fun NowPlayingScreen(
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, tint = NeonViolet, modifier = Modifier.size(16.dp))
                                                     Spacer(modifier = Modifier.width(8.dp))
-                                                    Text("Tìm/tạo lời bằng Gemini AI", color = TextPrimary, fontSize = 12.sp)
+                                                    Column {
+                                                        Text("Tìm/tạo lời bằng Gemini AI", color = TextPrimary, fontSize = 12.sp)
+                                                        Text("Có thể gửi âm thanh · lời có thể sai", color = TextSecondary, fontSize = 10.sp)
+                                                    }
                                                 }
                                             },
                                             onClick = {
@@ -859,7 +862,7 @@ fun NowPlayingScreen(
                                     }
                                     if (uiState.geminiLyricsSuggestionSongId == song.id && !uiState.isSearchingLyrics) {
                                         Spacer(modifier = Modifier.height(8.dp))
-                                        Text("Chưa có lời khớp. Gemini có thể tạo lời tham khảo; nội dung có thể sai.", color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
+                                        Text("Chưa có lời khớp. Gemini có thể nhận âm thanh để tạo lời tham khảo; nội dung có thể sai.", color = TextSecondary, fontSize = 11.sp, textAlign = TextAlign.Center)
                                         TextButton(onClick = { viewModel.searchLyricsOnline(song, useGemini = true) }) {
                                             Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(15.dp))
                                             Spacer(modifier = Modifier.width(5.dp))

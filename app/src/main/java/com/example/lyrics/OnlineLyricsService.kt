@@ -1,5 +1,7 @@
 package com.example.lyrics
 
+import android.content.Context
+import android.net.Uri
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -10,6 +12,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URLEncoder
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.util.concurrent.TimeUnit
 
 data class OnlineLyricsResult(
@@ -100,7 +104,10 @@ object OnlineLyricsService {
         apiKey: String = "",
         preferredModel: String? = null,
         useGemini: Boolean = false,
-        youtubeVideoId: String? = null
+        youtubeVideoId: String? = null,
+        localAudioPath: String? = null,
+        localAudioFormat: String? = null,
+        audioContext: Context? = null
     ): OnlineLyricsResult? = withContext(Dispatchers.IO) {
         var cleanTitle = cleanSearchTerm(rawTitle)
         var cleanArtist = cleanSearchTerm(rawArtist)
@@ -126,7 +133,9 @@ object OnlineLyricsService {
             ) ?: createGeminiLyrics(
                 title = cleanTitle, artist = cleanArtist, durationMs = durationMs,
                 apiKey = resolvedApiKey, preferredModel = preferredModel,
-                youtubeVideoId = youtubeVideoId
+                youtubeVideoId = youtubeVideoId,
+                localAudio = if (youtubeVideoId == null && audioContext != null && localAudioPath != null)
+                    readLocalAudio(audioContext, localAudioPath, localAudioFormat) else null
             )
         }
 
@@ -317,29 +326,79 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
     }
 
     /** The user explicitly opted in to AI lyrics; these are never presented as verified. */
+    private data class LocalAudio(val mimeType: String, val base64: String)
+
+    private fun readLocalAudio(context: Context, path: String, format: String?): LocalAudio? {
+        val uri = Uri.parse(path)
+        val input = try {
+            when (uri.scheme) {
+                "content", "file" -> context.contentResolver.openInputStream(uri)
+                null -> File(path).inputStream()
+                else -> null
+            }
+        } catch (error: Exception) {
+            Log.w(TAG, "Cannot open local audio for Gemini: ${error.message}")
+            null
+        } ?: return null
+        return try {
+            val maxBytes = 12 * 1024 * 1024
+            val bytes = ByteArrayOutputStream()
+            input.use { stream ->
+                val buffer = ByteArray(8192)
+                while (true) {
+                    val count = stream.read(buffer)
+                    if (count < 0) break
+                    if (bytes.size() + count > maxBytes) return null
+                    bytes.write(buffer, 0, count)
+                }
+            }
+            val extension = path.substringBefore('?').substringAfterLast('.', "")
+                .ifBlank { format.orEmpty() }.lowercase()
+            val fallbackMime = when (extension) {
+                "mp3" -> "audio/mpeg"
+                "m4a", "mp4", "aac" -> "audio/mp4"
+                "wav" -> "audio/wav"
+                "flac" -> "audio/flac"
+                "ogg" -> "audio/ogg"
+                else -> "audio/mpeg"
+            }
+            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+                ?.takeIf { it.startsWith("audio/") } ?: fallbackMime
+            LocalAudio(mime, android.util.Base64.encodeToString(bytes.toByteArray(), android.util.Base64.NO_WRAP))
+        } catch (error: Exception) {
+            Log.w(TAG, "Cannot read local audio for Gemini: ${error.message}")
+            null
+        }
+    }
+
     private fun createGeminiLyrics(
         title: String,
         artist: String,
         durationMs: Long,
         apiKey: String,
         preferredModel: String?,
-        youtubeVideoId: String?
+        youtubeVideoId: String?,
+        localAudio: LocalAudio?
     ): OnlineLyricsResult? {
         val videoId = youtubeVideoId?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{11}")) }
         val durationSec = (durationMs / 1000).coerceAtLeast(0)
         // The public YouTube URL input is a Gemini preview feature. If it is
         // unavailable for this track/key, fall back to clearly marked original text.
-        for (includeVideo in listOf(videoId != null, false).distinct()) {
-            val prompt = if (includeVideo) {
-                """Nghe phần âm thanh của video này cho bài "$title" - "$artist". Hãy ghi lại lời bạn nghe được và ước tính mốc thời gian LRC theo âm thanh. Nếu không nghe rõ, chỉ viết phần chắc chắn; không khẳng định đây là lời chính thức. Thời lượng tham khảo: $durationSec giây. Trả về JSON duy nhất: {"lyrics":"các dòng lời","synced_lrc":"[mm:ss.xx] từng dòng hoặc rỗng"}."""
+        for (includeAudio in listOf(videoId != null || localAudio != null, false).distinct()) {
+            val prompt = if (includeAudio) {
+                """Nghe phần âm thanh được cung cấp cho bài "$title" - "$artist". Hãy ghi lại lời bạn nghe được và ước tính mốc thời gian LRC theo âm thanh. Nếu không nghe rõ, chỉ viết phần chắc chắn; không khẳng định đây là lời chính thức. Thời lượng tham khảo: $durationSec giây. Trả về JSON duy nhất: {"lyrics":"các dòng lời","synced_lrc":"[mm:ss.xx] từng dòng hoặc rỗng"}."""
             } else {
                 """Không có âm thanh của bài "$title" - "$artist" để nghe. Hãy SÁNG TÁC lời tham khảo mới theo cảm hứng từ tên bài, không giả vờ là lời gốc hoặc đã nghe giai điệu. Thời lượng tham khảo: $durationSec giây. Trả về JSON duy nhất: {"lyrics":"các dòng lời mới","synced_lrc":""}."""
             }
             for (model in geminiModels(preferredModel)) {
                 try {
                     val parts = JSONArray()
-                    if (includeVideo && videoId != null) {
+                    if (includeAudio && videoId != null) {
                         parts.put(JSONObject().put("file_data", JSONObject().put("file_uri", "https://www.youtube.com/watch?v=$videoId")))
+                    } else if (includeAudio && localAudio != null) {
+                        parts.put(JSONObject().put("inline_data", JSONObject()
+                            .put("mime_type", localAudio.mimeType)
+                            .put("data", localAudio.base64)))
                     }
                     parts.put(JSONObject().put("text", prompt))
                     val payload = JSONObject().put("contents", JSONArray().put(JSONObject().put("parts", parts)))
@@ -362,7 +421,7 @@ Chỉ đặt confidence="high" nếu đã tìm được nguồn lời khớp bà
                         val json = runCatching { JSONObject(raw) }.getOrNull() ?: return@use
                         val lyrics = json.optString("lyrics").trim()
                         if (lyrics.length < 30) return@use
-                        val lrc = if (includeVideo) json.optString("synced_lrc").trim()
+                        val lrc = if (includeAudio) json.optString("synced_lrc").trim()
                             .takeIf { it.isNotBlank() }?.let { validateAlignedLyrics(lyrics, it, durationMs) }
                             else null
                         return OnlineLyricsResult(

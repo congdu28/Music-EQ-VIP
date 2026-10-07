@@ -856,6 +856,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             }
             val currentAppState = _appUiState.value
             val result = try {
+                val videoId = if (useGemini) {
+                    Regex("(?:/vi/|/v/|[?&]v=|yt://)([A-Za-z0-9_-]{11})")
+                        .find("${song.filePath} ${song.albumArtUri.orEmpty()}")?.groupValues?.getOrNull(1)
+                } else null
                 com.example.lyrics.OnlineLyricsService.fetchLyrics(
                     rawTitle = song.title,
                     rawArtist = song.artist,
@@ -863,10 +867,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     apiKey = currentAppState.geminiApiKey,
                     preferredModel = currentAppState.geminiModel,
                     useGemini = useGemini,
-                    youtubeVideoId = if (useGemini) {
-                        Regex("(?:/vi/|/v/|[?&]v=|yt://)([A-Za-z0-9_-]{11})")
-                            .find("${song.filePath} ${song.albumArtUri.orEmpty()}")?.groupValues?.getOrNull(1)
-                    } else null
+                    youtubeVideoId = videoId,
+                    localAudioPath = if (useGemini && videoId == null &&
+                        (song.filePath.startsWith("/") || song.filePath.startsWith("content://") || song.filePath.startsWith("file://")))
+                        song.filePath else null,
+                    localAudioFormat = song.format,
+                    audioContext = if (useGemini) getApplication<Application>() else null
                 )
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
