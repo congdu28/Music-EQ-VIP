@@ -64,6 +64,13 @@ enum class PlayerAmbientMode(val label: String) {
     ACCENT("Màu nhấn")
 }
 
+enum class PlayerAmbientStyle(val label: String) {
+    GLOW("Tỏa sáng"),
+    WAVE("Sóng"),
+    ROTATE("Xoay vòng"),
+    AURORA("Cực quang")
+}
+
 data class MusicFolder(
     val name: String,
     val path: String,
@@ -110,6 +117,8 @@ data class MusicAppUiState(
     val appearanceMode: String = "LIGHT",
     val accentColor: Int = 0xFF3399FF.toInt(),
     val playerAmbientMode: PlayerAmbientMode = PlayerAmbientMode.OFF,
+    val playerAmbientStyle: PlayerAmbientStyle = PlayerAmbientStyle.GLOW,
+    val playerAmbientSpeed: Float = 1f,
     val youtubeQuery: String = "",
     val youtubeSuggestions: List<String> = emptyList(),
     val selectedYouTubeCategory: String = "🔥 Hot V-Pop",
@@ -157,6 +166,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val savedAmbientMode = PlayerAmbientMode.entries.firstOrNull {
             it.name == savedAmbientModeName
         } ?: PlayerAmbientMode.OFF
+        val savedAmbientStyle = PlayerAmbientStyle.entries.firstOrNull {
+            it.name == repository.getPlayerAmbientStyle()
+        } ?: PlayerAmbientStyle.GLOW
+        val savedAmbientSpeed = repository.getPlayerAmbientSpeed()
         AppThemeColors.update(savedDarkTheme, Color(savedAccentColor))
         _appUiState.update {
             it.copy(
@@ -166,6 +179,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                 appearanceMode = savedAppearanceMode,
                 accentColor = savedAccentColor,
                 playerAmbientMode = savedAmbientMode,
+                playerAmbientStyle = savedAmbientStyle,
+                playerAmbientSpeed = savedAmbientSpeed,
                 showInitialScanRecommendation = repository.shouldRecommendInitialLibraryScan(),
                 hasCompletedLibraryScan = repository.hasCompletedLibraryScan(),
                 recentlyPlayedSongs = repository.getRecentlyPlayedSongs()
@@ -1046,6 +1061,17 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun setPlayerAmbientMode(mode: PlayerAmbientMode) {
         repository.setPlayerAmbientMode(mode.name)
         _appUiState.update { it.copy(playerAmbientMode = mode) }
+    }
+
+    fun setPlayerAmbientStyle(style: PlayerAmbientStyle) {
+        repository.setPlayerAmbientStyle(style.name)
+        _appUiState.update { it.copy(playerAmbientStyle = style) }
+    }
+
+    fun setPlayerAmbientSpeed(speed: Float) {
+        val clamped = speed.coerceIn(0.25f, 2f)
+        repository.setPlayerAmbientSpeed(clamped)
+        _appUiState.update { it.copy(playerAmbientSpeed = clamped) }
     }
 
     private fun lyricsTrackKey(song: Song): String = "${song.id}|${song.title}|${song.artist}"

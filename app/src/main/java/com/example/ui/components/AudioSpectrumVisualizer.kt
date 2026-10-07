@@ -1,12 +1,6 @@
 package com.example.ui.components
 
 import android.media.audiofx.Visualizer
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,6 +26,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextSecondary
 import kotlin.math.abs
@@ -67,19 +62,14 @@ fun AudioSpectrumVisualizer(
         fft.maxOrNull()?.let { it > 0.015f } == true
     }
     val useFallback = isPlaying && !hasCurrentSignal
-    val fallbackPhase = if (useFallback) {
-        val fallbackTransition = rememberInfiniteTransition(label = "fallback_visualizer")
-        fallbackTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = (2 * Math.PI).toFloat(),
-            animationSpec = infiniteRepeatable(
-                animation = tween(easing = LinearEasing, durationMillis = 900),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "fallback_phase"
-        ).value
-    } else {
-        0f
+    val fallbackPhaseState = produceState(0f, useFallback) {
+        value = 0f
+        if (useFallback) {
+            while (true) {
+                delay(50L)
+                value = (value + 0.22f) % (2f * Math.PI).toFloat()
+            }
+        }
     }
 
     DisposableEffect(audioSessionId, isPlaying, hasAudioCapturePermission) {
@@ -119,7 +109,7 @@ fun AudioSpectrumVisualizer(
                             }
                         }
                     }
-                }, (Visualizer.getMaxCaptureRate() / 2).coerceAtLeast(4_000), true, true)
+                }, (Visualizer.getMaxCaptureRate() / 2).coerceIn(4_000, 20_000), true, true)
                 instance.enabled = isPlaying
                 visualizer = instance
             } catch (_: Exception) {
@@ -207,24 +197,23 @@ fun AudioSpectrumVisualizer(
             modifier = Modifier.fillMaxWidth().weight(1f)
                 .then(if (onToggleStyle != null) Modifier.clickable(onClick = onToggleStyle) else Modifier)
         ) {
+            val fallbackPhase = fallbackPhaseState.value
             val centerY = size.height / 2f
             if (style == VisualizerStyle.WAVE) {
                 val path = Path()
                 val samples = waveform
                 if (samples.size > 1 && hasCurrentSignal) {
-                    val stride = (samples.size / size.width.toInt().coerceAtLeast(1)).coerceAtLeast(1)
-                    var point = 0
-                    while (point < size.width.toInt()) {
-                        val sampleIndex = (point * samples.size / size.width.toInt().coerceAtLeast(1)).coerceIn(0, samples.lastIndex)
-                        val x = point.toFloat()
+                    val pointCount = size.width.toInt().coerceIn(2, 256)
+                    for (point in 0 until pointCount) {
+                        val sampleIndex = (point * samples.size / pointCount).coerceIn(0, samples.lastIndex)
+                        val x = point.toFloat() / (pointCount - 1) * size.width
                         val y = centerY - samples[sampleIndex] * (size.height * 0.46f)
                         if (point == 0) path.moveTo(x, y) else path.lineTo(x, y)
-                        point += stride
                     }
                     drawPath(path, brush = gradientBrush, style = Stroke(width = 2.dp.toPx()))
                 } else if (isPlaying) {
                     val fallbackPath = Path()
-                    val points = size.width.toInt().coerceAtLeast(2)
+                    val points = 96
                     for (x in 0 until points) {
                         val progress = x.toFloat() / (points - 1)
                         val wave = sin(progress * Math.PI * 4 + fallbackPhase) * 0.55 +

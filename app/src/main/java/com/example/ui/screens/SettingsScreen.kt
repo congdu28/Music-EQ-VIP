@@ -45,6 +45,7 @@ import com.example.ui.MainTab
 import com.example.ui.MusicAppUiState
 import com.example.ui.MusicViewModel
 import com.example.ui.PlayerAmbientMode
+import com.example.ui.PlayerAmbientStyle
 import com.example.ui.theme.*
 
 @Composable
@@ -64,6 +65,7 @@ fun SettingsScreen(
     var showEqualizerOptions by remember { mutableStateOf(false) }
     var showLyricsAiOptions by remember { mutableStateOf(false) }
     var showAppInfo by remember { mutableStateOf(false) }
+    var ambientSpeedDraft by remember(uiState.playerAmbientSpeed) { mutableFloatStateOf(uiState.playerAmbientSpeed) }
 
     // Back gesture returns to Library
     BackHandler {
@@ -255,7 +257,56 @@ fun SettingsScreen(
                         }
                     }
                 }
-                Text("Màu ambient được hòa trộn từ ảnh bìa, RGB hoặc màu nhấn bạn chọn.", color = TextMuted, fontSize = 10.sp)
+                Text("Kiểu hiển thị", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PlayerAmbientStyle.entries.chunked(2).forEach { rowStyles ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowStyles.forEach { style ->
+                                val selected = uiState.playerAmbientStyle == style
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (selected) NeonViolet.copy(alpha = 0.16f) else DarkSurfaceVariant,
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonViolet else DarkBorder),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(42.dp)
+                                        .selectable(selected = selected, role = Role.RadioButton) {
+                                            viewModel.setPlayerAmbientStyle(style)
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(style.label, color = if (selected) NeonViolet else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Tốc độ chuyển động", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("${String.format(java.util.Locale.ROOT, "%.2f", ambientSpeedDraft)}×", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+                Slider(
+                    value = ambientSpeedDraft,
+                    onValueChange = { ambientSpeedDraft = it },
+                    onValueChangeFinished = { viewModel.setPlayerAmbientSpeed(ambientSpeedDraft) },
+                    valueRange = 0.25f..2f,
+                    steps = 6,
+                    colors = SliderDefaults.colors(
+                        thumbColor = NeonCyan,
+                        activeTrackColor = NeonCyan,
+                        inactiveTrackColor = DarkBorder
+                    ),
+                    modifier = Modifier.fillMaxWidth().testTag("player_ambient_speed_slider")
+                )
+                Text("Màu được hòa trộn từ ảnh bìa, RGB hoặc màu nhấn. Hiệu ứng chuyển động tạm dừng khi nhạc dừng.", color = TextMuted, fontSize = 10.sp)
             }
         }
 

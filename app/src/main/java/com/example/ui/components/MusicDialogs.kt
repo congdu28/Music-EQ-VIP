@@ -333,46 +333,67 @@ fun EditLyricsDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = offsetText,
-                        onValueChange = { offsetText = it },
-                        label = { Text("Độ trễ Offset (ms)") },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = NeonCyan,
-                            unfocusedBorderColor = DarkBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
-                        ),
-                        modifier = Modifier.weight(1f).testTag("lyrics_offset_input")
-                    )
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = {
-                            val current = offsetText.toLongOrNull() ?: 0L
-                            offsetText = (current + 500).toString()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant)
-                    ) {
-                        Text("+500ms", fontSize = 11.sp, color = TextPrimary)
+                BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                    val offsetField: @Composable () -> Unit = {
+                        OutlinedTextField(
+                            value = offsetText,
+                            onValueChange = { offsetText = it.filter { char -> char.isDigit() || char == '-' } },
+                            label = { Text("Độ trễ (ms)", maxLines = 1) },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberSigned),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = NeonCyan,
+                                unfocusedBorderColor = DarkBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("lyrics_offset_input")
+                        )
+                    }
+                    val adjustButtons: @Composable () -> Unit = {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = {
+                                    val current = offsetText.toLongOrNull() ?: 0L
+                                    offsetText = (current + 500).toString()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("+500 ms", fontSize = 12.sp, color = TextPrimary, maxLines = 1)
+                            }
+                            Button(
+                                onClick = {
+                                    val current = offsetText.toLongOrNull() ?: 0L
+                                    offsetText = (current - 500).toString()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("−500 ms", fontSize = 12.sp, color = TextPrimary, maxLines = 1)
+                            }
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(4.dp))
-
-                    Button(
-                        onClick = {
-                            val current = offsetText.toLongOrNull() ?: 0L
-                            offsetText = (current - 500).toString()
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceVariant)
-                    ) {
-                        Text("-500ms", fontSize = 11.sp, color = TextPrimary)
+                    if (maxWidth < 380.dp) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            offsetField()
+                            adjustButtons()
+                        }
+                    } else {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(modifier = Modifier.weight(1f)) { offsetField() }
+                            Box(modifier = Modifier.weight(0.9f)) { adjustButtons() }
+                        }
                     }
                 }
             }

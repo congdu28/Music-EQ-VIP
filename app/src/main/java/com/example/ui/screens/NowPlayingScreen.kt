@@ -28,6 +28,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
@@ -44,12 +46,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.model.Song
 import com.example.player.PlayerUiState
 import com.example.player.RepeatMode
 import com.example.ui.MainTab
 import com.example.ui.MusicViewModel
 import com.example.ui.PlayerAmbientMode
+import com.example.ui.PlayerAmbientStyle
 import com.example.ui.components.AudioSpectrumVisualizer
 import com.example.ui.theme.*
 import coil.Coil
@@ -58,6 +64,10 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.delay
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 enum class NowPlayingDisplayMode {
     ALBUM_ART,
@@ -90,6 +100,21 @@ fun NowPlayingScreen(
     val pendingOnlineSong = uiState.pendingOnlineSong
     val song = pendingOnlineSong ?: playerState.currentSong
     val equalizerState by viewModel.equalizerState.collectAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isAppResumed by remember(lifecycleOwner) {
+        mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> isAppResumed = true
+                Lifecycle.Event.ON_PAUSE -> isAppResumed = false
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Only a favorite selection opts into the dedicated blocking loading screen.
     // YouTube playback from search and other screens keeps the regular player UI.
@@ -223,18 +248,6 @@ fun NowPlayingScreen(
         return
     }
 
-    // Vinyl/Disc rotation animation
-    val infiniteTransition = rememberInfiniteTransition(label = "disc_spin")
-    val rotationAngle by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 360f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(22000, easing = LinearEasing),
-            repeatMode = androidx.compose.animation.core.RepeatMode.Restart
-        ),
-        label = "rotation"
-    )
-
     var isUserDragging by remember { mutableStateOf(false) }
     var dragProgress by remember { mutableFloatStateOf(0f) }
 
@@ -257,6 +270,20 @@ fun NowPlayingScreen(
     val lyricsPanelHeight = (screenHeight * 0.45f).coerceIn(250.dp, 430.dp)
     val artworkSize = (screenHeight * 0.245f).coerceIn(145.dp, 195.dp)
     val isLyricsMode = displayMode == NowPlayingDisplayMode.FULL_LYRICS
+
+    val infiniteTransition = rememberInfiniteTransition(label = "player_visual_motion")
+    val shouldAnimateDisc = playerState.isPlaying && isAppResumed && !isLyricsMode && song.albumArtUri.isNullOrBlank()
+    val discRotation = if (shouldAnimateDisc) {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(36_000, easing = LinearEasing),
+                repeatMode = androidx.compose.animation.core.RepeatMode.Restart
+            ),
+            label = "rotation"
+        )
+    } else null
 
     // Use the accent selected in Settings throughout the player.
     val selectedAccent = Color(uiState.accentColor)
@@ -300,17 +327,25 @@ fun NowPlayingScreen(
             }
         }
     }
-    val rgbHue = if (uiState.playerAmbientMode == PlayerAmbientMode.RGB || uiState.playerAmbientMode == PlayerAmbientMode.AURORA) {
-        val hue by infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(
-                tween(if (uiState.playerAmbientMode == PlayerAmbientMode.AURORA) 16_000 else 24_000, easing = LinearEasing)
-            ),
-            label = "ambient_rgb_hue"
-        )
-        hue
-    } else 0f
+    // Ambient motion updates at 20 fps only during playback. Pausing audio freezes
+    // the background phase, avoiding a continuous animation loop while idle.
+    val ambientPhaseState = produceState(
+        initialValue = 0f,
+        key1 = uiState.playerAmbientMode,
+        key2 = uiState.playerAmbientStyle,
+        key3 = uiState.playerAmbientSpeed to (playerState.isPlaying && isAppResumed)
+    ) {
+        value = 0f
+        if (uiState.playerAmbientMode != PlayerAmbientMode.OFF && playerState.isPlaying && isAppResumed) {
+            val frameDelayMs = 50L
+            val phaseStep = 2f * PI.toFloat() * uiState.playerAmbientSpeed / 600f
+            while (true) {
+                delay(frameDelayMs)
+                value = (value + phaseStep) % (2f * PI.toFloat())
+            }
+        }
+    }
+    val rgbHue = 0f
     val ambientColor = when (uiState.playerAmbientMode) {
         PlayerAmbientMode.OFF -> Color.Transparent
         PlayerAmbientMode.ALBUM -> albumAmbientColor ?: selectedAccent
@@ -333,10 +368,19 @@ fun NowPlayingScreen(
     }
     val animatedAmbient by animateColorAsState(
         targetValue = ambientColor,
-        animationSpec = tween(durationMillis = 500, easing = FastOutSlowInEasing),
-        label = "ambientColor"
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "ambientPrimaryColor"
     )
-
+    val animatedAmbientSecondary by animateColorAsState(
+        targetValue = ambientSecondary,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "ambientSecondaryColor"
+    )
+    val animatedAmbientTertiary by animateColorAsState(
+        targetValue = ambientTertiary,
+        animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing),
+        label = "ambientTertiaryColor"
+    )
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -347,39 +391,118 @@ fun NowPlayingScreen(
                 modifier = Modifier
                     .matchParentSize()
                     .drawBehind {
+                        val phase = ambientPhaseState.value
+                        val phaseTurn = phase / (2f * PI.toFloat())
+                        val hue = phaseTurn * 360f
+                        fun hueColor(shift: Float, saturation: Float): Color = Color(
+                            android.graphics.Color.HSVToColor(
+                                floatArrayOf((hue + shift) % 360f, saturation, 1f)
+                            )
+                        )
+                        val dynamicPrimary = when (uiState.playerAmbientMode) {
+                            PlayerAmbientMode.RGB -> hueColor(0f, 0.76f)
+                            PlayerAmbientMode.AURORA -> hueColor(0f, 0.88f)
+                            else -> animatedAmbient
+                        }
+                        val dynamicSecondary = when (uiState.playerAmbientMode) {
+                            PlayerAmbientMode.RGB -> hueColor(112f, 0.76f)
+                            PlayerAmbientMode.AURORA -> hueColor(118f, 0.86f)
+                            else -> animatedAmbientSecondary
+                        }
+                        val dynamicTertiary = when (uiState.playerAmbientMode) {
+                            PlayerAmbientMode.RGB -> hueColor(228f, 0.76f)
+                            PlayerAmbientMode.AURORA -> hueColor(238f, 0.86f)
+                            else -> animatedAmbientTertiary
+                        }
                         val baseAlpha = if (uiState.isDarkTheme) 0.35f else 0.19f
                         val glowAlpha = if (uiState.isDarkTheme) 0.62f else 0.34f
                         val radius = size.maxDimension * 0.95f
-                        drawRect(
-                            Brush.linearGradient(
-                                listOf(
-                                    animatedAmbient.copy(alpha = baseAlpha),
-                                    ambientSecondary.copy(alpha = baseAlpha * 0.92f),
-                                    ambientTertiary.copy(alpha = baseAlpha)
+                        when (uiState.playerAmbientStyle) {
+                            PlayerAmbientStyle.GLOW -> {
+                                val pulse = 0.9f + sin(phase) * 0.1f
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.92f),
+                                    dynamicTertiary.copy(alpha = baseAlpha)
+                                )))
+                                val glows = listOf(
+                                    Triple(dynamicPrimary, Offset(size.width * 0.20f, size.height * 0.22f), 1f),
+                                    Triple(dynamicSecondary, Offset(size.width * 0.85f, size.height * 0.52f), 0.9f),
+                                    Triple(dynamicTertiary, Offset(size.width * 0.35f, size.height * 0.95f), 0.8f)
                                 )
-                            )
-                        )
-                        drawRect(
-                            Brush.radialGradient(
-                                colors = listOf(animatedAmbient.copy(alpha = glowAlpha), Color.Transparent),
-                                center = Offset(size.width * 0.20f, size.height * 0.22f),
-                                radius = radius
-                            )
-                        )
-                        drawRect(
-                            Brush.radialGradient(
-                                colors = listOf(ambientSecondary.copy(alpha = glowAlpha * 0.92f), Color.Transparent),
-                                center = Offset(size.width * 0.85f, size.height * 0.52f),
-                                radius = radius * 0.9f
-                            )
-                        )
-                        drawRect(
-                            Brush.radialGradient(
-                                colors = listOf(ambientTertiary.copy(alpha = glowAlpha * 0.74f), Color.Transparent),
-                                center = Offset(size.width * 0.35f, size.height * 0.95f),
-                                radius = radius * 0.8f
-                            )
-                        )
+                                glows.forEach { (color, center, radiusScale) ->
+                                    drawRect(Brush.radialGradient(
+                                        colors = listOf(color.copy(alpha = glowAlpha * pulse), Color.Transparent),
+                                        center = center,
+                                        radius = radius * radiusScale
+                                    ))
+                                }
+                            }
+                            PlayerAmbientStyle.WAVE -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.4f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.35f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.4f)
+                                )))
+                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
+                                    val wavePath = Path()
+                                    val centerY = size.height * (0.28f + index * 0.22f)
+                                    val amplitude = size.height * (0.07f + index * 0.012f)
+                                    val phaseOffset = index * (2f * PI.toFloat() / 3f)
+                                    for (point in 0..48) {
+                                        val fraction = point / 48f
+                                        val x = fraction * size.width
+                                        val y = centerY + sin(fraction * 2f * PI.toFloat() * 1.35f + phase + phaseOffset) * amplitude
+                                        if (point == 0) wavePath.moveTo(x, y) else wavePath.lineTo(x, y)
+                                    }
+                                    drawPath(
+                                        wavePath,
+                                        color.copy(alpha = if (uiState.isDarkTheme) 0.24f else 0.16f),
+                                        style = Stroke(width = size.height * 0.07f)
+                                    )
+                                }
+                            }
+                            PlayerAmbientStyle.ROTATE -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.7f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.55f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.7f)
+                                )))
+                                val orbitRadiusX = size.width * 0.34f
+                                val orbitRadiusY = size.height * 0.26f
+                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
+                                    val angle = phase + index * (2f * PI.toFloat() / 3f)
+                                    val center = Offset(
+                                        size.width * 0.5f + cos(angle) * orbitRadiusX,
+                                        size.height * 0.5f + sin(angle) * orbitRadiusY
+                                    )
+                                    drawRect(Brush.radialGradient(
+                                        colors = listOf(color.copy(alpha = glowAlpha * 0.78f), Color.Transparent),
+                                        center = center,
+                                        radius = radius * 0.82f
+                                    ))
+                                }
+                            }
+                            PlayerAmbientStyle.AURORA -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.8f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.85f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.8f)
+                                )))
+                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
+                                    val wave = sin(phase + index * (2f * PI.toFloat() / 3f))
+                                    val center = Offset(
+                                        size.width * (0.15f + index * 0.34f),
+                                        size.height * (0.22f + (wave + 1f) * 0.28f)
+                                    )
+                                    drawRect(Brush.radialGradient(
+                                        colors = listOf(color.copy(alpha = glowAlpha * 0.82f), Color.Transparent),
+                                        center = center,
+                                        radius = radius * 0.9f
+                                    ))
+                                }
+                            }
+                        }
                     }
             )
         }
@@ -629,7 +752,7 @@ fun NowPlayingScreen(
                                             modifier = Modifier
                                                 .size(108.dp)
                                                 .graphicsLayer {
-                                                    rotationZ = if (playerState.isPlaying) rotationAngle else 0f
+                                                    rotationZ = discRotation?.value ?: 0f
                                                 }
                                                 .clip(CircleShape)
                                                 .background(Color(0xFF13171F)),
