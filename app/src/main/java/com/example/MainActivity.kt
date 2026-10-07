@@ -535,11 +535,8 @@ fun MainAppScreen(viewModel: MusicViewModel) {
             song = song,
             playlists = uiState.playlists,
             onDismiss = { viewModel.setShowAddToPlaylist(null) },
-            onSelectPlaylist = { playlist -> viewModel.addSongToPlaylist(playlist.id, song.id) },
-            onCreateNewPlaylist = {
-                viewModel.setShowAddToPlaylist(null)
-                viewModel.setShowCreatePlaylist(true)
-            }
+            onSelectPlaylist = { playlist -> viewModel.addSongToPlaylist(playlist.id, song) },
+            onCreateNewPlaylist = { viewModel.createPlaylistForSong(song) }
         )
     }
 

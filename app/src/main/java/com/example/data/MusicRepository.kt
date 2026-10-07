@@ -19,6 +19,7 @@ import com.example.model.PlaylistSongCrossRef
 import com.example.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -190,7 +191,16 @@ class MusicRepository(private val context: Context) {
     }
 
     val allSongs: Flow<List<Song>> = db.songDao().getAllSongs()
-    val favoriteSongs: Flow<List<Song>> = db.songDao().getFavoriteSongs()
+    val favoriteSongs: Flow<List<Song>> = combine(db.songDao().getFavoriteSongs(), allSongs) { favorites, songs ->
+        val downloadedByVideoId = songs.asSequence()
+            .filter { it.album == "YouTube Offline" && File(it.filePath).isFile }
+            .mapNotNull { offline -> youtubeVideoId(offline)?.let { it to offline } }
+            .toMap()
+        favorites.map { favorite ->
+            val localCopy = youtubeVideoId(favorite)?.let(downloadedByVideoId::get)
+            if (localCopy == null) favorite else localCopy.copy(isFavorite = true)
+        }.distinctBy { youtubeVideoId(it)?.let { id -> "youtube:$id" } ?: "song:${it.id}" }
+    }
     val allPlaylists: Flow<List<Playlist>> = db.playlistDao().getAllPlaylists()
     val allPresets: Flow<List<EqualizerPreset>> = db.equalizerDao().getAllPresets()
 
@@ -502,20 +512,46 @@ class MusicRepository(private val context: Context) {
 
     suspend fun toggleFavorite(song: Song): Boolean = withContext(Dispatchers.IO) {
         val dao = db.songDao()
-        val updatedRows = dao.toggleFavorite(song.id)
-        if (updatedRows == 0) {
-            // Online YouTube songs are not part of the local scan. Store them on first favorite
-            // action so the same favorites flow and screen can manage them reliably. Keep the
-            // stable video ID instead of an expiring resolved stream URL.
-            val reusableSong = YouTubeMusicService.videoIdFor(song)
-                ?.let { song.copy(filePath = "yt://$it") }
-                ?: song
-            dao.insertSong(reusableSong.copy(isFavorite = true))
-            true
+        val videoId = youtubeVideoId(song)
+        if (videoId != null) {
+            val relatedEntries = dao.getAllSongsList().filter { candidate ->
+                candidate.filePath == "yt://$videoId" ||
+                    ((candidate.album == "YouTube Offline" || candidate.album == "YouTube Online") && youtubeVideoId(candidate) == videoId)
+            }
+            val shouldFavorite = !song.isFavorite
+            if (relatedEntries.isNotEmpty()) {
+                relatedEntries.forEach { dao.updateSong(it.copy(isFavorite = shouldFavorite)) }
+            } else {
+                // Persist the stable video ID rather than an expiring stream URL.
+                dao.insertSong(
+                    song.copy(
+                        id = 0L,
+                        album = "YouTube Online",
+                        filePath = "yt://$videoId",
+                        format = "YouTube Online",
+                        isFavorite = true
+                    )
+                )
+            }
+            return@withContext shouldFavorite
+        }
+
+        val existing = song.id.takeIf { it > 0L }?.let { dao.getSongById(it) }
+        if (existing != null) {
+            val updated = existing.copy(isFavorite = !existing.isFavorite)
+            dao.updateSong(updated)
+            updated.isFavorite
         } else {
-            dao.getSongById(song.id)?.isFavorite ?: false
+            dao.insertSong(song.copy(id = 0L, isFavorite = true))
+            true
         }
     }
+
+    private fun youtubeVideoId(song: Song): String? =
+        YouTubeMusicService.videoIdFor(song)
+            ?: song.takeIf { it.album == "YouTube Offline" }
+                ?.let { File(it.filePath).nameWithoutExtension }
+                ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,20}")) }
 
     suspend fun updateSongLyrics(songId: Long, lyrics: String, offsetMs: Long) = withContext(Dispatchers.IO) {
         db.songDao().updateLyrics(songId, lyrics, offsetMs)
@@ -538,8 +574,22 @@ class MusicRepository(private val context: Context) {
     suspend fun addDownloadedYouTubeSong(song: Song, audioFile: File, format: String, bitrateKbps: Int): Song =
         withContext(Dispatchers.IO) {
             val path = audioFile.absolutePath
-            val existing = db.songDao().getSongByFilePath(path)
-            if (existing != null) return@withContext existing
+            val dao = db.songDao()
+            val videoId = youtubeVideoId(song)
+            val relatedFavorite = videoId?.let { id ->
+                song.isFavorite || dao.getAllSongsList().any { candidate ->
+                    candidate.isFavorite &&
+                        (candidate.filePath == "yt://$id" ||
+                            ((candidate.album == "YouTube Offline" || candidate.album == "YouTube Online") && youtubeVideoId(candidate) == id))
+                }
+            } ?: song.isFavorite
+            val existing = dao.getSongByFilePath(path)
+            if (existing != null) {
+                if (!relatedFavorite || existing.isFavorite) return@withContext existing
+                val updated = existing.copy(isFavorite = true)
+                dao.updateSong(updated)
+                return@withContext updated
+            }
 
             val offlineSong = song.copy(
                 id = 0L,
@@ -548,10 +598,10 @@ class MusicRepository(private val context: Context) {
                 format = format.uppercase(),
                 bitrateKbps = bitrateKbps.takeIf { it > 0 } ?: song.bitrateKbps,
                 isHiRes = false,
-                isFavorite = false,
+                isFavorite = relatedFavorite,
                 addedTimestamp = System.currentTimeMillis()
             )
-            val insertedId = db.songDao().insertSong(offlineSong)
+            val insertedId = dao.insertSong(offlineSong)
             offlineSong.copy(id = insertedId)
         }
 
@@ -588,6 +638,46 @@ class MusicRepository(private val context: Context) {
 
     suspend fun addSongToPlaylist(playlistId: Long, songId: Long) = withContext(Dispatchers.IO) {
         db.playlistDao().addSongToPlaylist(PlaylistSongCrossRef(playlistId, songId))
+    }
+
+    suspend fun addSongToPlaylist(playlistId: Long, song: Song): Song = withContext(Dispatchers.IO) {
+        val songDao = db.songDao()
+        val videoId = youtubeVideoId(song)
+        val storedSong = if (videoId != null) {
+            val allStoredSongs = songDao.getAllSongsList()
+            val offlineCopy = allStoredSongs.firstOrNull { candidate ->
+                candidate.album == "YouTube Offline" &&
+                    File(candidate.filePath).isFile &&
+                    youtubeVideoId(candidate) == videoId
+            }
+            val existingOnlineEntry = allStoredSongs.firstOrNull { candidate ->
+                candidate.album == "YouTube Online" && youtubeVideoId(candidate) == videoId
+            }
+            offlineCopy
+                ?: existingOnlineEntry
+                ?: songDao.getSongByFilePath("yt://$videoId")
+                ?: run {
+                    val onlineSong = song.copy(
+                        id = 0L,
+                        album = "YouTube Online",
+                        filePath = "yt://$videoId",
+                        format = "YouTube Online",
+                        isFavorite = false
+                    )
+                    val insertedId = songDao.insertSong(onlineSong)
+                    onlineSong.copy(id = insertedId)
+                }
+        } else {
+            song.id.takeIf { it > 0L }?.let { songDao.getSongById(it) }
+                ?: songDao.getSongByFilePath(song.filePath)
+                ?: run {
+                    val newSong = song.copy(id = 0L)
+                    val insertedId = songDao.insertSong(newSong)
+                    newSong.copy(id = insertedId)
+                }
+        }
+        db.playlistDao().addSongToPlaylist(PlaylistSongCrossRef(playlistId, storedSong.id))
+        storedSong
     }
 
     fun getSongsForPlaylist(playlistId: Long): Flow<List<Song>> {

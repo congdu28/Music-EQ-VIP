@@ -106,6 +106,7 @@ data class MusicAppUiState(
     val showInitialScanRecommendation: Boolean = false,
     val showCreatePlaylistDialog: Boolean = false,
     val showAddToPlaylistDialog: Song? = null,
+    val pendingPlaylistSongForCreation: Song? = null,
     val showEditMetadataDialog: Song? = null,
     val showEditLyricsDialog: Boolean = false,
     val showSleepTimerDialog: Boolean = false,
@@ -156,6 +157,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var youtubeLoadMoreJob: Job? = null
     private val youtubeDownloadJobs = mutableMapOf<String, Job>()
 
+    private fun reconcileDownloadedFavoriteState(songs: List<Song>, favorites: List<Song>): List<Song> {
+        val favoriteVideoIds = favorites.mapNotNull { favorite ->
+            com.example.data.YouTubeMusicService.videoIdFor(favorite)
+                ?: favorite.takeIf { it.album == "YouTube Offline" }?.let { File(it.filePath).nameWithoutExtension }
+        }.toSet()
+        val onlineFavoriteStateById = songs.asSequence()
+            .filter { it.album == "YouTube Online" || it.filePath.startsWith("yt://") }
+            .mapNotNull { online -> com.example.data.YouTubeMusicService.videoIdFor(online)?.let { it to online.isFavorite } }
+            .groupBy({ it.first }, { it.second })
+            .mapValues { (_, favoriteStates) -> favoriteStates.any { it } }
+        return songs.map { candidate ->
+            if (candidate.album != "YouTube Offline") candidate
+            else {
+                val videoId = File(candidate.filePath).nameWithoutExtension
+                val isFavorite = when {
+                    videoId in favoriteVideoIds -> true
+                    videoId in onlineFavoriteStateById -> onlineFavoriteStateById[videoId] == true
+                    else -> candidate.isFavorite
+                }
+                candidate.copy(isFavorite = isFavorite)
+            }
+        }
+    }
+
     init {
         val savedKey = repository.getGeminiApiKey()
         val savedModel = repository.getGeminiModel()
@@ -203,7 +228,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     .mapNotNull { File(it.filePath).nameWithoutExtension }
                     .toSet()
                 _appUiState.update {
-                    it.copy(songs = songList, downloadedYouTubeVideoIds = downloadedVideoIds)
+                    it.copy(
+                        songs = reconcileDownloadedFavoriteState(songList, it.favoriteSongs),
+                        downloadedYouTubeVideoIds = downloadedVideoIds
+                    )
                 }
                 // Pre-load queue and first song ready WITHOUT auto-playing
                 if (playerController.uiState.value.currentSong == null && songList.isNotEmpty()) {
@@ -216,7 +244,12 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
         viewModelScope.launch {
             repository.favoriteSongs.collect { favs ->
-                _appUiState.update { it.copy(favoriteSongs = favs) }
+                _appUiState.update {
+                    it.copy(
+                        favoriteSongs = favs,
+                        songs = reconcileDownloadedFavoriteState(it.songs, favs)
+                    )
+                }
             }
         }
 
@@ -486,6 +519,14 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     /** Prefer the library's local copy for results that have already been downloaded. */
     fun playYouTubeQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
+        playQueue(songs, startIndex)
+    }
+
+    private fun resolveDownloadedYouTubeCopies(songs: List<Song>): List<Song> {
+        val favoritedVideoIds = _appUiState.value.favoriteSongs.mapNotNull { favorite ->
+            com.example.data.YouTubeMusicService.videoIdFor(favorite)
+                ?: favorite.takeIf { it.album == "YouTube Offline" }?.let { File(it.filePath).nameWithoutExtension }
+        }.toSet()
         val offlineByVideoId = _appUiState.value.songs
             .asSequence()
             .filter { it.album == "YouTube Offline" && File(it.filePath).isFile }
@@ -495,11 +536,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     ?.let { videoId -> videoId to local }
             }
             .toMap()
-        val resolvedQueue = songs.map { online ->
-            val videoId = com.example.data.YouTubeMusicService.videoIdFor(online)
-            videoId?.let(offlineByVideoId::get) ?: online
+        return songs.map { candidate ->
+            val videoId = com.example.data.YouTubeMusicService.videoIdFor(candidate)
+            val localCopy = videoId?.let(offlineByVideoId::get)
+            if (localCopy == null) {
+                candidate.copy(isFavorite = candidate.isFavorite || videoId?.let { it in favoritedVideoIds } == true)
+            } else {
+                localCopy.copy(isFavorite = candidate.isFavorite || localCopy.isFavorite || videoId?.let { it in favoritedVideoIds } == true)
+            }
         }
-        playQueue(resolvedQueue, startIndex.coerceIn(0, resolvedQueue.lastIndex))
     }
 
     fun setSearchQuery(query: String) {
@@ -675,7 +720,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun toggleFavorite(song: Song) {
         viewModelScope.launch {
             val isFavorite = repository.toggleFavorite(song)
-            playerController.updateFavoriteState(song.id, isFavorite)
+            val currentSong = playerState.value.currentSong
+            val songVideoId = com.example.data.YouTubeMusicService.videoIdFor(song)
+                ?: song.takeIf { it.album == "YouTube Offline" }?.let { File(it.filePath).nameWithoutExtension }
+            val currentVideoId = currentSong?.let { current ->
+                com.example.data.YouTubeMusicService.videoIdFor(current)
+                    ?: current.takeIf { it.album == "YouTube Offline" }?.let { File(it.filePath).nameWithoutExtension }
+            }
+            val playerSongId = if (song.id > 0L) song.id else currentSong?.takeIf { songVideoId != null && songVideoId == currentVideoId }?.id ?: song.id
+            playerController.updateFavoriteState(playerSongId, isFavorite)
             val recentSongs = _appUiState.value.recentlyPlayedSongs.map { recent ->
                 if (recent.id == song.id) recent.copy(isFavorite = isFavorite) else recent
             }
@@ -688,20 +741,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun playAllSequential(songs: List<Song>, startIndex: Int = 0) {
         clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
-        playerController.playAllSequential(songs, startIndex)
+        playerController.playAllSequential(resolveDownloadedYouTubeCopies(songs), startIndex)
     }
 
     fun playAllShuffled(songs: List<Song>) {
         clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
-        playerController.playAllShuffled(songs)
+        playerController.playAllShuffled(resolveDownloadedYouTubeCopies(songs))
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
         clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
-        playerController.playQueue(songs, startIndex)
+        playerController.playQueue(resolveDownloadedYouTubeCopies(songs), startIndex)
     }
 
     /** Keep the playlist detail visible so playback can use the persistent mini-player. */
@@ -709,18 +762,21 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         if (songs.isEmpty()) return
         clearPendingOnlineSelection()
         _appUiState.update { it.copy(currentTab = MainTab.LIBRARY) }
-        playerController.playQueue(songs, startIndex)
+        playerController.playQueue(resolveDownloadedYouTubeCopies(songs), startIndex)
     }
 
     fun playFavoriteQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
         val selectedIndex = startIndex.coerceIn(0, songs.lastIndex)
         val selectedSong = songs[selectedIndex]
+        val resolvedSelectedSong = resolveDownloadedYouTubeCopies(listOf(selectedSong)).first()
         val isYouTubeFavorite = selectedSong.filePath.startsWith("yt://") ||
-            selectedSong.format.contains("YouTube", ignoreCase = true)
+            selectedSong.album.equals("YouTube Online", ignoreCase = true) ||
+            selectedSong.format.contains("YouTube", ignoreCase = true) ||
+            com.example.data.YouTubeMusicService.videoIdFor(selectedSong) != null
 
         clearPendingOnlineSelection()
-        if (!isYouTubeFavorite) {
+        if (!isYouTubeFavorite || resolvedSelectedSong.album == "YouTube Offline") {
             playQueue(songs, selectedIndex)
             return
         }
@@ -736,7 +792,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 // Give Compose a frame to show the pending song before MediaPlayer teardown.
                 delay(64)
-                playerController.playQueue(songs, selectedIndex)
+                playerController.playQueue(resolveDownloadedYouTubeCopies(songs), selectedIndex)
                 // Some saved YouTube favorites already contain a resolved HTTP stream URL.
                 // That path prepares asynchronously without setting isLoadingOnlineStream or
                 // publishing currentSong immediately, so keep the pending screen until either
@@ -766,7 +822,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     fun playSong(song: Song) {
         clearPendingOnlineSelection()
         setTab(MainTab.NOW_PLAYING)
-        playerController.playSong(song)
+        playerController.playSong(resolveDownloadedYouTubeCopies(listOf(song)).first())
     }
 
     private fun clearPendingOnlineSelection() {
@@ -1193,8 +1249,32 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createPlaylist(name: String, desc: String) {
         viewModelScope.launch {
-            repository.createPlaylist(name, desc)
-            _appUiState.update { it.copy(showCreatePlaylistDialog = false) }
+            try {
+                val playlistId = repository.createPlaylist(name, desc)
+                val pendingSong = _appUiState.value.pendingPlaylistSongForCreation
+                if (pendingSong != null) repository.addSongToPlaylist(playlistId, pendingSong)
+                _appUiState.update {
+                    it.copy(
+                        showCreatePlaylistDialog = false,
+                        pendingPlaylistSongForCreation = null,
+                        scanResultMessage = pendingSong?.let { song -> "Đã tạo danh sách và thêm '${song.title}'." }
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                android.util.Log.e("MusicViewModel", "Unable to create playlist", error)
+                _appUiState.update { it.copy(scanResultMessage = "Không thể tạo danh sách phát: ${error.message ?: "lỗi dữ liệu"}") }
+            }
+        }
+    }
+
+    fun createPlaylistForSong(song: Song) {
+        _appUiState.update {
+            it.copy(
+                showAddToPlaylistDialog = null,
+                showCreatePlaylistDialog = true,
+                pendingPlaylistSongForCreation = song
+            )
         }
     }
 
@@ -1205,7 +1285,32 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun setShowCreatePlaylist(show: Boolean) = _appUiState.update { it.copy(showCreatePlaylistDialog = show) }
+    fun addSongToPlaylist(playlistId: Long, song: Song) {
+        viewModelScope.launch {
+            try {
+                repository.addSongToPlaylist(playlistId, song)
+                _appUiState.update {
+                    it.copy(
+                        showAddToPlaylistDialog = null,
+                        scanResultMessage = "Đã thêm '${song.title}' vào danh sách phát."
+                    )
+                }
+            } catch (error: Throwable) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                android.util.Log.e("MusicViewModel", "Unable to add song to playlist", error)
+                _appUiState.update {
+                    it.copy(scanResultMessage = "Không thể thêm '${song.title}' vào danh sách phát: ${error.message ?: "lỗi dữ liệu"}")
+                }
+            }
+        }
+    }
+
+    fun setShowCreatePlaylist(show: Boolean) = _appUiState.update {
+        it.copy(
+            showCreatePlaylistDialog = show,
+            pendingPlaylistSongForCreation = if (show) it.pendingPlaylistSongForCreation else null
+        )
+    }
     fun setShowAddToPlaylist(song: Song?) = _appUiState.update { it.copy(showAddToPlaylistDialog = song) }
     fun setShowEditLyrics(show: Boolean) = _appUiState.update { it.copy(showEditLyricsDialog = show) }
     fun setShowSleepTimer(show: Boolean) = _appUiState.update { it.copy(showSleepTimerDialog = show) }
@@ -1214,8 +1319,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     fun getFilteredSongs(): List<Song> {
         val query = _appUiState.value.searchQuery.trim().lowercase()
+        val favoriteVideoIds = _appUiState.value.favoriteSongs.mapNotNull { favorite ->
+            com.example.data.YouTubeMusicService.videoIdFor(favorite)
+                ?: favorite.takeIf { it.album == "YouTube Offline" }?.let { File(it.filePath).nameWithoutExtension }
+        }.toSet()
         val all = when (_appUiState.value.librarySubTab) {
-            LibrarySubTab.ALL_SONGS -> _appUiState.value.songs.filterNot { it.isFavorite }
+            LibrarySubTab.ALL_SONGS -> _appUiState.value.songs.filterNot { song ->
+                song.isFavorite || (song.album == "YouTube Offline" &&
+                    File(song.filePath).nameWithoutExtension in favoriteVideoIds)
+            }
             LibrarySubTab.FOLDERS -> _appUiState.value.songs
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,16 +58,16 @@ fun SettingsScreen(
     onRequestScan: () -> Unit = { viewModel.scanDeviceAudio() },
     modifier: Modifier = Modifier
 ) {
-    var showCustomAccentDialog by remember { mutableStateOf(false) }
-    var showAmbientOptions by remember { mutableStateOf(false) }
-    var showFormats by remember { mutableStateOf(false) }
-    var showLibraryOptions by remember { mutableStateOf(false) }
-    var showSleepTimerOptions by remember { mutableStateOf(false) }
-    var showCrossfadeOptions by remember { mutableStateOf(false) }
-    var showEqualizerOptions by remember { mutableStateOf(false) }
-    var showLyricsAiOptions by remember { mutableStateOf(false) }
-    var showAppInfo by remember { mutableStateOf(false) }
-    var ambientSpeedDraft by remember(uiState.playerAmbientSpeed) { mutableFloatStateOf(uiState.playerAmbientSpeed) }
+    var showCustomAccentDialog by rememberSaveable { mutableStateOf(false) }
+    var showAmbientOptions by rememberSaveable { mutableStateOf(false) }
+    var showFormats by rememberSaveable { mutableStateOf(false) }
+    var showLibraryOptions by rememberSaveable { mutableStateOf(false) }
+    var showSleepTimerOptions by rememberSaveable { mutableStateOf(false) }
+    var showCrossfadeOptions by rememberSaveable { mutableStateOf(false) }
+    var showEqualizerOptions by rememberSaveable { mutableStateOf(false) }
+    var showLyricsAiOptions by rememberSaveable { mutableStateOf(false) }
+    var showAppInfo by rememberSaveable { mutableStateOf(false) }
+    var ambientSpeedDraft by rememberSaveable(uiState.playerAmbientSpeed) { mutableFloatStateOf(uiState.playerAmbientSpeed) }
 
     // Return to the actual parent screen (for example player → YouTube results).
     BackHandler {
