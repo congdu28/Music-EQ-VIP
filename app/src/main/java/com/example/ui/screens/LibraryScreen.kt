@@ -55,6 +55,8 @@ import com.example.ui.MusicFolder
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.*
 
+private val YouTubeTag = Color(0xFFFF4D6D)
+
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
 fun LibraryScreen(
@@ -290,7 +292,7 @@ fun LibraryScreen(
             LibrarySubTab.ALL_SONGS,
             LibrarySubTab.FAVORITES,
             LibrarySubTab.PLAYLISTS,
-            LibrarySubTab.ARTISTS
+            LibrarySubTab.YOUTUBE_DOWNLOADS
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
@@ -306,7 +308,7 @@ fun LibraryScreen(
                     LibrarySubTab.HI_RES -> "Hi-Res"
                     LibrarySubTab.FAVORITES -> "Yêu thích"
                     LibrarySubTab.PLAYLISTS -> "Playlist"
-                    LibrarySubTab.ARTISTS -> "Nghệ sĩ"
+                    LibrarySubTab.YOUTUBE_DOWNLOADS -> "Từ YouTube"
                     LibrarySubTab.RECENT -> "Gần đây"
                 }
                 Surface(
@@ -946,6 +948,21 @@ fun CompactSongItem(
                             Text(
                                 text = "Hi-Res",
                                 color = HiResGold,
+                                fontSize = 8.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    if (song.album == "YouTube Offline") {
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = YouTubeTag.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(0.6.dp, YouTubeTag.copy(alpha = 0.48f))
+                        ) {
+                            Text(
+                                text = "YouTube",
+                                color = YouTubeTag,
                                 fontSize = 8.sp,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)

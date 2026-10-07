@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.ui.MainTab
 import com.example.ui.MusicViewModel
+import com.example.model.Song
 import com.example.ui.components.*
 import com.example.ui.screens.*
 import com.example.ui.theme.*
@@ -75,6 +76,17 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     val playerState by viewModel.playerState.collectAsState()
     val equalizerState by viewModel.equalizerState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    var pendingYouTubeDownload by remember { mutableStateOf<Song?>(null) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> pendingYouTubeDownload?.let(viewModel::toggleYouTubeSongDownload); pendingYouTubeDownload = null }
+    val requestYouTubeDownload: (Song) -> Unit = { song ->
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            pendingYouTubeDownload = song
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else viewModel.toggleYouTubeSongDownload(song)
+    }
 
     LaunchedEffect(uiState.scanResultMessage) {
         uiState.scanResultMessage?.let { message ->
@@ -87,7 +99,6 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         viewModel.setTab(MainTab.LIBRARY)
     }
 
-    val context = LocalContext.current
     val visualizerPermission = Manifest.permission.RECORD_AUDIO
     var visualizerPermissionGranted by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, visualizerPermission) == PackageManager.PERMISSION_GRANTED)
@@ -434,14 +445,16 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                     YouTubeOnlineScreen(
                         viewModel = viewModel,
                         uiState = uiState,
-                        playerState = playerState
+                        playerState = playerState,
+                        onDownloadSong = requestYouTubeDownload
                     )
                 }
                 uiState.currentTab == MainTab.NOW_PLAYING -> {
                     NowPlayingScreen(
                         viewModel = viewModel,
                         playerState = playerState,
-                        hasAudioCapturePermission = visualizerPermissionGranted
+                        hasAudioCapturePermission = visualizerPermissionGranted,
+                        onDownloadSong = requestYouTubeDownload
                     )
                 }
                 uiState.currentTab == MainTab.LYRICS -> {

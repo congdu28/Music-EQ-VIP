@@ -41,7 +41,7 @@ enum class LibrarySubTab(val title: String) {
     HI_RES("Hi-Res FLAC/WAV"),
     FAVORITES("Yêu thích"),
     PLAYLISTS("Danh sách phát"),
-    ARTISTS("Nghệ sĩ"),
+    YOUTUBE_DOWNLOADS("Từ YouTube"),
     RECENT("Gần đây")
 }
 
@@ -115,12 +115,14 @@ data class MusicAppUiState(
     val youtubePaginationError: String? = null,
     val youtubeErrorMessage: String? = null,
     val youtubeDownloadProgress: Map<String, Int> = emptyMap(),
+    val youtubeDownloadBytes: Map<String, Long> = emptyMap(),
     val downloadedYouTubeVideoIds: Set<String> = emptySet()
 )
 
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
     val repository = MusicRepository(application)
+    private val youtubeDownloadNotifier = com.example.data.YouTubeDownloadNotifier(application)
     val equalizerManager = EqualizerManager(application)
     val playerController = MusicPlayerController(application, equalizerManager)
 
@@ -463,6 +465,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
         youtubeDownloadJobs[videoId]?.let {
             it.cancel()
+            youtubeDownloadNotifier.cancel(videoId)
             return
         }
         if (videoId in _appUiState.value.downloadedYouTubeVideoIds) {
@@ -471,7 +474,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         _appUiState.update { current ->
-            current.copy(youtubeDownloadProgress = current.youtubeDownloadProgress + (videoId to 0))
+            current.copy(
+                youtubeDownloadProgress = current.youtubeDownloadProgress + (videoId to 0),
+                youtubeDownloadBytes = current.youtubeDownloadBytes + (videoId to 0L),
+                scanResultMessage = "Đang tải '${song.title}' từ YouTube…"
+            )
         }
         val job = viewModelScope.launch {
             try {
@@ -479,14 +486,20 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     getApplication(),
                     song
                 ) { progress ->
+                    youtubeDownloadNotifier.progress(videoId, song.title, progress.downloadedBytes, progress.totalBytes)
                     _appUiState.update { current ->
                         val previous = current.youtubeDownloadProgress[videoId] ?: return@update current
-                        if (progress == 100 || progress != previous) {
-                            current.copy(youtubeDownloadProgress = current.youtubeDownloadProgress + (videoId to progress))
-                        } else current
+                        val percent = if (progress.totalBytes > 0L) {
+                            (progress.downloadedBytes * 100L / progress.totalBytes).toInt().coerceIn(0, 99)
+                        } else 0
+                        current.copy(
+                            youtubeDownloadProgress = current.youtubeDownloadProgress + (videoId to percent),
+                            youtubeDownloadBytes = current.youtubeDownloadBytes + (videoId to progress.downloadedBytes)
+                        )
                     }
                 }
                 repository.addDownloadedYouTubeSong(song, downloaded.file, downloaded.format)
+                youtubeDownloadNotifier.finished(videoId, song.title)
                 _appUiState.update { current ->
                     current.copy(
                         downloadedYouTubeVideoIds = current.downloadedYouTubeVideoIds + videoId,
@@ -494,8 +507,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                youtubeDownloadNotifier.cancel(videoId)
                 _appUiState.update { it.copy(scanResultMessage = "Đã hủy tải '${song.title}'.") }
             } catch (error: Throwable) {
+                youtubeDownloadNotifier.failed(videoId, song.title, error.message ?: "lỗi mạng")
                 android.util.Log.e("MusicViewModel", "YouTube download failed for $videoId", error)
                 _appUiState.update {
                     it.copy(scanResultMessage = "Không tải được '${song.title}': ${error.message ?: "lỗi mạng"}")
@@ -503,7 +518,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 youtubeDownloadJobs.remove(videoId)
                 _appUiState.update { current ->
-                    current.copy(youtubeDownloadProgress = current.youtubeDownloadProgress - videoId)
+                    current.copy(
+                        youtubeDownloadProgress = current.youtubeDownloadProgress - videoId,
+                        youtubeDownloadBytes = current.youtubeDownloadBytes - videoId
+                    )
                 }
             }
         }
@@ -1122,7 +1140,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
             LibrarySubTab.FAVORITES -> _appUiState.value.favoriteSongs
             LibrarySubTab.HI_RES -> _appUiState.value.songs.filter { it.isHiRes }
             LibrarySubTab.RECENT -> _appUiState.value.recentlyPlayedSongs
-            LibrarySubTab.ARTISTS, LibrarySubTab.PLAYLISTS -> _appUiState.value.songs
+            LibrarySubTab.YOUTUBE_DOWNLOADS -> _appUiState.value.songs.filter { it.album == "YouTube Offline" }
+            LibrarySubTab.PLAYLISTS -> _appUiState.value.songs
         }
         if (query.isEmpty()) return all
         return all.filter {

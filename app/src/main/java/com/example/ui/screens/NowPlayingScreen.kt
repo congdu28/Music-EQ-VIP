@@ -78,6 +78,7 @@ fun NowPlayingScreen(
     viewModel: MusicViewModel,
     playerState: PlayerUiState,
     hasAudioCapturePermission: Boolean = false,
+    onDownloadSong: (Song) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // Back navigation returns to library
@@ -467,19 +468,20 @@ fun NowPlayingScreen(
                                 .size(40.dp)
                                 .clip(CircleShape)
                                 .clickable(enabled = !isDownloaded || isDownloading) {
-                                    viewModel.toggleYouTubeSongDownload(song)
+                                    onDownloadSong(song)
                                 }
                                 .testTag("now_playing_youtube_download_button")
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 when {
-                                    isDownloading -> CircularProgressIndicator(
+                                    isDownloading && downloadProgress > 0 -> CircularProgressIndicator(
                                         progress = { downloadProgress.coerceIn(0, 100) / 100f },
                                         color = NeonPink,
                                         trackColor = DarkBorder,
                                         strokeWidth = 2.dp,
                                         modifier = Modifier.size(21.dp)
                                     )
+                                    isDownloading -> CircularProgressIndicator(color = NeonPink, strokeWidth = 2.dp, modifier = Modifier.size(21.dp))
                                     isDownloaded -> Icon(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = "Đã tải xuống",

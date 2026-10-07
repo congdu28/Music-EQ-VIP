@@ -48,11 +48,14 @@ import kotlinx.coroutines.flow.collect
 private val YouTubeRed = Color(0xFFFF0033)
 private val YouTubeRedLight = Color(0xFFFF4D6D)
 
+private fun formatDownloadBytes(bytes: Long): String = if (bytes < 1024 * 1024) "${bytes / 1024} KB" else "%.1f MB".format(bytes / (1024.0 * 1024.0))
+
 @Composable
 fun YouTubeOnlineScreen(
     viewModel: MusicViewModel,
     uiState: MusicAppUiState,
     playerState: PlayerUiState,
+    onDownloadSong: (Song) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isSearchFocused by remember { mutableStateOf(false) }
@@ -373,6 +376,7 @@ fun YouTubeOnlineScreen(
                                 isCurrentSong = isCurrent,
                                 isDownloading = videoId in uiState.youtubeDownloadProgress,
                                 downloadProgress = uiState.youtubeDownloadProgress[videoId] ?: 0,
+                                downloadedBytes = uiState.youtubeDownloadBytes[videoId] ?: 0L,
                                 isDownloaded = videoId in uiState.downloadedYouTubeVideoIds,
                                 onClick = {
                                     if (isCurrent && playerState.isPlaying) {
@@ -383,7 +387,7 @@ fun YouTubeOnlineScreen(
                                         viewModel.playQueue(uiState.youtubeSongs, index)
                                     }
                                 },
-                                onDownload = { viewModel.toggleYouTubeSongDownload(song) },
+                                onDownload = { onDownloadSong(song) },
                                 onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                                 onViewSpecs = { viewModel.setShowAudioSpecs(true) }
                             )
@@ -429,6 +433,7 @@ fun YouTubeSongItem(
     isCurrentSong: Boolean,
     isDownloading: Boolean,
     downloadProgress: Int,
+    downloadedBytes: Long,
     isDownloaded: Boolean,
     onClick: () -> Unit,
     onDownload: () -> Unit,
@@ -550,7 +555,7 @@ fun YouTubeSongItem(
                 )
 
                 Text(
-                    text = "Phát trực tuyến trên YouTube Music",
+                    text = if (isDownloading) "Đang tải · ${formatDownloadBytes(downloadedBytes)}" else "Phát trực tuyến trên YouTube Music",
                     color = TextMuted,
                     fontSize = 10.sp,
                     maxLines = 1,
@@ -566,13 +571,13 @@ fun YouTubeSongItem(
                 ) {
                     when {
                         isDownloading -> Box(contentAlignment = Alignment.Center) {
-                            CircularProgressIndicator(
-                                progress = { downloadProgress.coerceIn(0, 100) / 100f },
-                                color = YouTubeRed,
-                                trackColor = DarkBorder,
-                                strokeWidth = 2.dp,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            if (downloadProgress > 0) CircularProgressIndicator(
+                                    progress = { downloadProgress.coerceIn(0, 100) / 100f },
+                                    color = YouTubeRed,
+                                    trackColor = DarkBorder,
+                                    strokeWidth = 2.dp,
+                                    modifier = Modifier.size(22.dp)
+                                ) else CircularProgressIndicator(color = YouTubeRed, strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
                             Icon(Icons.Default.Close, contentDescription = "Hủy tải", tint = YouTubeRed, modifier = Modifier.size(12.dp))
                         }
                         isDownloaded -> Icon(Icons.Default.CheckCircle, contentDescription = "Đã tải", tint = NeonCyan, modifier = Modifier.size(20.dp))
@@ -602,7 +607,7 @@ fun YouTubeSongItem(
                             Text(
                                 when {
                                     isDownloaded -> "Đã tải vào thư viện offline"
-                                    isDownloading -> "Đang tải ${downloadProgress.coerceIn(0, 100)}%"
+                                    isDownloading -> "Đang tải ${formatDownloadBytes(downloadedBytes)}${if (downloadProgress > 0) " · ${downloadProgress.coerceIn(0, 100)}%" else ""}"
                                     else -> "Tải nhạc về thiết bị"
                                 },
                                 color = TextPrimary
