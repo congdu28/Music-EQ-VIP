@@ -162,6 +162,7 @@ fun NowPlayingScreen(
 
     var displayMode by remember { mutableStateOf(NowPlayingDisplayMode.ALBUM_ART) }
     var showSpeedDialog by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
 
     LaunchedEffect(song?.filePath) {
         if (song != null) displayMode = NowPlayingDisplayMode.ALBUM_ART
@@ -240,7 +241,11 @@ fun NowPlayingScreen(
     val activeIndex = uiState.activeLyricIndex
     val hasLyrics = parsedLyrics.lines.isNotEmpty()
     val hasSyncedLyrics = parsedLyrics.lines.any { it.timeMs >= 0 }
-    val artworkSize = (LocalConfiguration.current.screenHeightDp.dp * 0.27f).coerceIn(165.dp, 220.dp)
+    val screenHeight = configuration.screenHeightDp.dp
+    val compactWidth = configuration.screenWidthDp < 360
+    val lyricsPanelHeight = (screenHeight * 0.45f).coerceIn(250.dp, 430.dp)
+    val artworkSize = (screenHeight * 0.27f).coerceIn(165.dp, 220.dp)
+    val isLyricsMode = displayMode == NowPlayingDisplayMode.FULL_LYRICS
 
     // Use the accent selected in Settings throughout the player.
     val selectedAccent = Color(uiState.accentColor)
@@ -365,6 +370,7 @@ fun NowPlayingScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
+                .animateContentSize(animationSpec = tween(240, easing = FastOutSlowInEasing))
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -656,7 +662,7 @@ fun NowPlayingScreen(
                         }
                     }
                 } else {
-                    // Full Embedded Lyrics List View (Fixed height 240dp so controls stay stable)
+                    // Lyrics area adapts to the available device height; the outer player can scroll on compact screens.
                     val lyricsListState = rememberLazyListState()
                     LaunchedEffect(activeIndex) {
                         if (activeIndex >= 0 && activeIndex < parsedLyrics.lines.size) {
@@ -667,7 +673,7 @@ fun NowPlayingScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(240.dp),
+                            .height(lyricsPanelHeight),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Row(
@@ -848,8 +854,8 @@ fun NowPlayingScreen(
                                         Text(
                                             text = line.text,
                                             color = if (isActive) TextPrimary else TextSecondary.copy(alpha = 0.72f),
-                                            fontSize = if (isActive) 15.sp else 13.sp,
-                                            lineHeight = if (isActive) 23.sp else 20.sp,
+                                            fontSize = if (isActive) { if (compactWidth) 14.sp else 16.sp } else { if (compactWidth) 12.sp else 14.sp },
+                                            lineHeight = if (isActive) { if (compactWidth) 21.sp else 24.sp } else { if (compactWidth) 18.sp else 21.sp },
                                             fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
                                             textAlign = TextAlign.Center,
                                             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp)
@@ -862,157 +868,166 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Keep the song title to two lines so longer Vietnamese titles remain readable.
-            Row(
-                modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = !isLyricsMode,
+                enter = fadeIn(tween(180)) + expandVertically(expandFrom = Alignment.Top, animationSpec = tween(220)),
+                exit = fadeOut(tween(120)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(180)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = song.title,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        lineHeight = 21.sp,
-                        letterSpacing = (-0.2).sp,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = song.artist,
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Spacer(modifier = Modifier.height(10.dp))
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // COMPACT SYNCED LYRICS PILL (Strictly fixed 42dp height, NO layout jumping!)
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = DarkSurface.copy(alpha = 0.7f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable {
-                        if (hasLyrics) {
-                            displayMode = NowPlayingDisplayMode.FULL_LYRICS
-                        } else {
-                            viewModel.searchLyricsOnline(song)
+                    // Keep the song title to two lines so longer Vietnamese titles remain readable.
+                    Row(
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = song.title,
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 18.sp,
+                                lineHeight = 21.sp,
+                                letterSpacing = (-0.2).sp,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = song.artist,
+                                color = TextSecondary,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (hasLyrics) {
-                        val activeLineText = if (activeIndex >= 0 && activeIndex < parsedLyrics.lines.size) {
-                            parsedLyrics.lines[activeIndex].text
-                        } else song.title
 
-                        AnimatedContent(
-                            targetState = activeLineText,
-                            transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
-                            label = "lyric_line_crossfade"
-                        ) { lineText ->
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.MusicNote,
-                                    contentDescription = null,
-                                    tint = animatedPrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = lineText,
-                                    color = TextPrimary,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    textAlign = TextAlign.Center,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // COMPACT SYNCED LYRICS PILL (Strictly fixed 42dp height, NO layout jumping!)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = DarkSurface.copy(alpha = 0.7f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(46.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable {
+                                if (hasLyrics) {
+                                    displayMode = NowPlayingDisplayMode.FULL_LYRICS
+                                } else {
+                                    viewModel.searchLyricsOnline(song)
+                                }
                             }
-                        }
-                    } else {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp),
+                            contentAlignment = Alignment.Center
                         ) {
-                            if (uiState.isSearchingLyrics) {
-                                CircularProgressIndicator(
-                                    color = NeonPink,
-                                    strokeWidth = 2.dp,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = "Đang tự tìm lời trên mạng...",
-                                    color = TextSecondary,
-                                    fontSize = 11.5.sp
-                                )
+                            if (hasLyrics) {
+                                val activeLineText = if (activeIndex >= 0 && activeIndex < parsedLyrics.lines.size) {
+                                    parsedLyrics.lines[activeIndex].text
+                                } else song.title
+
+                                AnimatedContent(
+                                    targetState = activeLineText,
+                                    transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(150)) },
+                                    label = "lyric_line_crossfade"
+                                ) { lineText ->
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MusicNote,
+                                            contentDescription = null,
+                                            tint = animatedPrimary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = lineText,
+                                            color = TextPrimary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            textAlign = TextAlign.Center,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
                             } else {
-                                Icon(
-                                    imageVector = Icons.Default.CloudDownload,
-                                    contentDescription = null,
-                                    tint = animatedPrimary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Chưa có lời • Chạm để tìm online ngay",
-                                    color = animatedPrimary,
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    if (uiState.isSearchingLyrics) {
+                                        CircularProgressIndicator(
+                                            color = NeonPink,
+                                            strokeWidth = 2.dp,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Đang tự tìm lời trên mạng...",
+                                            color = TextSecondary,
+                                            fontSize = 11.5.sp
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Default.CloudDownload,
+                                            contentDescription = null,
+                                            tint = animatedPrimary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Chưa có lời • Chạm để tìm online ngay",
+                                            color = animatedPrimary,
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Live or simulated audio wave visualization
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = DarkSurface.copy(alpha = 0.5f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(76.dp)
+                    ) {
+                        AudioSpectrumVisualizer(
+                            isPlaying = playerState.isPlaying,
+                            audioSessionId = playerState.audioSessionId,
+                            hasAudioCapturePermission = hasAudioCapturePermission,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                            customColors = listOf(animatedPrimary, animatedSecondary, animatedPrimary),
+                            style = uiState.visualizerStyle,
+                            onToggleStyle = { viewModel.toggleVisualizerStyle() },
+                            onSelectStyle = { viewModel.setVisualizerStyle(it) }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Live or simulated audio wave visualization
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = DarkSurface.copy(alpha = 0.5f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(76.dp)
-            ) {
-                AudioSpectrumVisualizer(
-                    isPlaying = playerState.isPlaying,
-                    audioSessionId = playerState.audioSessionId,
-                    hasAudioCapturePermission = hasAudioCapturePermission,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 8.dp, vertical = 2.dp),
-                    customColors = listOf(animatedPrimary, animatedSecondary, animatedPrimary),
-                    style = uiState.visualizerStyle,
-                    onToggleStyle = { viewModel.toggleVisualizerStyle() },
-                    onSelectStyle = { viewModel.setVisualizerStyle(it) }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
 
             // IMMERSIVE PROGRESS SCRUBBER SLIDER
             Slider(
@@ -1189,175 +1204,184 @@ fun NowPlayingScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // DEDICATED QUICK CONTROLS BAR: SPEED, EQ, SLEEP TIMER, FAVORITE
-            // Fully responsive, auto-ellipsis, single-line protection, never wraps or clips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+            AnimatedVisibility(
+                visible = !isLyricsMode,
+                enter = fadeIn(tween(180)) + expandVertically(expandFrom = Alignment.Top, animationSpec = tween(220)),
+                exit = fadeOut(tween(120)) + shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(180)),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // 1. TỐC ĐỘ PHÁT (SPEED)
-                val isCustomSpeed = playerState.playbackSpeed != 1.0f
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isCustomSpeed) animatedPrimary.copy(alpha = 0.22f) else DarkSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (isCustomSpeed) animatedPrimary else DarkBorder
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { showSpeedDialog = true }
-                        .testTag("now_playing_speed_button")
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Speed,
-                            contentDescription = "Tốc độ phát",
-                            tint = if (isCustomSpeed) animatedPrimary else TextSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = String.format("%.2fx", playerState.playbackSpeed),
-                            color = if (isCustomSpeed) animatedPrimary else TextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                Column {
+                    Spacer(modifier = Modifier.height(10.dp))
 
-                // 2. EQUALIZER TRIGGER
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (equalizerState.isEnabled) animatedPrimary.copy(alpha = 0.15f) else DarkSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (equalizerState.isEnabled) animatedPrimary.copy(alpha = 0.6f) else DarkBorder
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { viewModel.setTab(MainTab.EQUALIZER) }
-                        .testTag("now_playing_eq_trigger_button")
-                ) {
+                    // DEDICATED QUICK CONTROLS BAR: SPEED, EQ, SLEEP TIMER, FAVORITE
+                    // Fully responsive, auto-ellipsis, single-line protection, never wraps or clips
                     Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Tune,
-                            contentDescription = "Bộ EQ",
-                            tint = if (equalizerState.isEnabled) animatedPrimary else TextSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "Bộ EQ",
-                            color = if (equalizerState.isEnabled) animatedPrimary else TextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                        // 1. TỐC ĐỘ PHÁT (SPEED)
+                        val isCustomSpeed = playerState.playbackSpeed != 1.0f
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isCustomSpeed) animatedPrimary.copy(alpha = 0.22f) else DarkSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isCustomSpeed) animatedPrimary else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { showSpeedDialog = true }
+                                .testTag("now_playing_speed_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = "Tốc độ phát",
+                                    tint = if (isCustomSpeed) animatedPrimary else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = String.format("%.2fx", playerState.playbackSpeed),
+                                    color = if (isCustomSpeed) animatedPrimary else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
 
-                // 3. SLEEP TIMER
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (playerState.isSleepTimerActive) NeonPink.copy(alpha = 0.2f) else DarkSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (playerState.isSleepTimerActive) NeonPink else DarkBorder
-                    ),
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { viewModel.setShowSleepTimer(true) }
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Bedtime,
-                            contentDescription = "Hẹn giờ",
-                            tint = if (playerState.isSleepTimerActive) NeonPink else TextSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = if (playerState.isSleepTimerActive) "${playerState.sleepTimerRemainingSeconds / 60}m" else "Hẹn giờ",
-                            color = if (playerState.isSleepTimerActive) NeonPink else TextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+                        // 2. EQUALIZER TRIGGER
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (equalizerState.isEnabled) animatedPrimary.copy(alpha = 0.15f) else DarkSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (equalizerState.isEnabled) animatedPrimary.copy(alpha = 0.6f) else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.setTab(MainTab.EQUALIZER) }
+                                .testTag("now_playing_eq_trigger_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = "Bộ EQ",
+                                    tint = if (equalizerState.isEnabled) animatedPrimary else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = "Bộ EQ",
+                                    color = if (equalizerState.isEnabled) animatedPrimary else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
 
-                // 4. YÊU THÍCH
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (song.isFavorite) NeonPink.copy(alpha = 0.16f) else DarkSurfaceVariant,
-                    border = androidx.compose.foundation.BorderStroke(
-                        1.dp,
-                        if (song.isFavorite) NeonPink.copy(alpha = 0.7f) else DarkBorder
-                    ),
-                    modifier = Modifier
-                        .weight(1.05f)
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .clickable { viewModel.toggleFavorite(song) }
-                        .testTag("now_playing_favorite_button")
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
-                            tint = if (song.isFavorite) NeonPink else TextSecondary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = if (song.isFavorite) "Đã thích" else "Yêu thích",
-                            color = if (song.isFavorite) NeonPink else TextPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        // 3. SLEEP TIMER
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (playerState.isSleepTimerActive) NeonPink.copy(alpha = 0.2f) else DarkSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (playerState.isSleepTimerActive) NeonPink else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.setShowSleepTimer(true) }
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Bedtime,
+                                    contentDescription = "Hẹn giờ",
+                                    tint = if (playerState.isSleepTimerActive) NeonPink else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (playerState.isSleepTimerActive) "${playerState.sleepTimerRemainingSeconds / 60}m" else "Hẹn giờ",
+                                    color = if (playerState.isSleepTimerActive) NeonPink else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        // 4. YÊU THÍCH
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (song.isFavorite) NeonPink.copy(alpha = 0.16f) else DarkSurfaceVariant,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (song.isFavorite) NeonPink.copy(alpha = 0.7f) else DarkBorder
+                            ),
+                            modifier = Modifier
+                                .weight(1.05f)
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.toggleFavorite(song) }
+                                .testTag("now_playing_favorite_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                    contentDescription = if (song.isFavorite) "Bỏ yêu thích" else "Thêm vào yêu thích",
+                                    tint = if (song.isFavorite) NeonPink else TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(3.dp))
+                                Text(
+                                    text = if (song.isFavorite) "Đã thích" else "Yêu thích",
+                                    color = if (song.isFavorite) NeonPink else TextPrimary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(14.dp))
                 }
             }
-
-            Spacer(modifier = Modifier.height(14.dp))
 
             // Playback Speed Dialog
             if (showSpeedDialog) {
@@ -1557,6 +1581,7 @@ private fun NowPlayingModeSelector(
         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
         modifier = Modifier
             .fillMaxWidth(0.90f)
+            .widthIn(max = 500.dp)
             .height(48.dp)
             .animateContentSize(animationSpec = tween(220, easing = FastOutSlowInEasing))
             .testTag("now_playing_mode_selector")
