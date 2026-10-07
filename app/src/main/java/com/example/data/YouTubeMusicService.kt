@@ -56,6 +56,7 @@ object YouTubeMusicService {
     private val visitorDataMutex = Mutex()
     private data class CachedStream(val url: String, val expiresAtMs: Long)
     private val streamCache = ConcurrentHashMap<String, CachedStream>()
+    private val streamVideoIdsByUrl = ConcurrentHashMap<String, String>()
     private val streamResolutionGates = ConcurrentHashMap<String, Mutex>()
     private val suggestionCache = ConcurrentHashMap<String, List<String>>()
 
@@ -154,7 +155,9 @@ object YouTubeMusicService {
             } catch (e: Throwable) {
                 Log.w(TAG, "Error fetching visitorData: ${e.message}")
             }
-            cachedVisitorData ?: ""
+            cachedVisitorData?.takeIf {
+                it.isNotBlank() && System.currentTimeMillis() < visitorDataExpiryTimestamp
+            } ?: ""
         }
     }
 
@@ -174,7 +177,9 @@ object YouTubeMusicService {
 
             val startedAt = System.nanoTime()
             val cached = streamCache[videoId]
-            if (cached != null) streamCache.remove(videoId, cached)
+            if (cached != null && streamCache.remove(videoId, cached)) {
+                streamVideoIdsByUrl.remove(cached.url, videoId)
+            }
 
             fun logResolved(source: String, url: String): String {
                 Log.d(TAG, "Resolved $videoId via $source in ${(System.nanoTime() - startedAt) / 1_000_000} ms")
@@ -225,6 +230,12 @@ object YouTubeMusicService {
                         Log.d(TAG, "Resolved stream via ANDROID_VR fallback for $videoId")
                         return@withLock logResolved("ANDROID_VR", url)
                     }
+                    Log.w(
+                        TAG,
+                        "ANDROID_VR returned no direct audio URL for $videoId; status=${json.optJSONObject("playabilityStatus")?.optString("status") ?: "unknown"}"
+                    )
+                } else {
+                    Log.w(TAG, "ANDROID_VR player request failed for $videoId: HTTP ${response.code}")
                 }
             }
             } catch (e: CancellationException) {
@@ -246,7 +257,19 @@ object YouTubeMusicService {
     }
 
     fun invalidateStreamUrl(url: String) {
-        streamCache.entries.removeAll { it.value.url == url }
+        val videoId = streamVideoIdsByUrl.remove(url)
+        if (videoId != null) {
+            streamCache.computeIfPresent(videoId) { _, cached -> if (cached.url == url) null else cached }
+        } else {
+            streamCache.entries.removeAll { it.value.url == url }
+        }
+    }
+
+    /** Invalidates a failed playback URL and resolves a fresh URL once for the same video. */
+    suspend fun resolveFreshStreamUrl(failedUrl: String, fallbackVideoId: String? = null): String? {
+        val videoId = streamVideoIdsByUrl[failedUrl] ?: fallbackVideoId ?: return null
+        invalidateStreamUrl(failedUrl)
+        return resolveStreamUrl(videoId)
     }
 
     private fun cacheStreamUrl(videoId: String, url: String, playerResponse: JSONObject) {
@@ -254,6 +277,7 @@ object YouTubeMusicService {
             ?.optLong("expiresInSeconds", 240L)
             ?: 240L
         val safeLifetimeMs = (expiresInSeconds - 60L).coerceAtLeast(0L) * 1000L
+        streamVideoIdsByUrl[url] = videoId
         if (safeLifetimeMs == 0L) return
         streamCache[videoId] = CachedStream(url, System.currentTimeMillis() + safeLifetimeMs)
     }
@@ -302,6 +326,12 @@ object YouTubeMusicService {
                         Log.d(TAG, "Successfully resolved VISIONOS audio stream for $videoId")
                         return@withContext url
                     }
+                    Log.w(
+                        TAG,
+                        "VISIONOS returned no direct audio URL for $videoId; status=${playability ?: "unknown"}"
+                    )
+                } else {
+                    Log.w(TAG, "VISIONOS player request failed for $videoId: HTTP ${response.code}")
                 }
             }
         } catch (e: CancellationException) {

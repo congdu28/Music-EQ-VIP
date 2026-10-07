@@ -23,11 +23,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
@@ -135,7 +130,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var youtubeSuggestionJob: Job? = null
     private var youtubeSearchJob: Job? = null
     private var youtubeLoadMoreJob: Job? = null
-    private var youtubePrewarmJob: Job? = null
 
     init {
         val savedKey = repository.getGeminiApiKey()
@@ -322,7 +316,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         youtubeSuggestionJob?.cancel()
         youtubeSearchJob?.cancel()
         youtubeLoadMoreJob?.cancel()
-        youtubePrewarmJob?.cancel()
         val category = _appUiState.value.selectedYouTubeCategory
         _appUiState.update {
             it.copy(
@@ -355,11 +348,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                             youtubeErrorMessage = if (page.songs.isEmpty()) "Không tìm thấy bài hát nào trên YouTube cho '$trimmed'" else null
                         )
                 }
-                if (_appUiState.value.youtubeQuery == trimmed &&
-                    _appUiState.value.selectedYouTubeCategory == category
-                ) {
-                    prewarmFirstYouTubeResult(page.songs)
-                }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (t: Throwable) {
@@ -379,7 +367,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         youtubeSuggestionJob?.cancel()
         youtubeSearchJob?.cancel()
         youtubeLoadMoreJob?.cancel()
-        youtubePrewarmJob?.cancel()
         _appUiState.update {
             it.copy(
                 selectedYouTubeCategory = category,
@@ -412,9 +399,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         youtubeContinuation = page.continuation,
                         youtubeErrorMessage = if (page.songs.isEmpty()) "Không thể tải danh mục '$category' từ YouTube. Vui lòng thử lại." else null
                     )
-                }
-                if (_appUiState.value.selectedYouTubeCategory == category && _appUiState.value.youtubeQuery.isBlank()) {
-                    prewarmFirstYouTubeResult(page.songs)
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
@@ -457,40 +441,6 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                     hasCompletedLibraryScan = true,
                     scanResultMessage = if (count > 0) "Đã quét và thêm $count bài hát mới vào thư viện" else "Thư viện đã được cập nhật đầy đủ"
                 )
-            }
-        }
-    }
-
-    /** Resolve only a small set of visible results, with bounded concurrency, to make taps faster. */
-    private fun prewarmFirstYouTubeResult(songs: List<Song>) {
-        val videoIds = songs.asSequence()
-            .take(4)
-            .mapNotNull { song ->
-                song.filePath.takeIf { it.startsWith("yt://") }
-                    ?.removePrefix("yt://")
-                    ?.takeIf(String::isNotBlank)
-            }
-            .distinct()
-            .toList()
-        if (videoIds.isEmpty()) return
-
-        youtubePrewarmJob?.cancel()
-        youtubePrewarmJob = viewModelScope.launch(Dispatchers.IO) {
-            val semaphore = Semaphore(2)
-            coroutineScope {
-                videoIds.map { videoId ->
-                    async {
-                        semaphore.withPermit {
-                            try {
-                                com.example.data.YouTubeMusicService.resolveStreamUrl(videoId)
-                            } catch (cancelled: kotlinx.coroutines.CancellationException) {
-                                throw cancelled
-                            } catch (error: Throwable) {
-                                android.util.Log.d("MusicViewModel", "YouTube stream prewarm skipped: ${error.message}")
-                            }
-                        }
-                    }
-                }.awaitAll()
             }
         }
     }

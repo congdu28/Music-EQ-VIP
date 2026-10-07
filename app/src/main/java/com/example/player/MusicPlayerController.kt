@@ -406,14 +406,16 @@ class MusicPlayerController(
     private fun playSongInternal(
         song: Song,
         sessionId: Long = currentPlaybackSessionId,
-        playbackRequestedAtNanos: Long = System.nanoTime()
+        playbackRequestedAtNanos: Long = System.nanoTime(),
+        youtubeRetryCount: Int = 0
     ) {
+        val isYouTubeOnline = song.filePath.startsWith("http", ignoreCase = true) &&
+            song.format.contains("YouTube", ignoreCase = true)
         try {
             crossfadeJob?.cancel()
             crossfadeJob = null
 
             val isOnline = song.filePath.startsWith("http://") || song.filePath.startsWith("https://")
-            val isYouTubeOnline = isOnline && song.format.contains("YouTube", ignoreCase = true)
             if (isYouTubeOnline) {
                 // Favorites may persist an already-resolved YouTube URL. Publish that selection
                 // and loading state before prepareAsync so the UI never retains the prior track.
@@ -479,11 +481,14 @@ class MusicPlayerController(
                 )
 
                 if (isOnline) {
-                    try {
-                        setDataSource(song.filePath)
-                    } catch (e: Exception) {
-                        val headers = mapOf("User-Agent" to com.example.data.YouTubeMusicService.AUDIO_USER_AGENT)
+                    if (isYouTubeOnline) {
+                        val headers = mapOf(
+                            "User-Agent" to com.example.data.YouTubeMusicService.AUDIO_USER_AGENT,
+                            "Referer" to "https://www.youtube.com/"
+                        )
                         setDataSource(context, Uri.parse(song.filePath), headers)
+                    } else {
+                        setDataSource(song.filePath)
                     }
                 } else {
                     val file = File(song.filePath)
@@ -594,9 +599,6 @@ class MusicPlayerController(
 
                 setOnErrorListener { mp, what, extra ->
                     Log.w(TAG, "MediaPlayer error: what=$what, extra=$extra")
-                    if (song.filePath.startsWith("http") && song.format.contains("YouTube", ignoreCase = true)) {
-                        com.example.data.YouTubeMusicService.invalidateStreamUrl(song.filePath)
-                    }
                     if (preparingPlayer == mp) {
                         preparingPlayer = null
                     }
@@ -608,7 +610,11 @@ class MusicPlayerController(
                         mp.release()
                     } catch (t: Throwable) {}
 
-                    _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                    val retryScheduled = isYouTubeOnline && youtubeRetryCount == 0 &&
+                        retryYouTubeStream(song, sessionId, playbackRequestedAtNanos, youtubeRetryCount)
+                    if (!retryScheduled) {
+                        _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                    }
                     // CRUCIAL: Return true so Android does NOT invoke OnCompletionListener and cascade to songs below!
                     true
                 }
@@ -618,12 +624,71 @@ class MusicPlayerController(
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error playing song: ${e.message}", e)
-            if (song.filePath.startsWith("http") && song.format.contains("YouTube", ignoreCase = true)) {
-                com.example.data.YouTubeMusicService.invalidateStreamUrl(song.filePath)
-            }
             preparingPlayer = null
-            _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+            val retryScheduled = isYouTubeOnline && youtubeRetryCount == 0 &&
+                retryYouTubeStream(song, sessionId, playbackRequestedAtNanos, youtubeRetryCount)
+            if (!retryScheduled) {
+                _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+            }
         }
+    }
+
+    private fun retryYouTubeStream(
+        song: Song,
+        sessionId: Long,
+        playbackRequestedAtNanos: Long,
+        retryCount: Int
+    ): Boolean {
+        if (retryCount >= 1 || currentPlaybackSessionId != sessionId) return false
+        Log.i(TAG, "Retrying failed YouTube stream with a fresh URL for '${song.title}'")
+        _uiState.update { it.copy(isLoadingOnlineStream = true, isPlaying = false) }
+        resolveStreamJob?.cancel()
+        resolveStreamJob = scope.launch {
+            val freshUrl = try {
+                withContext(Dispatchers.IO) {
+                    com.example.data.YouTubeMusicService.resolveFreshStreamUrl(
+                        failedUrl = song.filePath,
+                        fallbackVideoId = extractYouTubeVideoId(song.albumArtUri)
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                Log.w(TAG, "Fresh YouTube stream lookup failed for '${song.title}': ${error.message}")
+                null
+            }
+            if (currentPlaybackSessionId != sessionId) return@launch
+            if (freshUrl.isNullOrBlank()) {
+                Log.w(TAG, "Fresh YouTube stream retry returned no URL for '${song.title}'")
+                _uiState.update { it.copy(isLoadingOnlineStream = false, isPlaying = false) }
+                return@launch
+            }
+
+            val retrySong = song.copy(filePath = freshUrl)
+            _uiState.update { current ->
+                val updatedQueue = current.queue.map {
+                    if (it.filePath == song.filePath ||
+                        (it.id == song.id && it.title == song.title && it.artist == song.artist)
+                    ) retrySong else it
+                }
+                current.copy(
+                    queue = updatedQueue,
+                    currentSong = retrySong,
+                    isLoadingOnlineStream = true,
+                    isPlaying = false
+                )
+            }
+            playSongInternal(retrySong, sessionId, playbackRequestedAtNanos, retryCount + 1)
+        }
+        return true
+    }
+
+    private fun extractYouTubeVideoId(thumbnailUrl: String?): String? {
+        if (thumbnailUrl.isNullOrBlank()) return null
+        return Regex("(?:/vi/|/v/|[?&]v=)([A-Za-z0-9_-]{11})(?:[/&?]|$)")
+            .find(thumbnailUrl)
+            ?.groupValues
+            ?.getOrNull(1)
     }
 
 
