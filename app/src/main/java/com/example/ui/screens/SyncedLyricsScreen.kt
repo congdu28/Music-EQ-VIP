@@ -42,9 +42,9 @@ fun SyncedLyricsScreen(
     playerState: PlayerUiState,
     modifier: Modifier = Modifier
 ) {
-    // Back gesture returns to the player, where lyrics can be opened again from the quick tools.
+    // Return to the screen that opened lyrics.
     BackHandler {
-        viewModel.setTab(MainTab.NOW_PLAYING)
+        viewModel.goBack()
     }
 
     val song = playerState.currentSong
@@ -74,7 +74,7 @@ fun SyncedLyricsScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = { viewModel.setTab(MainTab.NOW_PLAYING) }) {
+                IconButton(onClick = { viewModel.goBack() }) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại trình phát", tint = TextPrimary)
                 }
                 Text(

@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -38,7 +37,6 @@ import coil.compose.AsyncImage
 import com.example.data.YouTubeMusicService
 import com.example.model.Song
 import com.example.player.PlayerUiState
-import com.example.ui.MainTab
 import com.example.ui.MusicAppUiState
 import com.example.ui.MusicViewModel
 import com.example.ui.theme.*
@@ -80,11 +78,6 @@ fun YouTubeOnlineScreen(
         }.distinctUntilChanged().collect { nearEnd ->
             if (nearEnd) viewModel.loadMoreYouTube()
         }
-    }
-
-    // Pressing system back returns to Library
-    BackHandler {
-        viewModel.setTab(MainTab.LIBRARY)
     }
 
     Column(
@@ -360,15 +353,13 @@ fun YouTubeOnlineScreen(
                         ) { index, song ->
                             val videoId = YouTubeMusicService.videoIdFor(song).orEmpty()
                             val current = playerState.currentSong
-                            val isPlayingOnline = current != null && (
-                                current.album == "YouTube Online" ||
-                                current.format.contains("YouTube") ||
-                                current.filePath.startsWith("yt://")
-                            )
-                            val isCurrent = isPlayingOnline && (
-                                current?.id == song.id ||
-                                (current?.filePath?.removePrefix("yt://") == song.filePath.removePrefix("yt://"))
-                            )
+                            val currentVideoId = current?.let { currentSong ->
+                                if (currentSong.album == "YouTube Offline") {
+                                    java.io.File(currentSong.filePath).nameWithoutExtension
+                                } else YouTubeMusicService.videoIdFor(currentSong)
+                            }
+                            val isCurrent = currentVideoId != null && currentVideoId == videoId
+                            val isCurrentOfflineCopy = current?.album == "YouTube Offline"
                             YouTubeSongItem(
                                 song = song,
                                 isPlaying = isCurrent && playerState.isPlaying,
@@ -379,12 +370,13 @@ fun YouTubeOnlineScreen(
                                 downloadedBytes = uiState.youtubeDownloadBytes[videoId] ?: 0L,
                                 isDownloaded = videoId in uiState.downloadedYouTubeVideoIds,
                                 onClick = {
-                                    if (isCurrent && playerState.isPlaying) {
+                                    val shouldPlayLocalCopy = videoId in uiState.downloadedYouTubeVideoIds && !isCurrentOfflineCopy
+                                    if (isCurrent && playerState.isPlaying && !shouldPlayLocalCopy) {
                                         viewModel.pausePlayback()
-                                    } else if (isCurrent && !playerState.isPlaying && !playerState.isLoadingOnlineStream) {
+                                    } else if (isCurrent && !playerState.isPlaying && !playerState.isLoadingOnlineStream && !shouldPlayLocalCopy) {
                                         viewModel.resumePlayback()
                                     } else {
-                                        viewModel.playQueue(uiState.youtubeSongs, index)
+                                        viewModel.playYouTubeQueue(uiState.youtubeSongs, index)
                                     }
                                 },
                                 onDownload = { onDownloadSong(song) },

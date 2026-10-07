@@ -91,9 +91,9 @@ fun NowPlayingScreen(
     onDownloadSong: (Song) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // Back navigation returns to library
+    // The ViewModel remembers which screen opened the player.
     BackHandler {
-        viewModel.setTab(MainTab.LIBRARY)
+        viewModel.goBack()
     }
 
     val uiState by viewModel.appUiState.collectAsState()
@@ -235,7 +235,7 @@ fun NowPlayingScreen(
                 Text("Hãy chọn một bài hát từ thư viện để bắt đầu thưởng thức", color = TextMuted, fontSize = 13.sp, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
-                    onClick = { viewModel.setTab(MainTab.LIBRARY) },
+                    onClick = { viewModel.goBack() },
                     colors = ButtonDefaults.buttonColors(containerColor = ElectricAzure, contentColor = AccentContent),
                     shape = RoundedCornerShape(24.dp)
                 ) {
@@ -502,6 +502,93 @@ fun NowPlayingScreen(
                                     ))
                                 }
                             }
+                            PlayerAmbientStyle.PULSE -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.75f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.5f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.75f)
+                                )))
+                                val breath = 0.72f + (sin(phase) + 1f) * 0.16f
+                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
+                                    val center = Offset(
+                                        size.width * (0.18f + index * 0.32f),
+                                        size.height * (0.36f + sin(phase + index * 2f) * 0.08f)
+                                    )
+                                    drawRect(Brush.radialGradient(
+                                        colors = listOf(color.copy(alpha = glowAlpha * 0.92f), color.copy(alpha = 0.08f), Color.Transparent),
+                                        center = center,
+                                        radius = radius * breath
+                                    ))
+                                }
+                            }
+                            PlayerAmbientStyle.DIAGONAL -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.65f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.5f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.65f)
+                                )))
+                                val drift = (phaseTurn % 1f) * size.width * 1.8f - size.width * 0.55f
+                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
+                                    val left = drift + index * size.width * 0.42f
+                                    val band = Path().apply {
+                                        moveTo(left, 0f)
+                                        lineTo(left + size.width * 0.2f, 0f)
+                                        lineTo(left - size.width * 0.3f, size.height)
+                                        lineTo(left - size.width * 0.5f, size.height)
+                                        close()
+                                    }
+                                    drawPath(band, color.copy(alpha = if (uiState.isDarkTheme) 0.18f else 0.12f))
+                                    drawRect(Brush.linearGradient(
+                                        colors = listOf(Color.Transparent, color.copy(alpha = glowAlpha * 0.58f), Color.Transparent),
+                                        start = Offset(left, size.height * 0.5f),
+                                        end = Offset(left + size.width * 0.45f, size.height * 0.5f)
+                                    ))
+                                }
+                            }
+                            PlayerAmbientStyle.RINGS -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.7f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.55f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.7f)
+                                )))
+                                val ringColors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary)
+                                for (ring in 0..4) {
+                                    val progress = (phaseTurn + ring * 0.2f) % 1f
+                                    val ringRadius = size.maxDimension * (0.14f + progress * 0.62f)
+                                    val alpha = (1f - progress) * if (uiState.isDarkTheme) 0.32f else 0.22f
+                                    drawCircle(
+                                        color = ringColors[ring % ringColors.size].copy(alpha = alpha),
+                                        radius = ringRadius,
+                                        center = Offset(size.width * 0.5f, size.height * 0.52f),
+                                        style = Stroke(width = size.minDimension * 0.028f)
+                                    )
+                                }
+                            }
+                            PlayerAmbientStyle.PARTICLES -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.65f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.45f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.65f)
+                                )))
+                                val particleColors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary)
+                                for (particle in 0 until 22) {
+                                    val xFraction = (particle * 0.618f + phaseTurn * 0.075f) % 1f
+                                    val yFraction = (particle * 0.417f + sin(phase * 0.7f + particle) * 0.08f + 1f) % 1f
+                                    val center = Offset(xFraction * size.width, yFraction * size.height)
+                                    val color = particleColors[particle % particleColors.size]
+                                    val particleRadius = size.minDimension * (0.012f + (particle % 3) * 0.004f)
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            listOf(color.copy(alpha = glowAlpha * 0.88f), color.copy(alpha = 0.24f), Color.Transparent),
+                                            center = center,
+                                            radius = particleRadius * 8f
+                                        ),
+                                        radius = particleRadius * 8f,
+                                        center = center
+                                    )
+                                    drawCircle(color.copy(alpha = if (uiState.isDarkTheme) 0.76f else 0.58f), particleRadius, center)
+                                }
+                            }
                         }
                     }
             )
@@ -532,7 +619,7 @@ fun NowPlayingScreen(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .clickable { viewModel.setTab(MainTab.LIBRARY) }
+                        .clickable { viewModel.goBack() }
                         .testTag("now_playing_minimize_button")
                 ) {
                     Box(contentAlignment = Alignment.Center) {

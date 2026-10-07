@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -77,6 +78,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
     val playerState by viewModel.playerState.collectAsState()
     val equalizerState by viewModel.equalizerState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val screenStateHolder = rememberSaveableStateHolder()
     val context = LocalContext.current
     var pendingYouTubeDownload by remember { mutableStateOf<Pair<Song, YouTubeDownloadQuality>?>(null) }
     var qualityPickerSong by remember { mutableStateOf<Song?>(null) }
@@ -104,9 +106,9 @@ fun MainAppScreen(viewModel: MusicViewModel) {
         }
     }
 
-    // Back button handling: return to Library tab if on another tab and no playlist is open
+    // Keep a single tab-aware Back handler so playback returns to its actual source screen.
     BackHandler(enabled = uiState.currentTab != MainTab.LIBRARY && uiState.selectedPlaylist == null) {
-        viewModel.setTab(MainTab.LIBRARY)
+        viewModel.goBack()
     }
 
     val visualizerPermission = Manifest.permission.RECORD_AUDIO
@@ -393,7 +395,7 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                                 if (uiState.selectedPlaylist != null) {
                                     viewModel.closePlaylist()
                                 }
-                                viewModel.setTab(tab)
+                                viewModel.selectMainTab(tab)
                             },
                             icon = {
                                 Icon(
@@ -431,65 +433,68 @@ fun MainAppScreen(viewModel: MusicViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            when {
-                uiState.selectedPlaylist != null -> {
-                    PlaylistDetailScreen(
-                        playlist = uiState.selectedPlaylist!!,
-                        songs = uiState.selectedPlaylistSongs,
-                        viewModel = viewModel,
-                        playerState = playerState,
-                        onBack = { viewModel.closePlaylist() }
-                    )
-                }
-                uiState.currentTab == MainTab.LIBRARY -> {
-                    LibraryScreen(
-                        viewModel = viewModel,
-                        uiState = uiState,
-                        playerState = playerState,
-                        onRequestScan = requestMusicScan,
-                        onPickAudioFolder = { pickAudioFolder(null) },
-                        onPickSuggestedFolder = pickAudioFolder
-                    )
-                }
-                uiState.currentTab == MainTab.YOUTUBE -> {
-                    YouTubeOnlineScreen(
-                        viewModel = viewModel,
-                        uiState = uiState,
-                        playerState = playerState,
-                        onDownloadSong = requestYouTubeDownload
-                    )
-                }
-                uiState.currentTab == MainTab.NOW_PLAYING -> {
-                    NowPlayingScreen(
-                        viewModel = viewModel,
-                        playerState = playerState,
-                        hasAudioCapturePermission = visualizerPermissionGranted,
-                        onDownloadSong = requestYouTubeDownload
-                    )
-                }
-                uiState.currentTab == MainTab.LYRICS -> {
-                    SyncedLyricsScreen(
-                        viewModel = viewModel,
-                        uiState = uiState,
-                        playerState = playerState
-                    )
-                }
-                uiState.currentTab == MainTab.EQUALIZER -> {
-                    EqualizerScreen(
-                        viewModel = viewModel,
-                        uiState = uiState,
-                        playerState = playerState,
-                        equalizerState = equalizerState
-                    )
-                }
-                uiState.currentTab == MainTab.SETTINGS -> {
-                    SettingsScreen(
-                        viewModel = viewModel,
-                        uiState = uiState,
-                        playerState = playerState,
-                        equalizerState = equalizerState,
-                        onRequestScan = requestMusicScan
-                    )
+            val screenKey = uiState.selectedPlaylist?.let { "playlist_${it.id}" } ?: uiState.currentTab.name
+            screenStateHolder.SaveableStateProvider(screenKey) {
+                when {
+                    uiState.selectedPlaylist != null -> {
+                        PlaylistDetailScreen(
+                            playlist = uiState.selectedPlaylist!!,
+                            songs = uiState.selectedPlaylistSongs,
+                            viewModel = viewModel,
+                            playerState = playerState,
+                            onBack = { viewModel.closePlaylist() }
+                        )
+                    }
+                    uiState.currentTab == MainTab.LIBRARY -> {
+                        LibraryScreen(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            playerState = playerState,
+                            onRequestScan = requestMusicScan,
+                            onPickAudioFolder = { pickAudioFolder(null) },
+                            onPickSuggestedFolder = pickAudioFolder
+                        )
+                    }
+                    uiState.currentTab == MainTab.YOUTUBE -> {
+                        YouTubeOnlineScreen(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            playerState = playerState,
+                            onDownloadSong = requestYouTubeDownload
+                        )
+                    }
+                    uiState.currentTab == MainTab.NOW_PLAYING -> {
+                        NowPlayingScreen(
+                            viewModel = viewModel,
+                            playerState = playerState,
+                            hasAudioCapturePermission = visualizerPermissionGranted,
+                            onDownloadSong = requestYouTubeDownload
+                        )
+                    }
+                    uiState.currentTab == MainTab.LYRICS -> {
+                        SyncedLyricsScreen(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            playerState = playerState
+                        )
+                    }
+                    uiState.currentTab == MainTab.EQUALIZER -> {
+                        EqualizerScreen(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            playerState = playerState,
+                            equalizerState = equalizerState
+                        )
+                    }
+                    uiState.currentTab == MainTab.SETTINGS -> {
+                        SettingsScreen(
+                            viewModel = viewModel,
+                            uiState = uiState,
+                            playerState = playerState,
+                            equalizerState = equalizerState,
+                            onRequestScan = requestMusicScan
+                        )
+                    }
                 }
             }
         }

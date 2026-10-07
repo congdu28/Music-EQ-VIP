@@ -87,9 +87,7 @@ fun EqualizerScreen(
             modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = {
-                viewModel.setTab(if (playerState.currentSong != null) com.example.ui.MainTab.NOW_PLAYING else com.example.ui.MainTab.SETTINGS)
-            }) {
+            IconButton(onClick = { viewModel.goBack() }) {
                 Icon(Icons.Default.ArrowBack, contentDescription = "Quay lại", tint = TextPrimary)
             }
             Column(modifier = Modifier.weight(1f)) {

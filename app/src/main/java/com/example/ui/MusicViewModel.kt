@@ -68,7 +68,11 @@ enum class PlayerAmbientStyle(val label: String) {
     GLOW("Tỏa sáng"),
     WAVE("Sóng"),
     ROTATE("Xoay vòng"),
-    AURORA("Cực quang")
+    AURORA("Cực quang"),
+    PULSE("Nhịp thở"),
+    DIAGONAL("Dải sáng"),
+    RINGS("Vòng sáng"),
+    PARTICLES("Hạt sáng")
 }
 
 data class MusicFolder(
@@ -142,6 +146,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _appUiState = MutableStateFlow(MusicAppUiState())
     private var pendingOnlinePlaybackJob: Job? = null
+    private val tabBackStack = mutableListOf<MainTab>()
     val appUiState: StateFlow<MusicAppUiState> = _appUiState.asStateFlow()
 
     val playerState: StateFlow<PlayerUiState> = playerController.uiState
@@ -305,6 +310,27 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun setTab(tab: MainTab) {
+        updateTab(tab, rememberPrevious = true)
+    }
+
+    /** Bottom-navigation taps establish a new root instead of growing Back history. */
+    fun selectMainTab(tab: MainTab) {
+        tabBackStack.clear()
+        updateTab(tab, rememberPrevious = false)
+    }
+
+    fun goBack() {
+        val current = _appUiState.value.currentTab
+        val previous = tabBackStack.removeLastOrNull() ?: MainTab.LIBRARY
+        updateTab(if (previous == current) MainTab.LIBRARY else previous, rememberPrevious = false)
+    }
+
+    private fun updateTab(tab: MainTab, rememberPrevious: Boolean) {
+        val current = _appUiState.value.currentTab
+        if (current != tab && rememberPrevious) {
+            tabBackStack.add(current)
+            if (tabBackStack.size > 16) tabBackStack.removeAt(0)
+        }
         _appUiState.update { it.copy(currentTab = tab) }
         val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.LYRICS)
         playerController.setHighPrecisionTracking(needsHighPrecision)
@@ -451,10 +477,29 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val ytSongs = _appUiState.value.youtubeSongs
         val index = ytSongs.indexOfFirst { it.filePath == song.filePath }
         if (index >= 0) {
-            playQueue(ytSongs, index)
+            playYouTubeQueue(ytSongs, index)
         } else {
-            playQueue(listOf(song), 0)
+            playYouTubeQueue(listOf(song), 0)
         }
+    }
+
+    /** Prefer the library's local copy for results that have already been downloaded. */
+    fun playYouTubeQueue(songs: List<Song>, startIndex: Int = 0) {
+        if (songs.isEmpty()) return
+        val offlineByVideoId = _appUiState.value.songs
+            .asSequence()
+            .filter { it.album == "YouTube Offline" && File(it.filePath).isFile }
+            .mapNotNull { local ->
+                File(local.filePath).nameWithoutExtension
+                    .takeIf(String::isNotBlank)
+                    ?.let { videoId -> videoId to local }
+            }
+            .toMap()
+        val resolvedQueue = songs.map { online ->
+            val videoId = com.example.data.YouTubeMusicService.videoIdFor(online)
+            videoId?.let(offlineByVideoId::get) ?: online
+        }
+        playQueue(resolvedQueue, startIndex.coerceIn(0, resolvedQueue.lastIndex))
     }
 
     fun setSearchQuery(query: String) {
@@ -520,10 +565,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
                         )
                     }
                 }
-                repository.addDownloadedYouTubeSong(song, downloaded.file, downloaded.format, downloaded.bitrateKbps)
+                val offlineSong = repository.addDownloadedYouTubeSong(song, downloaded.file, downloaded.format, downloaded.bitrateKbps)
                 youtubeDownloadNotifier.finished(videoId, song.title)
                 _appUiState.update { current ->
                     current.copy(
+                        songs = (current.songs.filterNot { it.filePath == offlineSong.filePath } + offlineSong),
                         downloadedYouTubeVideoIds = current.downloadedYouTubeVideoIds + videoId,
                         scanResultMessage = "Đã tải '${song.title}' vào thư viện offline."
                     )
@@ -682,6 +728,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         // Publish a screen-level loading selection before entering player cleanup/resolution.
         // That work can block on some devices, so the player screen must not depend on the
         // controller's currentSong changing first.
+        setTab(MainTab.NOW_PLAYING)
         _appUiState.update {
             it.copy(currentTab = MainTab.NOW_PLAYING, pendingOnlineSong = selectedSong)
         }

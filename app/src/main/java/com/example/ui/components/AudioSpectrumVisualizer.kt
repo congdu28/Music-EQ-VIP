@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -200,28 +202,53 @@ fun AudioSpectrumVisualizer(
             val fallbackPhase = fallbackPhaseState.value
             val centerY = size.height / 2f
             if (style == VisualizerStyle.WAVE) {
-                val path = Path()
                 val samples = waveform
-                if (samples.size > 1 && hasCurrentSignal) {
-                    val pointCount = size.width.toInt().coerceIn(2, 256)
-                    for (point in 0 until pointCount) {
-                        val sampleIndex = (point * samples.size / pointCount).coerceIn(0, samples.lastIndex)
-                        val x = point.toFloat() / (pointCount - 1) * size.width
-                        val y = centerY - samples[sampleIndex] * (size.height * 0.46f)
-                        if (point == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                fun drawSmoothWave(values: FloatArray) {
+                    if (values.size < 2 || size.width <= 0f || size.height <= 0f) return
+                    val pointCount = 160
+                    val path = Path()
+                    var previousX = 0f
+                    var previousY = centerY
+                    for (point in 0..pointCount) {
+                        val fraction = point.toFloat() / pointCount
+                        val sourcePosition = fraction * values.lastIndex
+                        val lowerIndex = sourcePosition.toInt().coerceIn(0, values.lastIndex)
+                        val upperIndex = (lowerIndex + 1).coerceAtMost(values.lastIndex)
+                        val interpolation = sourcePosition - lowerIndex
+                        val raw = values[lowerIndex] * (1f - interpolation) + values[upperIndex] * interpolation
+                        val left = values[(lowerIndex - 1).coerceAtLeast(0)]
+                        val right = values[(upperIndex + 1).coerceAtMost(values.lastIndex)]
+                        val smooth = left * 0.18f + raw * 0.64f + right * 0.18f
+                        val x = fraction * size.width
+                        val y = centerY - smooth * (size.height * 0.46f)
+                        if (point == 0) {
+                            path.moveTo(x, y)
+                        } else {
+                            path.quadraticTo(previousX, previousY, (previousX + x) / 2f, (previousY + y) / 2f)
+                        }
+                        previousX = x
+                        previousY = y
                     }
-                    drawPath(path, brush = gradientBrush, style = Stroke(width = 2.dp.toPx()))
+                    // Explicitly reach both canvas edges so the wave never appears as a short fragment.
+                    path.lineTo(size.width, previousY)
+                    drawPath(
+                        path,
+                        brush = gradientBrush,
+                        style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                    )
+                }
+
+                if (samples.size > 1 && hasCurrentSignal) {
+                    drawSmoothWave(samples)
                 } else if (isPlaying) {
-                    val fallbackPath = Path()
-                    val points = 96
-                    for (x in 0 until points) {
-                        val progress = x.toFloat() / (points - 1)
+                    val points = 160
+                    val simulated = FloatArray(points) { index ->
+                        val progress = index.toFloat() / (points - 1)
                         val wave = sin(progress * Math.PI * 4 + fallbackPhase) * 0.55 +
                             sin(progress * Math.PI * 9 - fallbackPhase * 0.7f) * 0.25
-                        val y = centerY + wave.toFloat() * size.height * 0.4f
-                        if (x == 0) fallbackPath.moveTo(x.toFloat(), y) else fallbackPath.lineTo(x.toFloat(), y)
+                        wave.toFloat()
                     }
-                    drawPath(fallbackPath, brush = gradientBrush, style = Stroke(width = 2.dp.toPx()))
+                    drawSmoothWave(simulated)
                 } else {
                     drawLine(waveColors.first().copy(alpha = 0.35f), Offset(0f, centerY), Offset(size.width, centerY), 1.dp.toPx())
                 }

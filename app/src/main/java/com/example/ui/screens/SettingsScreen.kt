@@ -58,6 +58,7 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var showCustomAccentDialog by remember { mutableStateOf(false) }
+    var showAmbientOptions by remember { mutableStateOf(false) }
     var showFormats by remember { mutableStateOf(false) }
     var showLibraryOptions by remember { mutableStateOf(false) }
     var showSleepTimerOptions by remember { mutableStateOf(false) }
@@ -67,9 +68,9 @@ fun SettingsScreen(
     var showAppInfo by remember { mutableStateOf(false) }
     var ambientSpeedDraft by remember(uiState.playerAmbientSpeed) { mutableFloatStateOf(uiState.playerAmbientSpeed) }
 
-    // Back gesture returns to Library
+    // Return to the actual parent screen (for example player → YouTube results).
     BackHandler {
-        viewModel.setTab(MainTab.LIBRARY)
+        viewModel.goBack()
     }
 
     val scrollState = rememberScrollState()
@@ -227,86 +228,90 @@ fun SettingsScreen(
                     }
                 }
                 Text("Chạm màu phổ biến hoặc mở Color Picker để chọn màu bất kỳ.", color = TextMuted, fontSize = 10.sp)
-                HorizontalDivider(color = DarkBorder)
-                Text("Nền ambient trình phát", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlayerAmbientMode.entries.chunked(3).forEach { rowModes ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            rowModes.forEach { mode ->
-                                val selected = uiState.playerAmbientMode == mode
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (selected) NeonCyan.copy(alpha = 0.16f) else DarkSurfaceVariant,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonCyan else DarkBorder),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(44.dp)
-                                        .selectable(selected = selected, role = Role.RadioButton) {
+            }
+        }
+
+        SettingsSectionHeader(
+            icon = Icons.Default.LightMode,
+            iconTint = NeonViolet,
+            title = "Ambient light",
+            subtitle = "${uiState.playerAmbientMode.label} · ${uiState.playerAmbientStyle.label}",
+            expanded = showAmbientOptions,
+            onClick = { showAmbientOptions = !showAmbientOptions }
+        )
+        AnimatedVisibility(visible = showAmbientOptions, modifier = rememberRevealOnExpand(showAmbientOptions)) {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = DarkSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Màu nền", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlayerAmbientMode.entries.chunked(3).forEach { rowModes ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowModes.forEach { mode ->
+                                    val selected = uiState.playerAmbientMode == mode
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (selected) NeonCyan.copy(alpha = 0.16f) else DarkSurfaceVariant,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonCyan else DarkBorder),
+                                        modifier = Modifier.weight(1f).height(44.dp).selectable(selected = selected, role = Role.RadioButton) {
                                             viewModel.setPlayerAmbientMode(mode)
                                         }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(mode.label, color = if (selected) NeonCyan else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(mode.label, color = if (selected) NeonCyan else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                        }
                                     }
                                 }
+                                repeat(3 - rowModes.size) { Spacer(modifier = Modifier.weight(1f)) }
                             }
-                            repeat(3 - rowModes.size) { Spacer(modifier = Modifier.weight(1f)) }
                         }
                     }
-                }
-                Text("Kiểu hiển thị", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PlayerAmbientStyle.entries.chunked(2).forEach { rowStyles ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            rowStyles.forEach { style ->
-                                val selected = uiState.playerAmbientStyle == style
-                                Surface(
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = if (selected) NeonViolet.copy(alpha = 0.16f) else DarkSurfaceVariant,
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonViolet else DarkBorder),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(42.dp)
-                                        .selectable(selected = selected, role = Role.RadioButton) {
+                    Text("Hiệu ứng", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PlayerAmbientStyle.entries.chunked(2).forEach { rowStyles ->
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowStyles.forEach { style ->
+                                    val selected = uiState.playerAmbientStyle == style
+                                    Surface(
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = if (selected) NeonViolet.copy(alpha = 0.16f) else DarkSurfaceVariant,
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, if (selected) NeonViolet else DarkBorder),
+                                        modifier = Modifier.weight(1f).height(42.dp).selectable(selected = selected, role = Role.RadioButton) {
                                             viewModel.setPlayerAmbientStyle(style)
                                         }
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(style.label, color = if (selected) NeonViolet else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text(style.label, color = if (selected) NeonViolet else TextSecondary, fontSize = 11.sp, maxLines = 1)
+                                        }
                                     }
                                 }
+                                if (rowStyles.size == 1) Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Tốc độ chuyển động", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text("${String.format(java.util.Locale.ROOT, "%.2f", ambientSpeedDraft)}×", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Slider(
+                        value = ambientSpeedDraft,
+                        onValueChange = { ambientSpeedDraft = it },
+                        onValueChangeFinished = { viewModel.setPlayerAmbientSpeed(ambientSpeedDraft) },
+                        valueRange = 0.25f..2f,
+                        steps = 6,
+                        colors = SliderDefaults.colors(thumbColor = NeonCyan, activeTrackColor = NeonCyan, inactiveTrackColor = DarkBorder),
+                        modifier = Modifier.fillMaxWidth().testTag("player_ambient_speed_slider")
+                    )
+                    Text("Màu nền được hòa trộn động. Hiệu ứng chỉ chuyển động khi nhạc đang phát.", color = TextMuted, fontSize = 10.sp)
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text("Tốc độ chuyển động", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Text("${String.format(java.util.Locale.ROOT, "%.2f", ambientSpeedDraft)}×", color = NeonCyan, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                }
-                Slider(
-                    value = ambientSpeedDraft,
-                    onValueChange = { ambientSpeedDraft = it },
-                    onValueChangeFinished = { viewModel.setPlayerAmbientSpeed(ambientSpeedDraft) },
-                    valueRange = 0.25f..2f,
-                    steps = 6,
-                    colors = SliderDefaults.colors(
-                        thumbColor = NeonCyan,
-                        activeTrackColor = NeonCyan,
-                        inactiveTrackColor = DarkBorder
-                    ),
-                    modifier = Modifier.fillMaxWidth().testTag("player_ambient_speed_slider")
-                )
-                Text("Màu được hòa trộn từ ảnh bìa, RGB hoặc màu nhấn. Hiệu ứng chuyển động tạm dừng khi nhạc dừng.", color = TextMuted, fontSize = 10.sp)
             }
         }
 
