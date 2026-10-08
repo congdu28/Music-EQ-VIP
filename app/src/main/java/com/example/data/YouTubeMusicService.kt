@@ -15,6 +15,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 data class YouTubeSearchPage(
     val songs: List<Song>,
@@ -22,6 +23,28 @@ data class YouTubeSearchPage(
 )
 
 data class YouTubeAudioStream(val url: String, val bitrateKbps: Int, val audioOnly: Boolean)
+
+private data class YouTubeHttpBody(val statusCode: Int, val body: String)
+
+private suspend fun okhttp3.Call.awaitBody(): YouTubeHttpBody =
+    suspendCancellableCoroutine { continuation ->
+        val activeCall = this
+        continuation.invokeOnCancellation { activeCall.cancel() }
+        activeCall.enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: okhttp3.Call, error: java.io.IOException) {
+                continuation.resumeWith(Result.failure(error))
+            }
+
+            override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
+                try {
+                    val body = response.use { YouTubeHttpBody(it.code, it.body?.string().orEmpty()) }
+                    continuation.resumeWith(Result.success(body))
+                } catch (error: Throwable) {
+                    continuation.resumeWith(Result.failure(error))
+                }
+            }
+        })
+    }
 
 object YouTubeMusicService {
     private const val TAG = "YouTubeMusicService"
@@ -57,7 +80,7 @@ object YouTubeMusicService {
             ?.substringAfter("/vi/", "")
             ?.substringBefore('/')
         return (fromPath ?: fromResolvedStream ?: fromThumbnail)
-            ?.takeIf { it.matches(Regex("[A-Za-z0-9_-]{6,20}")) }
+            ?.takeIf { videoIdPattern.matches(it) }
     }
 
     fun bitrateKbpsForStream(url: String): Int? = streamCache.values
@@ -88,6 +111,30 @@ object YouTubeMusicService {
     private val streamVideoIdsByUrl = ConcurrentHashMap<String, String>()
     private val streamResolutionGates = ConcurrentHashMap<String, Mutex>()
     private val suggestionCache = ConcurrentHashMap<String, List<String>>()
+    private val videoIdPattern = Regex("[A-Za-z0-9_-]{6,20}")
+    private const val SEARCH_PAGE_CACHE_LIMIT = 24
+    private const val SEARCH_PAGE_CACHE_TTL_MS = 2 * 60 * 1000L
+    private data class CachedSearchPage(val page: YouTubeSearchPage, val expiresAtMs: Long)
+    private val searchPageCache = LinkedHashMap<String, CachedSearchPage>(SEARCH_PAGE_CACHE_LIMIT, 0.75f, true)
+
+    private fun cachedSearchPage(key: String): YouTubeSearchPage? = synchronized(searchPageCache) {
+        val cached = searchPageCache[key] ?: return@synchronized null
+        if (cached.expiresAtMs <= System.currentTimeMillis()) {
+            searchPageCache.remove(key)
+            null
+        } else cached.page
+    }
+
+    private fun rememberSearchPage(key: String, page: YouTubeSearchPage) {
+        if (page.songs.isEmpty()) return
+        synchronized(searchPageCache) {
+            searchPageCache[key] = CachedSearchPage(page, System.currentTimeMillis() + SEARCH_PAGE_CACHE_TTL_MS)
+            while (searchPageCache.size > SEARCH_PAGE_CACHE_LIMIT) {
+                val oldestKey = searchPageCache.keys.iterator().let { if (it.hasNext()) it.next() else null } ?: break
+                searchPageCache.remove(oldestKey)
+            }
+        }
+    }
 
     /** Returns a still-valid visitor token without waiting for the token endpoint. */
     private fun peekVisitorData(): String {
@@ -99,7 +146,8 @@ object YouTubeMusicService {
     suspend fun searchSuggestions(query: String): List<String> = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) return@withContext emptyList()
-        suggestionCache[trimmed.lowercase()]?.let { return@withContext it }
+        val cacheKey = trimmed.lowercase()
+        suggestionCache[cacheKey]?.let { return@withContext it }
 
         try {
             val encodedQuery = java.net.URLEncoder.encode(trimmed, Charsets.UTF_8.name())
@@ -108,20 +156,25 @@ object YouTubeMusicService {
                 .header("User-Agent", AUDIO_USER_AGENT)
                 .build()
 
-            suggestionClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext emptyList()
-                val payload = JSONArray(response.body?.string().orEmpty())
-                val suggestions = payload.optJSONArray(1) ?: return@withContext emptyList()
-                val results = buildList {
-                    for (index in 0 until suggestions.length()) {
-                        val suggestion = suggestions.optString(index).trim()
-                        if (suggestion.isNotEmpty() && suggestion !in this) add(suggestion)
-                        if (size == 6) break
-                    }
+            val response = suggestionClient.newCall(request).awaitBody()
+            if (response.statusCode !in 200..299) return@withContext emptyList()
+            val payload = JSONArray(response.body)
+            val suggestions = payload.optJSONArray(1) ?: return@withContext emptyList()
+            val results = buildList {
+                for (index in 0 until suggestions.length()) {
+                    val suggestion = suggestions.optString(index).trim()
+                    if (suggestion.isNotEmpty() && suggestion !in this) add(suggestion)
+                    if (size == 6) break
                 }
-                suggestionCache[trimmed.lowercase()] = results
-                results
             }
+            synchronized(suggestionCache) {
+                suggestionCache[cacheKey] = results
+                while (suggestionCache.size > 64) {
+                    val oldestKey = suggestionCache.keys.firstOrNull { it != cacheKey } ?: break
+                    suggestionCache.remove(oldestKey)
+                }
+            }
+            results
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -443,10 +496,18 @@ object YouTubeMusicService {
     suspend fun searchSongsPage(query: String): YouTubeSearchPage = withContext(Dispatchers.IO) {
         val trimmed = query.trim()
         if (trimmed.isBlank()) return@withContext YouTubeSearchPage(emptyList(), null)
+        val cacheKey = trimmed.lowercase()
+        cachedSearchPage(cacheKey)?.let {
+            Log.d(TAG, "Using cached YouTube search page")
+            return@withContext it
+        }
 
         try {
             val page = requestSearchPage(searchPayload(query = trimmed, songFilter = true))
-            if (page.songs.isNotEmpty() || page.continuation != null) return@withContext page
+            if (page.songs.isNotEmpty() || page.continuation != null) {
+                rememberSearchPage(cacheKey, page)
+                return@withContext page
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -455,7 +516,9 @@ object YouTubeMusicService {
 
         // Fallback: search without the song filter if targeted search gave no results.
         try {
-            requestSearchPage(searchPayload(query = trimmed, songFilter = false))
+            requestSearchPage(searchPayload(query = trimmed, songFilter = false)).also {
+                rememberSearchPage(cacheKey, it)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -496,7 +559,7 @@ object YouTubeMusicService {
         if (songFilter) put("params", "EgWKAQIIAWoKEAkQChAFEAMQBA%3D%3D")
     }
 
-    private fun requestSearchPage(payload: JSONObject): YouTubeSearchPage {
+    private suspend fun requestSearchPage(payload: JSONObject): YouTubeSearchPage {
         val request = Request.Builder()
             .url("https://music.youtube.com/youtubei/v1/search?prettyPrint=false")
             .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
@@ -504,14 +567,22 @@ object YouTubeMusicService {
             .header("Referer", "https://music.youtube.com/")
             .build()
 
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return YouTubeSearchPage(emptyList(), null)
-            val body = response.body?.string().orEmpty()
-            if (body.isBlank()) return YouTubeSearchPage(emptyList(), null)
-            val root = JSONObject(body)
-            cacheVisitorDataFromResponse(root)
-            return YouTubeSearchPage(parseSearchResults(root), extractContinuation(root))
+        val startedAt = System.nanoTime()
+        val response = client.newCall(request).awaitBody()
+        val networkMs = (System.nanoTime() - startedAt) / 1_000_000
+        if (response.statusCode !in 200..299) {
+            Log.w(TAG, "YouTube search request returned HTTP ${response.statusCode} after ${networkMs} ms")
+            return YouTubeSearchPage(emptyList(), null)
         }
+        if (response.body.isBlank()) return YouTubeSearchPage(emptyList(), null)
+
+        val parseStartedAt = System.nanoTime()
+        val root = JSONObject(response.body)
+        cacheVisitorDataFromResponse(root)
+        val page = YouTubeSearchPage(parseSearchResults(root), extractContinuation(root))
+        val parseMs = (System.nanoTime() - parseStartedAt) / 1_000_000
+        Log.d(TAG, "YouTube search page timings: network=${networkMs}ms parse=${parseMs}ms results=${page.songs.size}")
+        return page
     }
 
     private fun cacheVisitorDataFromResponse(root: JSONObject) {
