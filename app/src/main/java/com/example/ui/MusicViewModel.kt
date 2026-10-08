@@ -157,6 +157,7 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     private var youtubeSuggestionJob: Job? = null
     private var youtubeSearchJob: Job? = null
     private var youtubeLoadMoreJob: Job? = null
+    private var selectedPlaylistSongsJob: Job? = null
     private val youtubeDownloadJobs = mutableMapOf<String, Job>()
 
     private fun reconcileDownloadedFavoriteState(songs: List<Song>, favorites: List<Song>): List<Song> {
@@ -1299,19 +1300,30 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
     // Playlists
     fun openPlaylist(playlist: Playlist) {
-        viewModelScope.launch {
+        selectedPlaylistSongsJob?.cancel()
+        _appUiState.update {
+            it.copy(
+                selectedPlaylist = playlist,
+                selectedPlaylistSongs = emptyList(),
+                showRemoveFromPlaylistDialog = null
+            )
+        }
+        selectedPlaylistSongsJob = viewModelScope.launch {
             repository.getSongsForPlaylist(playlist.id).collect { songs ->
-                _appUiState.update {
-                    it.copy(
-                        selectedPlaylist = playlist,
-                        selectedPlaylistSongs = songs
-                    )
+                _appUiState.update { current ->
+                    if (current.selectedPlaylist?.id == playlist.id) {
+                        current.copy(selectedPlaylistSongs = songs)
+                    } else {
+                        current
+                    }
                 }
             }
         }
     }
 
     fun closePlaylist() {
+        selectedPlaylistSongsJob?.cancel()
+        selectedPlaylistSongsJob = null
         _appUiState.update {
             it.copy(selectedPlaylist = null, selectedPlaylistSongs = emptyList(), showRemoveFromPlaylistDialog = null)
         }
