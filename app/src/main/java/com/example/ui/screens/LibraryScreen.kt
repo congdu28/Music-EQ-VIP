@@ -959,13 +959,14 @@ fun CompactSongItem(
                             )
                         }
                     }
+                    Spacer(modifier = Modifier.width(6.dp))
                     val sourceColor = when (song.sourceLabel) {
                         "YouTube Downloaded" -> YouTubeTag
                         "YouTube Online" -> Color(0xFF55A8FF)
                         else -> NeonCyan
                     }
                     Surface(
-                        shape = RoundedCornerShape(4.dp),
+                        shape = RoundedCornerShape(5.dp),
                         color = sourceColor.copy(alpha = 0.12f),
                         border = androidx.compose.foundation.BorderStroke(0.6.dp, sourceColor.copy(alpha = 0.48f))
                     ) {
@@ -975,7 +976,7 @@ fun CompactSongItem(
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                     Spacer(modifier = Modifier.width(4.dp))

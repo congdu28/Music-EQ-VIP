@@ -269,7 +269,7 @@ fun NowPlayingScreen(
     val screenHeight = configuration.screenHeightDp.dp
     val compactWidth = configuration.screenWidthDp < 360
     val lyricsPanelHeight = (screenHeight * 0.45f).coerceIn(250.dp, 430.dp)
-    val artworkSize = (screenHeight * 0.245f).coerceIn(145.dp, 195.dp)
+    val artworkSize = (screenHeight * 0.21f).coerceIn(128.dp, 175.dp)
     val isLyricsMode = displayMode == NowPlayingDisplayMode.FULL_LYRICS
 
     val infiniteTransition = rememberInfiniteTransition(label = "player_visual_motion")
@@ -328,8 +328,8 @@ fun NowPlayingScreen(
             }
         }
     }
-    // Ambient motion updates at 20 fps only during playback. Pausing audio freezes
-    // the background phase, avoiding a continuous animation loop while idle.
+    // Advance on display frames so all ambient effects move evenly, then freeze
+    // immediately while paused to avoid unnecessary background work.
     val ambientPhaseState = produceState(
         initialValue = 0f,
         key1 = uiState.playerAmbientMode,
@@ -338,11 +338,17 @@ fun NowPlayingScreen(
     ) {
         value = 0f
         if (uiState.playerAmbientMode != PlayerAmbientMode.OFF && playerState.isPlaying && isAppResumed) {
-            val frameDelayMs = 50L
-            val phaseStep = 2f * PI.toFloat() * uiState.playerAmbientSpeed / 600f
+            var previousFrameNanos = 0L
+            val radiansPerSecond = 2f * PI.toFloat() * uiState.playerAmbientSpeed / 30f
             while (true) {
-                delay(frameDelayMs)
-                value = (value + phaseStep) % (2f * PI.toFloat())
+                withFrameNanos { frameNanos ->
+                    if (previousFrameNanos != 0L) {
+                        val deltaSeconds = (frameNanos - previousFrameNanos)
+                            .coerceAtMost(100_000_000L) / 1_000_000_000f
+                        value = (value + radiansPerSecond * deltaSeconds) % (2f * PI.toFloat())
+                    }
+                    previousFrameNanos = frameNanos
+                }
             }
         }
     }
@@ -528,9 +534,12 @@ fun NowPlayingScreen(
                                     dynamicSecondary.copy(alpha = baseAlpha * 0.5f),
                                     dynamicTertiary.copy(alpha = baseAlpha * 0.65f)
                                 )))
-                                val drift = (phaseTurn % 1f) * size.width * 1.8f - size.width * 0.55f
-                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
-                                    val left = drift + index * size.width * 0.42f
+                                val bandColors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary)
+                                val bandSpacing = size.width * 0.42f
+                                val drift = (phaseTurn % 1f) * bandSpacing * bandColors.size
+                                for (bandIndex in -6..8) {
+                                    val color = bandColors[((bandIndex % bandColors.size) + bandColors.size) % bandColors.size]
+                                    val left = drift + bandIndex * bandSpacing
                                     val band = Path().apply {
                                         moveTo(left, 0f)
                                         lineTo(left + size.width * 0.2f, 0f)
@@ -556,7 +565,8 @@ fun NowPlayingScreen(
                                 for (ring in 0..4) {
                                     val progress = (phaseTurn + ring * 0.2f) % 1f
                                     val ringRadius = size.maxDimension * (0.14f + progress * 0.62f)
-                                    val alpha = (1f - progress) * if (uiState.isDarkTheme) 0.32f else 0.22f
+                                    val alpha = sin(PI.toFloat() * progress).coerceAtLeast(0f) *
+                                        if (uiState.isDarkTheme) 0.32f else 0.22f
                                     drawCircle(
                                         color = ringColors[ring % ringColors.size].copy(alpha = alpha),
                                         radius = ringRadius,
@@ -573,7 +583,8 @@ fun NowPlayingScreen(
                                 )))
                                 val particleColors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary)
                                 for (particle in 0 until 22) {
-                                    val xFraction = (particle * 0.618f + phaseTurn * 0.075f) % 1f
+                                    val xBase = (particle * 0.618f) % 1f
+                                    val xFraction = (xBase + sin(phase + particle * 1.7f) * 0.075f).coerceIn(0.015f, 0.985f)
                                     val yFraction = (particle * 0.417f + sin(phase * 0.7f + particle) * 0.08f + 1f) % 1f
                                     val center = Offset(xFraction * size.width, yFraction * size.height)
                                     val color = particleColors[particle % particleColors.size]

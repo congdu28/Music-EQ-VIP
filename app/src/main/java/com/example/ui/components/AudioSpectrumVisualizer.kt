@@ -25,7 +25,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.delay
 import com.example.ui.theme.TextMuted
 import com.example.ui.theme.TextSecondary
 import kotlin.math.abs
@@ -64,9 +63,16 @@ fun AudioSpectrumVisualizer(
     val fallbackPhaseState = produceState(0f, useFallback) {
         value = 0f
         if (useFallback) {
+            var previousFrameNanos = 0L
             while (true) {
-                delay(50L)
-                value = (value + 0.22f) % (2f * Math.PI).toFloat()
+                withFrameNanos { frameNanos ->
+                    if (previousFrameNanos != 0L) {
+                        val deltaSeconds = (frameNanos - previousFrameNanos)
+                            .coerceAtMost(100_000_000L) / 1_000_000_000f
+                        value = (value + deltaSeconds * 4.4f) % (2f * Math.PI).toFloat()
+                    }
+                    previousFrameNanos = frameNanos
+                }
             }
         }
     }
@@ -87,8 +93,15 @@ fun AudioSpectrumVisualizer(
                         samplingRate: Int
                     ) {
                         waveformBytes?.let { samples ->
-                            waveform = FloatArray(samples.size) { index ->
+                            val incoming = FloatArray(samples.size) { index ->
                                 ((samples[index].toInt() and 0xFF) - 128) / 128f
+                            }
+                            waveform = if (waveform.size == incoming.size) {
+                                FloatArray(incoming.size) { index ->
+                                    waveform[index] * 0.58f + incoming[index] * 0.42f
+                                }
+                            } else {
+                                incoming
                             }
                         }
                     }
