@@ -761,11 +761,11 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /** Keep the playlist detail visible so playback can use the persistent mini-player. */
-    fun playPlaylistQueue(songs: List<Song>, startIndex: Int = 0) {
+    fun playPlaylistQueue(songs: List<Song>, startIndex: Int = 0, playlistName: String? = null) {
         if (songs.isEmpty()) return
         clearPendingOnlineSelection()
         _appUiState.update { it.copy(currentTab = MainTab.LIBRARY) }
-        playerController.playQueue(resolveDownloadedYouTubeCopies(songs), startIndex)
+        playerController.playQueue(resolveDownloadedYouTubeCopies(songs), startIndex, playlistName)
     }
 
     fun playFavoriteQueue(songs: List<Song>, startIndex: Int = 0) {

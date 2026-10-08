@@ -113,7 +113,7 @@ fun PlaylistDetailScreen(
             Button(
                 onClick = {
                     if (songs.isNotEmpty()) {
-                        viewModel.playPlaylistQueue(songs, 0)
+                        viewModel.playPlaylistQueue(songs, 0, playlist.name)
                     }
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = NeonCyan, contentColor = AccentContent),
@@ -128,7 +128,7 @@ fun PlaylistDetailScreen(
             OutlinedButton(
                 onClick = {
                     if (songs.isNotEmpty()) {
-                        viewModel.playPlaylistQueue(songs.shuffled(), 0)
+                        viewModel.playPlaylistQueue(songs.shuffled(), 0, playlist.name)
                     }
                 },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonPurple),
@@ -165,18 +165,18 @@ fun PlaylistDetailScreen(
                         song = song,
                         isPlaying = isCurrent && playerState.isPlaying,
                         isCurrentSong = isCurrent,
-                        onClick = { viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0)) },
+                        onClick = { viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0), playlist.name) },
                         onFavoriteClick = { viewModel.toggleFavorite(song) },
                         onAddToPlaylist = { viewModel.setShowAddToPlaylist(song) },
                         onEditLyrics = {
-                            viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0))
+                            viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0), playlist.name)
                             viewModel.setShowEditLyrics(true)
                         },
                         onEditMetadata = {
                             viewModel.setShowEditMetadata(song)
                         },
                         onViewSpecs = {
-                            viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0))
+                            viewModel.playPlaylistQueue(songs, songs.indexOf(song).coerceAtLeast(0), playlist.name)
                             viewModel.setShowAudioSpecs(true)
                         },
                         onDelete = { viewModel.setShowDeleteSong(song) },

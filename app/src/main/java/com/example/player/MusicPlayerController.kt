@@ -37,7 +37,8 @@ data class PlayerUiState(
     val isCrossfadeEnabled: Boolean = true,
     val crossfadeDurationSeconds: Float = 2.0f,
     val isLoadingOnlineStream: Boolean = false,
-    val audioSessionId: Int = 0
+    val audioSessionId: Int = 0,
+    val currentPlaylistName: String? = null
 )
 
 
@@ -187,7 +188,8 @@ class MusicPlayerController(
                 isPlaying = false,
                 currentPositionMs = 0,
                 totalDurationMs = initialSong.durationMs,
-                isHiResAudioActive = initialSong.isHiRes
+                isHiResAudioActive = initialSong.isHiRes,
+                currentPlaylistName = null
             )
         }
     }
@@ -234,7 +236,8 @@ class MusicPlayerController(
                     totalDurationMs = 0L,
                     audioSessionId = 0,
                     queue = remaining,
-                    currentIndex = -1
+                    currentIndex = -1,
+                    currentPlaylistName = null
                 )
             }
         } else if (remaining.size != state.queue.size) {
@@ -268,7 +271,8 @@ class MusicPlayerController(
             it.copy(
                 queue = songs,
                 currentIndex = validIndex,
-                isShuffle = false
+                isShuffle = false,
+                currentPlaylistName = null
             )
         }
         playSong(songs[validIndex])
@@ -281,19 +285,21 @@ class MusicPlayerController(
             it.copy(
                 queue = shuffledList,
                 currentIndex = 0,
-                isShuffle = true
+                isShuffle = true,
+                currentPlaylistName = null
             )
         }
         playSong(shuffledList[0])
     }
 
-    fun playQueue(songs: List<Song>, startIndex: Int = 0) {
+    fun playQueue(songs: List<Song>, startIndex: Int = 0, playlistName: String? = null) {
         if (songs.isEmpty()) return
         val validIndex = startIndex.coerceIn(0, songs.size - 1)
         _uiState.update {
             it.copy(
                 queue = songs,
-                currentIndex = validIndex
+                currentIndex = validIndex,
+                currentPlaylistName = playlistName?.takeIf { it.isNotBlank() }
             )
         }
         playSong(songs[validIndex])

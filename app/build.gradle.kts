@@ -17,8 +17,8 @@ android {
     applicationId = "com.aistudio.nhipdieu.musichq"
     minSdk = 23 // Android 6.0; Room 2.7+ and Firebase AI Logic require API 23.
     targetSdk = 36
-    versionCode = 70
-    versionName = "1.0.69"
+    versionCode = 71
+    versionName = "1.0.70"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

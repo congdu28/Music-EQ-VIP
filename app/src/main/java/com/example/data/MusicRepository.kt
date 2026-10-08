@@ -78,19 +78,19 @@ class MusicRepository(private val context: Context) {
         prefs.edit().putInt("appearance_accent_color", color).apply()
     }
 
-    fun getPlayerAmbientMode(): String = prefs.getString("player_ambient_mode", "OFF") ?: "OFF"
+    fun getPlayerAmbientMode(): String = prefs.getString("player_ambient_mode", "AURORA") ?: "AURORA"
 
     fun setPlayerAmbientMode(mode: String) {
         prefs.edit().putString("player_ambient_mode", mode).apply()
     }
 
-    fun getPlayerAmbientStyle(): String = prefs.getString("player_ambient_style", "GLOW") ?: "GLOW"
+    fun getPlayerAmbientStyle(): String = prefs.getString("player_ambient_style", "PARTICLES") ?: "PARTICLES"
 
     fun setPlayerAmbientStyle(style: String) {
         prefs.edit().putString("player_ambient_style", style).apply()
     }
 
-    fun getPlayerAmbientSpeed(): Float = prefs.getFloat("player_ambient_speed", 1f).coerceIn(0.25f, 2f)
+    fun getPlayerAmbientSpeed(): Float = prefs.getFloat("player_ambient_speed", 1.5f).coerceIn(0.25f, 2f)
 
     fun setPlayerAmbientSpeed(speed: Float) {
         prefs.edit().putFloat("player_ambient_speed", speed.coerceIn(0.25f, 2f)).apply()

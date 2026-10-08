@@ -50,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.model.Song
+import com.example.model.sourceLabel
 import com.example.player.PlayerUiState
 import com.example.player.RepeatMode
 import com.example.ui.MainTab
@@ -619,7 +620,7 @@ fun NowPlayingScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp),
+                    .heightIn(min = 58.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -666,15 +667,49 @@ fun NowPlayingScreen(
                     }
                 }
 
-                Text(
-                    text = "ĐANG PHÁT",
-                    color = TextSecondary,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    letterSpacing = 1.2.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
-                )
+                Column(
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "ĐANG PHÁT",
+                        color = TextSecondary,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        letterSpacing = 1.2.sp,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = animatedPrimary.copy(alpha = 0.14f),
+                        border = androidx.compose.foundation.BorderStroke(0.7.dp, animatedPrimary.copy(alpha = 0.42f)),
+                        modifier = Modifier.padding(top = 2.dp)
+                    ) {
+                        Text(
+                            text = song.sourceLabel,
+                            color = animatedPrimary,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+                    playerState.currentPlaylistName?.takeIf { it.isNotBlank() }?.let { playlistName ->
+                        Text(
+                            text = playlistName,
+                            color = TextSecondary,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(top = 1.dp)
+                        )
+                    }
+                }
 
                 // Header Action Buttons: YouTube download and edit tags
                 Row(
