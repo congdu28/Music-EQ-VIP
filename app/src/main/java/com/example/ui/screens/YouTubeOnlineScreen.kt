@@ -59,6 +59,18 @@ fun YouTubeOnlineScreen(
     var isSearchFocused by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val resultsListState = rememberLazyListState()
+    val youtubeVideoIds = remember(uiState.youtubeSongs) {
+        uiState.youtubeSongs.map { YouTubeMusicService.videoIdFor(it).orEmpty() }
+    }
+    val currentSong = playerState.currentSong
+    val currentVideoId = remember(currentSong) {
+        currentSong?.let { song ->
+            if (song.album == "YouTube Offline") {
+                java.io.File(song.filePath).nameWithoutExtension
+            } else YouTubeMusicService.videoIdFor(song)
+        }
+    }
+    val isCurrentOfflineCopy = currentSong?.album == "YouTube Offline"
 
     LaunchedEffect(
         resultsListState,
@@ -349,17 +361,10 @@ fun YouTubeOnlineScreen(
                     ) {
                         itemsIndexed(
                             items = uiState.youtubeSongs,
-                            key = { index, song -> "${song.filePath}_$index" }
+                            key = { _, song -> song.filePath }
                         ) { index, song ->
-                            val videoId = YouTubeMusicService.videoIdFor(song).orEmpty()
-                            val current = playerState.currentSong
-                            val currentVideoId = current?.let { currentSong ->
-                                if (currentSong.album == "YouTube Offline") {
-                                    java.io.File(currentSong.filePath).nameWithoutExtension
-                                } else YouTubeMusicService.videoIdFor(currentSong)
-                            }
+                            val videoId = youtubeVideoIds.getOrNull(index).orEmpty()
                             val isCurrent = currentVideoId != null && currentVideoId == videoId
-                            val isCurrentOfflineCopy = current?.album == "YouTube Offline"
                             YouTubeSongItem(
                                 song = song,
                                 isPlaying = isCurrent && playerState.isPlaying,
