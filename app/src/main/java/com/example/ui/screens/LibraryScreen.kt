@@ -932,18 +932,19 @@ fun CompactSongItem(
 
                 Spacer(modifier = Modifier.height(3.dp))
 
+                Text(
+                    text = song.artist,
+                    color = TextSecondary,
+                    fontSize = 11.5.sp,
+                    lineHeight = 14.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(5.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = song.artist,
-                        color = TextSecondary,
-                        fontSize = 11.5.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Spacer(modifier = Modifier.width(4.dp))
-
                     if (song.isHiRes) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),

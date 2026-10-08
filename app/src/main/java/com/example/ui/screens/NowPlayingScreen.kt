@@ -50,7 +50,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.model.Song
-import com.example.model.sourceLabel
 import com.example.player.PlayerUiState
 import com.example.player.RepeatMode
 import com.example.ui.MainTab
@@ -624,59 +623,58 @@ fun NowPlayingScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Minimize Button
-                Surface(
-                    shape = CircleShape,
-                    color = DarkSurfaceVariant,
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .clickable { viewModel.goBack() }
-                        .testTag("now_playing_minimize_button")
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.KeyboardArrowDown,
-                            contentDescription = "Thu nhỏ",
-                            tint = TextPrimary,
-                            modifier = Modifier.size(22.dp)
-                        )
+                    Surface(
+                        shape = CircleShape,
+                        color = DarkSurfaceVariant,
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .clickable { viewModel.goBack() }
+                            .testTag("now_playing_minimize_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Thu nhỏ",
+                                tint = TextPrimary,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
+                    Surface(
+                        shape = CircleShape,
+                        color = DarkSurfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary.copy(alpha = 0.35f)),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .clickable { viewModel.setShowAddToPlaylist(song) }
+                            .testTag("now_playing_add_to_playlist_button")
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.PlaylistAdd,
+                                contentDescription = "Thêm vào playlist",
+                                tint = animatedPrimary,
+                                modifier = Modifier.size(21.dp)
+                            )
+                        }
                     }
                 }
 
-                // Make the playback source easy to identify without letting long labels
-                // push the action buttons off narrow screens.
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                ) {
-                    Text(
-                        text = "ĐANG PHÁT",
-                        color = TextSecondary,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        letterSpacing = 1.2.sp
-                    )
-                    val playbackSource = song.sourceLabel
-                    Surface(
-                        shape = RoundedCornerShape(50),
-                        color = animatedPrimary.copy(alpha = 0.18f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, animatedPrimary.copy(alpha = 0.65f)),
-                        modifier = Modifier.widthIn(max = 160.dp)
-                    ) {
-                        Text(
-                            text = playbackSource,
-                            color = animatedPrimary,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 3.dp)
-                        )
-                    }
-                }
+                Text(
+                    text = "ĐANG PHÁT",
+                    color = TextSecondary,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 1.2.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f).padding(horizontal = 4.dp)
+                )
 
                 // Header Action Buttons: YouTube download and edit tags
                 Row(

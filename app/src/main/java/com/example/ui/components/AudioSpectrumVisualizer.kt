@@ -60,16 +60,17 @@ fun AudioSpectrumVisualizer(
         fft.maxOrNull()?.let { it > 0.015f } == true
     }
     val useFallback = isPlaying && !hasCurrentSignal
-    val fallbackPhaseState = produceState(0f, useFallback) {
-        value = 0f
+    var fallbackPhase by remember(audioSessionId) { mutableDoubleStateOf(0.0) }
+    LaunchedEffect(audioSessionId, useFallback) {
         if (useFallback) {
             var previousFrameNanos = 0L
             while (true) {
                 withFrameNanos { frameNanos ->
                     if (previousFrameNanos != 0L) {
                         val deltaSeconds = (frameNanos - previousFrameNanos)
-                            .coerceAtMost(100_000_000L) / 1_000_000_000f
-                        value = (value + deltaSeconds * 4.4f) % (2f * Math.PI).toFloat()
+                            .coerceAtMost(100_000_000L) / 1_000_000_000.0
+                        // Keep an unwrapped phase so repeating the simulated wave never resets its motion.
+                        fallbackPhase += deltaSeconds * 4.4
                     }
                     previousFrameNanos = frameNanos
                 }
@@ -121,7 +122,7 @@ fun AudioSpectrumVisualizer(
                             }
                         }
                     }
-                }, (Visualizer.getMaxCaptureRate() / 2).coerceIn(4_000, 20_000), true, true)
+                }, Visualizer.getMaxCaptureRate().coerceIn(8_000, 20_000), true, true)
                 instance.enabled = isPlaying
                 visualizer = instance
             } catch (_: Exception) {
@@ -209,7 +210,7 @@ fun AudioSpectrumVisualizer(
             modifier = Modifier.fillMaxWidth().weight(1f)
                 .then(if (onToggleStyle != null) Modifier.clickable(onClick = onToggleStyle) else Modifier)
         ) {
-            val fallbackPhase = fallbackPhaseState.value
+            val phase = fallbackPhase.toFloat()
             val centerY = size.height / 2f
             if (style == VisualizerStyle.WAVE) {
                 val barCount = 54
@@ -233,8 +234,8 @@ fun AudioSpectrumVisualizer(
                     } else if (isPlaying) {
                         (
                             0.22f +
-                                abs(sin(fallbackPhase + index * 0.51f)).toFloat() * 0.5f +
-                                abs(sin(fallbackPhase * 0.72f + index * 0.19f)).toFloat() * 0.24f
+                                abs(sin(phase + index * 0.51f)).toFloat() * 0.5f +
+                                abs(sin(phase * 0.72f + index * 0.19f)).toFloat() * 0.24f
                             ).coerceIn(0.05f, 1f)
                     } else {
                         0.025f
@@ -278,7 +279,7 @@ fun AudioSpectrumVisualizer(
                     val signal = if (waveform.isNotEmpty() && hasCurrentSignal) {
                         waveform[sampleIndex]
                     } else if (isPlaying) {
-                        (sin(fraction * Math.PI * 5 + fallbackPhase) * 0.7).toFloat()
+                        (sin(fraction * Math.PI * 5 + phase) * 0.7).toFloat()
                     } else 0f
                     val x = fraction * size.width
                     val y = centerY - signal * size.height * 0.4f
@@ -302,7 +303,7 @@ fun AudioSpectrumVisualizer(
                         for (bin in start until end) energy = maxOf(energy, spectrum[bin])
                         (energy * 2.4f).coerceIn(0.025f, 1f)
                     } else if (isPlaying) {
-                        (0.12f + (sin(fallbackPhase + i * 0.53f).toFloat() + 1f) * 0.28f)
+                        (0.12f + (sin(phase + i * 0.53f).toFloat() + 1f) * 0.28f)
                             .coerceIn(0.06f, 0.72f)
                     } else 0.025f
                     val barHeight = size.height * heightFraction
