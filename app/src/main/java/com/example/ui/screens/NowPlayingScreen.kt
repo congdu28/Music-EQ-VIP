@@ -697,18 +697,7 @@ fun NowPlayingScreen(
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
-                    playerState.currentPlaylistName?.takeIf { it.isNotBlank() }?.let { playlistName ->
-                        Text(
-                            text = playlistName,
-                            color = TextSecondary,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Medium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(top = 1.dp)
-                        )
-                    }
+
                 }
 
                 // Header Action Buttons: YouTube download and edit tags
@@ -1205,11 +1194,11 @@ fun NowPlayingScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(modifier = Modifier.height(10.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Keep the song title to two lines so longer Vietnamese titles remain readable.
                     Row(
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 66.dp).padding(horizontal = 4.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 62.dp).padding(horizontal = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
@@ -1232,10 +1221,28 @@ fun NowPlayingScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            playerState.currentPlaylistName?.takeIf { it.isNotBlank() }?.let { playlistName ->
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = animatedPrimary.copy(alpha = 0.14f),
+                                    border = androidx.compose.foundation.BorderStroke(0.8.dp, animatedPrimary.copy(alpha = 0.55f)),
+                                    modifier = Modifier.padding(top = 5.dp)
+                                ) {
+                                    Text(
+                                        text = playlistName,
+                                        color = animatedPrimary,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(5.dp))
 
                     // COMPACT SYNCED LYRICS PILL (Strictly fixed 42dp height, NO layout jumping!)
                     Surface(
@@ -1244,7 +1251,7 @@ fun NowPlayingScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(46.dp)
+                            .height(42.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .clickable {
                                 if (hasLyrics) {
@@ -1330,7 +1337,7 @@ fun NowPlayingScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     // Live or simulated audio wave visualization
                     Surface(
@@ -1339,7 +1346,7 @@ fun NowPlayingScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(90.dp)
+                            .height(78.dp)
                     ) {
                         AudioSpectrumVisualizer(
                             isPlaying = playerState.isPlaying,
@@ -1355,7 +1362,7 @@ fun NowPlayingScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(6.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                 }
             }
 
@@ -1378,7 +1385,7 @@ fun NowPlayingScreen(
                 ),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(42.dp)
                     .testTag("now_playing_seek_slider")
             )
 
@@ -1459,7 +1466,7 @@ fun NowPlayingScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // PRIMARY PLAYBACK CONTROLS (Shuffle, Prev, Play/Pause, Next, Repeat)
             Row(
@@ -1735,7 +1742,7 @@ fun NowPlayingScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
             }
 
