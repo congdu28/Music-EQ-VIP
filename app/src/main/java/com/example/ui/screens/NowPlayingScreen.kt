@@ -328,15 +328,10 @@ fun NowPlayingScreen(
             }
         }
     }
-    // Advance on display frames so all ambient effects move evenly, then freeze
-    // immediately while paused to avoid unnecessary background work.
-    val ambientPhaseState = produceState(
-        initialValue = 0f,
-        key1 = uiState.playerAmbientMode,
-        key2 = uiState.playerAmbientStyle,
-        key3 = uiState.playerAmbientSpeed to (playerState.isPlaying && isAppResumed)
-    ) {
-        value = 0f
+    // Keep the phase in composition state: cancelling the frame loop on pause or
+    // backgrounding freezes it, and playback resumes from the exact same phase.
+    val ambientPhaseState = remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(uiState.playerAmbientMode, uiState.playerAmbientSpeed, playerState.isPlaying, isAppResumed) {
         if (uiState.playerAmbientMode != PlayerAmbientMode.OFF && playerState.isPlaying && isAppResumed) {
             var previousFrameNanos = 0L
             val radiansPerSecond = 2f * PI.toFloat() * uiState.playerAmbientSpeed / 30f
@@ -344,8 +339,9 @@ fun NowPlayingScreen(
                 withFrameNanos { frameNanos ->
                     if (previousFrameNanos != 0L) {
                         val deltaSeconds = (frameNanos - previousFrameNanos)
-                            .coerceAtMost(100_000_000L) / 1_000_000_000f
-                        value = (value + radiansPerSecond * deltaSeconds) % (2f * PI.toFloat())
+                            .coerceIn(0L, 50_000_000L) / 1_000_000_000f
+                        ambientPhaseState.floatValue =
+                            (ambientPhaseState.floatValue + radiansPerSecond * deltaSeconds) % (2f * PI.toFloat())
                     }
                     previousFrameNanos = frameNanos
                 }
@@ -394,10 +390,15 @@ fun NowPlayingScreen(
             .musicScreenBackground()
     ) {
         if (uiState.playerAmbientMode != PlayerAmbientMode.OFF) {
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .drawBehind {
+            Crossfade(
+                targetState = uiState.playerAmbientStyle,
+                animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
+                label = "ambient_style_crossfade"
+            ) { ambientStyle ->
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .drawBehind {
                         val phase = ambientPhaseState.value
                         val phaseTurn = phase / (2f * PI.toFloat())
                         val hue = phaseTurn * 360f
@@ -424,7 +425,7 @@ fun NowPlayingScreen(
                         val baseAlpha = if (uiState.isDarkTheme) 0.35f else 0.19f
                         val glowAlpha = if (uiState.isDarkTheme) 0.62f else 0.34f
                         val radius = size.maxDimension * 0.95f
-                        when (uiState.playerAmbientStyle) {
+                        when (ambientStyle) {
                             PlayerAmbientStyle.GLOW -> {
                                 val pulse = 0.9f + sin(phase) * 0.1f
                                 drawRect(Brush.linearGradient(listOf(
@@ -601,9 +602,121 @@ fun NowPlayingScreen(
                                     drawCircle(color.copy(alpha = if (uiState.isDarkTheme) 0.76f else 0.58f), particleRadius, center)
                                 }
                             }
+                            PlayerAmbientStyle.NEBULA -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.34f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.46f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.36f)
+                                )))
+                                listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary).forEachIndexed { index, color ->
+                                    val angle = phase * (0.42f + index * 0.06f) + index * 2.1f
+                                    val center = Offset(
+                                        size.width * (0.5f + cos(angle) * 0.28f),
+                                        size.height * (0.5f + sin(angle * 0.83f) * 0.28f)
+                                    )
+                                    drawRect(Brush.radialGradient(
+                                        colors = listOf(color.copy(alpha = glowAlpha * 0.72f), color.copy(alpha = 0.06f), Color.Transparent),
+                                        center = center,
+                                        radius = radius * 0.82f
+                                    ))
+                                }
+                            }
+                            PlayerAmbientStyle.FIREWORKS -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.42f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.5f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.42f)
+                                )))
+                                val colors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary)
+                                for (burst in 0..2) {
+                                    val progress = (phaseTurn * 0.42f + burst / 3f) % 1f
+                                    val envelope = sin(PI.toFloat() * progress).coerceAtLeast(0f)
+                                    val center = Offset(
+                                        size.width * (0.2f + burst * 0.3f),
+                                        size.height * if (burst == 1) 0.36f else 0.62f
+                                    )
+                                    val burstRadius = size.minDimension * (0.035f + progress * 0.32f)
+                                    val color = colors[burst]
+                                    drawCircle(
+                                        color = color.copy(alpha = envelope * if (uiState.isDarkTheme) 0.28f else 0.18f),
+                                        radius = burstRadius,
+                                        center = center,
+                                        style = Stroke(width = size.minDimension * 0.012f)
+                                    )
+                                    for (ray in 0 until 10) {
+                                        val angle = ray * (2f * PI.toFloat() / 10f) + burst * 0.31f
+                                        val inner = burstRadius * 0.38f
+                                        val outer = burstRadius * (0.74f + 0.08f * sin(phase * 2f + ray))
+                                        drawLine(
+                                            color = color.copy(alpha = envelope * glowAlpha * 0.42f),
+                                            start = Offset(center.x + cos(angle) * inner, center.y + sin(angle) * inner),
+                                            end = Offset(center.x + cos(angle) * outer, center.y + sin(angle) * outer),
+                                            strokeWidth = size.minDimension * 0.006f
+                                        )
+                                    }
+                                }
+                            }
+                            PlayerAmbientStyle.ORBS -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.4f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.38f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.4f)
+                                )))
+                                val orbColors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary, dynamicPrimary, dynamicSecondary)
+                                for (orb in 0 until 5) {
+                                    val center = Offset(
+                                        size.width * (0.5f + cos(phase * (0.34f + orb * 0.025f) + orb * 1.31f) * 0.38f),
+                                        size.height * (0.5f + sin(phase * (0.48f + orb * 0.02f) + orb * 1.77f) * 0.34f)
+                                    )
+                                    val orbRadius = size.minDimension * (0.34f + (orb % 3) * 0.055f)
+                                    val color = orbColors[orb]
+                                    drawCircle(
+                                        brush = Brush.radialGradient(
+                                            listOf(color.copy(alpha = glowAlpha * 0.48f), color.copy(alpha = 0.1f), Color.Transparent),
+                                            center = center,
+                                            radius = orbRadius
+                                        ),
+                                        radius = orbRadius,
+                                        center = center
+                                    )
+                                }
+                            }
+                            PlayerAmbientStyle.PRISM -> {
+                                drawRect(Brush.linearGradient(listOf(
+                                    dynamicPrimary.copy(alpha = baseAlpha * 0.5f),
+                                    dynamicSecondary.copy(alpha = baseAlpha * 0.58f),
+                                    dynamicTertiary.copy(alpha = baseAlpha * 0.5f)
+                                )))
+                                val prismColors = listOf(dynamicPrimary, dynamicSecondary, dynamicTertiary)
+                                for (prism in 0..4) {
+                                    val centerX = size.width * (0.5f + sin(phase * 0.62f + prism * 1.05f) * 0.48f)
+                                    val centerY = size.height * (0.5f + cos(phase * 0.47f + prism * 0.88f) * 0.42f)
+                                    val halfWidth = size.width * (0.12f + (prism % 2) * 0.035f)
+                                    val height = size.height * (0.38f + (prism % 3) * 0.07f)
+                                    val points = listOf(
+                                        Offset(centerX, centerY - height),
+                                        Offset(centerX + halfWidth, centerY + height * 0.62f),
+                                        Offset(centerX - halfWidth, centerY + height * 0.62f)
+                                    )
+                                    val path = Path().apply {
+                                        moveTo(points[0].x, points[0].y)
+                                        lineTo(points[1].x, points[1].y)
+                                        lineTo(points[2].x, points[2].y)
+                                        close()
+                                    }
+                                    val color = prismColors[prism % prismColors.size]
+                                    drawPath(path, color.copy(alpha = if (uiState.isDarkTheme) 0.055f else 0.035f))
+                                    drawPath(
+                                        path,
+                                        color.copy(alpha = glowAlpha * 0.22f),
+                                        style = Stroke(width = size.minDimension * 0.012f)
+                                    )
+                                }
+                            }
                         }
                     }
-            )
+                )
+            }
         }
 
         // Main player layout: uses verticalScroll as fallback for small screens,
