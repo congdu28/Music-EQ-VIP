@@ -72,7 +72,11 @@ enum class PlayerAmbientStyle(val label: String) {
     PULSE("Nhịp thở"),
     DIAGONAL("Dải sáng"),
     RINGS("Vòng sáng"),
-    PARTICLES("Hạt sáng")
+    PARTICLES("Hạt sáng"),
+    NEBULA("Tinh vân"),
+    FIREWORKS("Pháo hoa"),
+    ORBS("Quả cầu sáng"),
+    PRISM("Lăng kính")
 }
 
 data class MusicFolder(
