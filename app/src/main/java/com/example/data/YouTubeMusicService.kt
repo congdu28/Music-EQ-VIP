@@ -413,12 +413,15 @@ object YouTubeMusicService {
                     muxedMp4 += YouTubeAudioStream(url, format.optInt("bitrate", 0) / 1000, audioOnly = false)
             }
         }
-        // AAC is most portable. A muxed MP4 is the next distinct decoder path;
-        // WebM/Opus is last because support differs across Android devices.
-        return (aac.sortedByDescending { it.bitrateKbps } +
-            muxedMp4.sortedBy { it.bitrateKbps }.take(1) +
-            alternativeAudio.sortedByDescending { it.bitrateKbps })
+        // Prefer the highest-bitrate audio-only stream available, regardless of codec.
+        // Keep remaining audio formats as fallbacks for devices with limited decoder support.
+        val audioOnly = (aac + alternativeAudio)
+            .sortedByDescending { it.bitrateKbps }
             .distinctBy { it.url }
+        val muxedFallback = muxedMp4
+            .sortedByDescending { it.bitrateKbps }
+            .take(1)
+        return (audioOnly + muxedFallback).distinctBy { it.url }
     }
 
     private fun selectStreamIndex(streams: List<YouTubeAudioStream>, targetKbps: Int?): Int {
