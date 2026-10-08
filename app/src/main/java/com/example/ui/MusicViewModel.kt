@@ -375,11 +375,8 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         val needsHighPrecision = (tab == MainTab.NOW_PLAYING || tab == MainTab.LYRICS)
         playerController.setHighPrecisionTracking(needsHighPrecision)
         if (tab == MainTab.YOUTUBE) {
-            // Warm the playback session while results load, so tapping a result
-            // usually skips the separate visitor-token request.
-            viewModelScope.launch(Dispatchers.IO) {
-                com.example.data.YouTubeMusicService.getVisitorData()
-            }
+            // The search response already supplies visitorData when available.
+            // Avoid a separate network request competing with the first results page.
             if (_appUiState.value.youtubeSongs.isEmpty() && !_appUiState.value.isSearchingYouTube) {
                 selectYouTubeCategory(_appUiState.value.selectedYouTubeCategory)
             }
@@ -399,8 +396,10 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
         youtubeSuggestionJob?.cancel()
         if (query.isBlank()) return
 
+        if (query.trim().length < 2) return
+
         youtubeSuggestionJob = viewModelScope.launch {
-            delay(80)
+            delay(280)
             val suggestions = com.example.data.YouTubeMusicService.searchSuggestions(query)
             if (_appUiState.value.youtubeQuery == query) {
                 _appUiState.update { it.copy(youtubeSuggestions = suggestions) }
