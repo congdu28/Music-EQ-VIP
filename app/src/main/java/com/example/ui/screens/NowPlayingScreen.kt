@@ -392,12 +392,13 @@ fun NowPlayingScreen(
         if (uiState.playerAmbientMode != PlayerAmbientMode.OFF) {
             Crossfade(
                 targetState = uiState.playerAmbientStyle,
+                modifier = Modifier.fillMaxSize(),
                 animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing),
                 label = "ambient_style_crossfade"
             ) { ambientStyle ->
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
+                        .fillMaxSize()
                         .drawBehind {
                         val phase = ambientPhaseState.value
                         val phaseTurn = phase / (2f * PI.toFloat())
