@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.Playlist
 import com.example.model.Song
+import com.example.model.sourceLabel
 import com.example.player.PlayerUiState
 import com.example.ui.LibrarySubTab
 import com.example.ui.LibrarySortOrder
@@ -958,20 +959,24 @@ fun CompactSongItem(
                             )
                         }
                     }
-                    if (song.album == "YouTube Offline") {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = YouTubeTag.copy(alpha = 0.12f),
-                            border = androidx.compose.foundation.BorderStroke(0.6.dp, YouTubeTag.copy(alpha = 0.48f))
-                        ) {
-                            Text(
-                                text = "YouTube",
-                                color = YouTubeTag,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                            )
-                        }
+                    val sourceColor = when (song.sourceLabel) {
+                        "YouTube Downloaded" -> YouTubeTag
+                        "YouTube Online" -> Color(0xFF55A8FF)
+                        else -> NeonCyan
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = sourceColor.copy(alpha = 0.12f),
+                        border = androidx.compose.foundation.BorderStroke(0.6.dp, sourceColor.copy(alpha = 0.48f))
+                    ) {
+                        Text(
+                            text = song.sourceLabel,
+                            color = sourceColor,
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
                     }
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(

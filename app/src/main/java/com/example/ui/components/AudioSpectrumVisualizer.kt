@@ -22,10 +22,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -36,7 +33,7 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 enum class VisualizerStyle(val displayName: String) {
-    WAVE("Sóng uốn lượn"),
+    WAVE("Sóng phát sáng"),
     SPECTRUM("Cột tần số"),
     MIRRORED("Cột đối xứng"),
     DOTS("Sóng hạt")
@@ -202,55 +199,62 @@ fun AudioSpectrumVisualizer(
             val fallbackPhase = fallbackPhaseState.value
             val centerY = size.height / 2f
             if (style == VisualizerStyle.WAVE) {
-                val samples = waveform
-                fun drawSmoothWave(values: FloatArray) {
-                    if (values.size < 2 || size.width <= 0f || size.height <= 0f) return
-                    val pointCount = 160
-                    val path = Path()
-                    var previousX = 0f
-                    var previousY = centerY
-                    for (point in 0..pointCount) {
-                        val fraction = point.toFloat() / pointCount
-                        val sourcePosition = fraction * values.lastIndex
-                        val lowerIndex = sourcePosition.toInt().coerceIn(0, values.lastIndex)
-                        val upperIndex = (lowerIndex + 1).coerceAtMost(values.lastIndex)
-                        val interpolation = sourcePosition - lowerIndex
-                        val raw = values[lowerIndex] * (1f - interpolation) + values[upperIndex] * interpolation
-                        val left = values[(lowerIndex - 1).coerceAtLeast(0)]
-                        val right = values[(upperIndex + 1).coerceAtMost(values.lastIndex)]
-                        val smooth = left * 0.18f + raw * 0.64f + right * 0.18f
-                        val x = fraction * size.width
-                        val y = centerY - smooth * (size.height * 0.46f)
-                        if (point == 0) {
-                            path.moveTo(x, y)
-                        } else {
-                            path.quadraticTo(previousX, previousY, (previousX + x) / 2f, (previousY + y) / 2f)
+                val barCount = 54
+                val step = size.width / barCount
+                val strokeWidth = (step * 0.34f).coerceAtLeast(1.6.dp.toPx())
+                val glowBrush = Brush.horizontalGradient(
+                    waveColors.map { it.copy(alpha = 0.18f) }
+                )
+                val rawHeights = FloatArray(barCount) { index ->
+                    val progress = index.toFloat() / (barCount - 1)
+                    val signal = if (waveform.size > 1 && hasCurrentSignal) {
+                        val start = (index * waveform.size / barCount).coerceIn(0, waveform.lastIndex)
+                        val end = ((index + 1) * waveform.size / barCount).coerceAtLeast(start + 1)
+                            .coerceAtMost(waveform.size)
+                        var sumSquares = 0f
+                        for (sample in start until end) {
+                            val value = waveform[sample]
+                            sumSquares += value * value
                         }
-                        previousX = x
-                        previousY = y
+                        (sqrt(sumSquares / (end - start)) * 3.2f).coerceIn(0.04f, 1f)
+                    } else if (isPlaying) {
+                        (
+                            0.22f +
+                                abs(sin(fallbackPhase + index * 0.51f)).toFloat() * 0.5f +
+                                abs(sin(fallbackPhase * 0.72f + index * 0.19f)).toFloat() * 0.24f
+                            ).coerceIn(0.05f, 1f)
+                    } else {
+                        0.025f
                     }
-                    // Explicitly reach both canvas edges so the wave never appears as a short fragment.
-                    path.lineTo(size.width, previousY)
-                    drawPath(
-                        path,
-                        brush = gradientBrush,
-                        style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-                    )
+                    val edgeEnvelope = sqrt(sin(Math.PI * progress).toFloat().coerceAtLeast(0f))
+                    signal * edgeEnvelope
                 }
 
-                if (samples.size > 1 && hasCurrentSignal) {
-                    drawSmoothWave(samples)
-                } else if (isPlaying) {
-                    val points = 160
-                    val simulated = FloatArray(points) { index ->
-                        val progress = index.toFloat() / (points - 1)
-                        val wave = sin(progress * Math.PI * 4 + fallbackPhase) * 0.55 +
-                            sin(progress * Math.PI * 9 - fallbackPhase * 0.7f) * 0.25
-                        wave.toFloat()
-                    }
-                    drawSmoothWave(simulated)
-                } else {
-                    drawLine(waveColors.first().copy(alpha = 0.35f), Offset(0f, centerY), Offset(size.width, centerY), 1.dp.toPx())
+                for (index in 0 until barCount) {
+                    val previous = rawHeights[(index - 1).coerceAtLeast(0)]
+                    val current = rawHeights[index]
+                    val next = rawHeights[(index + 1).coerceAtMost(barCount - 1)]
+                    val smoothHeight = previous * 0.2f + current * 0.6f + next * 0.2f
+                    val halfHeight = (size.height * 0.46f * smoothHeight)
+                        .coerceAtLeast(1.4.dp.toPx())
+                    val x = step * (index + 0.5f)
+                    val start = Offset(x, centerY - halfHeight)
+                    val end = Offset(x, centerY + halfHeight)
+
+                    drawLine(
+                        brush = glowBrush,
+                        start = start,
+                        end = end,
+                        strokeWidth = strokeWidth * 3.4f,
+                        cap = StrokeCap.Round
+                    )
+                    drawLine(
+                        brush = gradientBrush,
+                        start = start,
+                        end = end,
+                        strokeWidth = strokeWidth,
+                        cap = StrokeCap.Round
+                    )
                 }
             } else if (style == VisualizerStyle.DOTS) {
                 val dotCount = 48

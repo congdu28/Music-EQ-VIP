@@ -25,6 +25,15 @@ data class Song(
     val addedTimestamp: Long = System.currentTimeMillis()
 )
 
+val Song.sourceLabel: String
+    get() = when {
+        album.equals("YouTube Offline", ignoreCase = true) ||
+            format.contains("YouTube Offline", ignoreCase = true) -> "YouTube Downloaded"
+        album.equals("YouTube Online", ignoreCase = true) ||
+            filePath.startsWith("yt://", ignoreCase = true) -> "YouTube Online"
+        else -> "Thư viện"
+    }
+
 @Entity(tableName = "playlists")
 data class Playlist(
     @PrimaryKey(autoGenerate = true)

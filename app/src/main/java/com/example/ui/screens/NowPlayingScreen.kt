@@ -50,6 +50,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.model.Song
+import com.example.model.sourceLabel
 import com.example.player.PlayerUiState
 import com.example.player.RepeatMode
 import com.example.ui.MainTab
@@ -647,12 +648,7 @@ fun NowPlayingScreen(
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 1.2.sp
                     )
-                    val playbackSource = when {
-                        song.album.equals("YouTube Online", ignoreCase = true) -> "YouTube Online"
-                        song.album.equals("YouTube Offline", ignoreCase = true) || song.format.contains("YouTube Offline", ignoreCase = true) -> "YouTube Offline"
-                        song.filePath.startsWith("yt://") -> "YouTube Online"
-                        else -> "Thư viện"
-                    }
+                    val playbackSource = song.sourceLabel
                     Surface(
                         shape = RoundedCornerShape(50),
                         color = animatedPrimary.copy(alpha = 0.18f),
@@ -1299,7 +1295,7 @@ fun NowPlayingScreen(
                         border = androidx.compose.foundation.BorderStroke(1.dp, DarkBorder),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(76.dp)
+                            .height(90.dp)
                     ) {
                         AudioSpectrumVisualizer(
                             isPlaying = playerState.isPlaying,
@@ -1308,7 +1304,7 @@ fun NowPlayingScreen(
                             modifier = Modifier
                                 .fillMaxSize()
                                 .padding(horizontal = 8.dp, vertical = 2.dp),
-                            customColors = listOf(animatedPrimary, animatedSecondary, animatedPrimary),
+                            customColors = listOf(Color(0xFFC958FF), Color(0xFF7858FF), Color(0xFF38B8FF)),
                             style = uiState.visualizerStyle,
                             onToggleStyle = { viewModel.toggleVisualizerStyle() },
                             onSelectStyle = { viewModel.setVisualizerStyle(it) }
