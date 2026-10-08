@@ -57,8 +57,17 @@ class MusicRepository(private val context: Context) {
 
     fun isDarkThemeEnabled(): Boolean = prefs.getBoolean("appearance_dark_theme", false)
 
-    fun getAppearanceMode(): String = prefs.getString("appearance_mode", null)
-        ?: if (isDarkThemeEnabled()) "DARK" else "LIGHT"
+    fun getAppearanceMode(): String {
+        val savedMode = prefs.getString("appearance_mode", null)
+        if (savedMode in setOf("LIGHT", "DARK", "SYSTEM")) return savedMode!!
+
+        // Preserve an explicit legacy Sáng/Tối choice, while fresh installs follow the device.
+        return if (prefs.contains("appearance_dark_theme")) {
+            if (isDarkThemeEnabled()) "DARK" else "LIGHT"
+        } else {
+            "SYSTEM"
+        }
+    }
 
     fun setAppearanceMode(mode: String) {
         val normalized = mode.takeIf { it in setOf("LIGHT", "DARK", "SYSTEM") } ?: "LIGHT"
