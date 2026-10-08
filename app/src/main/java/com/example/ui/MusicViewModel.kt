@@ -121,7 +121,7 @@ data class MusicAppUiState(
     val geminiApiKey: String = "",
     val geminiModel: String = "gemini-3.8-flash",
     val isDarkTheme: Boolean = false,
-    val appearanceMode: String = "LIGHT",
+    val appearanceMode: String = "SYSTEM",
     val accentColor: Int = 0xFF3399FF.toInt(),
     val playerAmbientMode: PlayerAmbientMode = PlayerAmbientMode.OFF,
     val playerAmbientStyle: PlayerAmbientStyle = PlayerAmbientStyle.GLOW,
